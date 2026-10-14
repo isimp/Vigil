@@ -46,12 +46,5 @@
     </ItemGroup>
   </Target>
 
-  <!-- -p:Deploy=false builds without touching the profile, for a build while the game runs. -->
-  <Target Name="DeployToProfile" AfterTargets="Build"
-          Condition="'$(Deploy)' != 'false' And '$(LibsDir)' == '' And Exists('$(BepInExDir)\plugins')">
-    <MakeDir Directories="$(DeployDir)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DeployDir)" ContinueOnError="true" />
-    <Message Importance="high" Text="Vigil -> $(DeployDir)" />
-  </Target>
 
 </Project>

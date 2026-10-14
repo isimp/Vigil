@@ -1,13 +1,11 @@
 <Project>
 
-  <!-- The game and BepInEx references Vigil builds against, and where it deploys.
+  <!-- The game and BepInEx references Vigil builds against.
 
-       Local:  a Valheim install and a BepInEx profile, and the build deploys into the profile
-               when it finishes. Override either if yours differ.
+       Local:  a Valheim install and a BepInEx profile. Override either if yours differ.
                  dotnet build -p:ValheimDir=... -p:ProfileDir=...
 
-       Anywhere else: one flat folder of DLLs. Setting it touches nothing local, deploy
-       included.
+       Anywhere else: one flat folder of DLLs.
                  dotnet build -p:LibsDir=lib -->
   <PropertyGroup>
     <!-- -p:ValheimDir=... wins, then the VALHEIM_DIR environment variable, then a stock Steam
@@ -16,7 +14,6 @@
     <ValheimDir Condition="'$(ValheimDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
     <ProfileDir Condition="'$(ProfileDir)' == ''">$(AppData)\com.kesomannen.gale\valheim\profiles\Default</ProfileDir>
     <BepInExDir>$(ProfileDir)\BepInEx</BepInExDir>
-    <DeployDir>$(BepInExDir)\plugins\Vigil</DeployDir>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(LibsDir)' == ''">

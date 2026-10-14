@@ -26,4 +26,4 @@ The server turns its incidents, shared spawn logs, shared reports and an unclean
 
 ## Building
 
-`dotnet build Vigil.csproj -c Release` builds against the installed game and copies the plugin into the Gale profile; `-p:LibsDir=lib` builds against the committed reference stubs instead, as CI does. `dotnet test tests/Vigil.Tests` runs the tests. Releasing is in [releasing.md](releasing.md).
+`dotnet build Vigil.csproj -c Release` builds against the installed game (the plugin itself reaches the profile and the server through Gale from Hexium); `-p:LibsDir=lib` builds against the committed reference stubs instead, as CI does. `dotnet test tests/Vigil.Tests` runs the tests. Releasing is in [releasing.md](releasing.md).
