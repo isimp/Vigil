@@ -1,0 +1,17 @@
+# The recorder's code was carried over from NetProbe, which was built without the code analysis
+# rules the rest of Vigil follows (BuildChecks.props). Until it is brought up to them, the analyzers
+# treat it as generated code and leave it alone. The compiler's own checks, doc comments included,
+# still apply to it.
+
+[src/Recorder/**.cs]
+generated_code = true
+
+[src/Core/Recorder/**.cs]
+generated_code = true
+
+# blaxxun's ServerSync, compiled in unchanged (see docs/technical.md): not ours to restyle. As
+# generated code its nullable annotations are read as none, which changes nothing in what is
+# compiled; the compiler's note that it does so (CS8669) is turned off for it.
+[src/ServerSync/**.cs]
+generated_code = true
+dotnet_diagnostic.CS8669.severity = none

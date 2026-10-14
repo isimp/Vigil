@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # lib/ holds metadata-only copies of everything the project references, so a build server
+      # needs no Valheim install and no download step. See tools/strip-references.ps1.
+      - name: Build
+        run: dotnet build Vigil.csproj -c Release -p:LibsDir=lib --nologo
+
+      # The tests cover the part of Vigil that needs no game (src/Core).
+      - name: Test
+        run: dotnet test tests/Vigil.Tests --nologo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vigil
+          path: bin/Release/Vigil.dll
+          if-no-files-found: error

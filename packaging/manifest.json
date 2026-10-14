@@ -1,0 +1,6 @@
+{
+  "name": "Vigil",
+  "website_url": "https://github.com/isimp/Vigil",
+  "description": "Personal admin and lag-diagnosis tool for my group's Valheim server, uploaded only so our mod manager can install it. Not meant for anyone else's use: no support, not maintained, may change or disappear without notice.",
+  "dependencies": []
+}

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reads Vigil's recordings after a session.
+       Run with: dotnet run (project tools/VigilReport), then the command, e.g. "sessions".
+       Not referenced by Vigil.csproj, so the plugin build never builds it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Vigil.Report</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/Core/**/*.cs" />
+  </ItemGroup>
+
+</Project>

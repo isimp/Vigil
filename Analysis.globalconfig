@@ -1,0 +1,36 @@
+is_global = true
+
+# The .NET code analysis rules Vigil turns off, each for what it misreads here. Every other
+# rule runs and fails the build (BuildChecks.props).
+
+# Unity's objects compare equal to null once destroyed, which flow analysis does not know: a
+# null check on one that looks set is how a destroyed one is skipped, not dead code.
+dotnet_diagnostic.CA1508.severity = none
+
+# Unity calls its messages (Awake, Update) on the instance, by name; they cannot be static.
+dotnet_diagnostic.CA1822.severity = none
+
+# A BepInEx plugin's id is a dotted name ("isimp.Vigil"), not a GUID, whatever its parameter
+# is called, and BepInEx names it GUID.
+dotnet_diagnostic.CA2243.severity = none
+dotnet_diagnostic.CA1720.severity = none
+
+# The game's spawn lists are read through a private field. A member that is gone or changed is
+# caught, logged once and left alone, whatever the exception.
+dotnet_diagnostic.CA1031.severity = none
+
+# Console words are lowered only to compare them with the lower-case command names; the result is
+# neither stored nor shown, so the round-trip concern behind upper-casing does not arise.
+dotnet_diagnostic.CA1308.severity = none
+
+# Random only scatters simulated players and their test objects around the world; nothing depends
+# on it being unpredictable.
+dotnet_diagnostic.CA5394.severity = none
+
+# MD5 only tells whether a config file changed between sessions; nobody is meant to be kept from
+# making two files hash alike.
+dotnet_diagnostic.CA5351.severity = none
+
+# The process and memory readings call kernel32, a system library that is always loaded from the
+# system folder, whatever the search paths say.
+dotnet_diagnostic.CA5392.severity = none

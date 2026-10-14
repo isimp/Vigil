@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>Vigil</AssemblyName>
+    <RootNamespace>Vigil</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!-- The one place the version is set: the plugin's own version is generated from it. -->
+    <Version>0.20.2</Version>
+    <Authors>isimp</Authors>
+    <Product>Vigil</Product>
+    <Description>Private admin and lag-diagnosis tool for my group's Valheim server; not maintained for anyone else's use.</Description>
+    <Copyright>Copyright (c) 2026 isimp</Copyright>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <DebugType>portable</DebugType>
+    <Nullable>disable</Nullable>
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+  </PropertyGroup>
+
+  <Import Project="BuildChecks.props" />
+  <Import Project="GameReferences.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- ServerSync compresses its config payloads. -->
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
+
+  <!-- The tests and the tools are their own projects; they build src/Core on their own. -->
+  <ItemGroup>
+    <Compile Remove="tests/**;tools/**" />
+    <None Remove="tests/**;tools/**" />
+  </ItemGroup>
+
+  <!-- VigilVersion.Value, for the plugin attribute, which needs a constant. -->
+  <Target Name="WriteVersion" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <VersionFile>$(IntermediateOutputPath)VigilVersion.g.cs</VersionFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(VersionFile)" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="namespace Vigil { internal static class VigilVersion { public const string Value = &quot;$(Version)&quot;%3B } }" />
+    <ItemGroup>
+      <Compile Include="$(VersionFile)" />
+      <FileWrites Include="$(VersionFile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- -p:Deploy=false builds without touching the profile, for a build while the game runs. -->
+  <Target Name="DeployToProfile" AfterTargets="Build"
+          Condition="'$(Deploy)' != 'false' And '$(LibsDir)' == '' And Exists('$(BepInExDir)\plugins')">
+    <MakeDir Directories="$(DeployDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DeployDir)" ContinueOnError="true" />
+    <Message Importance="high" Text="Vigil -> $(DeployDir)" />
+  </Target>
+
+</Project>

@@ -1,0 +1,148 @@
+name: Release
+
+# Manual only. Publishes to GitHub, then to Hexium. Vigil goes to Hexium only: it is there so
+# one group's mod manager can install it, not to be found by everyone.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.20.2 (must already match <Version> in Vigil.csproj)"
+        required: true
+      notes:
+        description: "One line for the top of the release notes (optional)"
+        required: false
+      draft:
+        description: "Create the GitHub release as a draft"
+        type: boolean
+        default: false
+      publish:
+        description: "Publish to Hexium after the GitHub release"
+        type: boolean
+        default: true
+      team:
+        description: "Hexium team to publish under (the package namespace)"
+        required: true
+        default: "isimp"
+      hexium_categories:
+        description: "Hexium categories, comma separated"
+        required: false
+        default: "Debugging,Performance,Networking,Tools,Open Source,Valheim 1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version lives in Vigil.csproj only; the plugin's own version is generated from it and
+      # the package's manifest gets it below. Checked before anything is built, so a mismatch
+      # costs seconds. Inputs are passed through the environment rather than pasted into the
+      # script, so what someone types in the dispatch form is data and never shell.
+      - name: Check the version matches the source
+        env:
+          WANT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          csproj=$(grep -oPm1 '(?<=<Version>)[^<]+' Vigil.csproj)
+          echo "asked for: $WANT"
+          echo "csproj   : $csproj"
+          if [ "$csproj" != "$WANT" ]; then
+            echo "::error::Version mismatch. Set $WANT in Vigil.csproj (<Version>), then run this again."
+            exit 1
+          fi
+          if ! grep -q "^## $WANT\$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $WANT' entry. Add one; it ships in the package."
+            exit 1
+          fi
+
+      # The icon is committed by hand. Checked up front so a missing one reads as a missing
+      # icon rather than as a copy error halfway through packaging.
+      - name: Check the icon is there
+        run: |
+          if [ ! -f packaging/icon.png ]; then
+            echo "::error::packaging/icon.png is missing. Drop a 256x256 PNG there and commit it."
+            exit 1
+          fi
+          echo "icon present"
+
+      # Publishing is part of releasing here, so a missing token is a failure now rather than
+      # after the GitHub release already exists.
+      - name: Check the Hexium token is set
+        if: inputs.publish
+        env:
+          HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
+        run: |
+          if [ -z "${HEXIUM_TOKEN:-}" ]; then
+            echo "::error::HEXIUM_TOKEN is not set. Create an API token in your Hexium team settings and add it as a repository secret."
+            exit 1
+          fi
+          echo "token present"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build
+        run: dotnet build Vigil.csproj -c Release -p:LibsDir=lib --nologo
+
+      - name: Test
+        run: dotnet test tests/Vigil.Tests --nologo
+
+      # Mod sites want every required file at the root of the archive, not inside a folder.
+      - name: Package
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          name="Vigil-$VERSION"
+
+          mkdir -p dist/package dist/hexium
+          cp bin/Release/Vigil.dll dist/package/
+          cp packaging/icon.png dist/package/
+          cp README.md CHANGELOG.md LICENSE dist/package/
+          jq --arg v "$VERSION" '.version_number = $v' packaging/manifest.json > dist/package/manifest.json
+          (cd dist/package && zip -qr "../hexium/$name.zip" .)
+          cp bin/Release/Vigil.dll dist/
+
+          echo "--- package contents ---"
+          unzip -l "dist/hexium/$name.zip"
+
+      # Everything the site requires of the archive (files at the root, a 256x256 icon, the
+      # name and description rules) is checked before anything is published.
+      - name: Check the package
+        env:
+          NAME: Vigil-${{ inputs.version }}.zip
+        run: python3 tools/publish.py "dist/hexium/$NAME" --check-only
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: Vigil ${{ inputs.version }}
+          draft: ${{ inputs.draft }}
+          generate_release_notes: true
+          body: |
+            ${{ inputs.notes }}
+
+            A private tool for my group's Valheim server, not maintained for anyone else's use.
+
+            Install: with a mod manager from Hexium, or drop `Vigil.dll` into `BepInEx/plugins`. Requires BepInEx 5. Most of it needs a copy on the dedicated server as well.
+          files: |
+            dist/hexium/Vigil-${{ inputs.version }}.zip
+            dist/Vigil.dll
+
+      # If the publish step fails, fix the cause and run the workflow again with the same
+      # version: the release step above updates the existing release rather than making a
+      # second one, and Hexium refuses a version it already has.
+      - name: Publish to Hexium
+        if: inputs.publish
+        env:
+          HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
+          PACKAGE: dist/hexium/Vigil-${{ inputs.version }}.zip
+          TEAM: ${{ inputs.team }}
+          CATEGORIES: ${{ inputs.hexium_categories }}
+        run: python3 tools/publish.py "$PACKAGE" --store hexium --team "$TEAM" --categories "$CATEGORIES"
