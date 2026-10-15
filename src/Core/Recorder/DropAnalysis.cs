@@ -58,6 +58,11 @@ namespace Vigil.Core
             bool faded = false, known = last >= 0;
             if (known)
             {
+                // Compared are the seconds before the other side really went quiet, not before the rate estimate reached zero.
+                double stop = StopAt(samples, samples[last].At + 1);
+                int before = last;
+                while (before > 0 && samples[before].At + 1 > stop) before--;
+                last = before;
                 var recent = samples.Skip(Math.Max(0, last - RecentSeconds + 1)).Take(Math.Min(RecentSeconds, last + 1)).ToList();
                 var earlier = samples.Take(Math.Max(0, last - RecentSeconds + 1)).Reverse().Take(EarlierSeconds).ToList();
                 double recentIn = recent.Average(s => s.InKbs), recentGap = recent.Max(s => s.MaxGapMs);
@@ -129,6 +134,36 @@ namespace Vigil.Core
             foreach (var s in samples)
                 lines.Add(string.Format(Ci, "   {0,5:0}  {1,8:0.0}  {2,8:0.0}  {3,8:0.0}  {4,14:0.0}  {5,7:0}  {6,16:0}", s.At - end, s.InKbs, s.OutKbs, s.QueueKb, s.UnackedKb, s.PingMs, s.MaxGapMs));
             return lines;
+        }
+
+        /// <summary>
+        /// When the other side really went quiet. Steam's incoming rate is an estimate that changes in
+        /// steps of a few seconds and decays after the packets stop, so the last second it shows traffic
+        /// can lie seconds after the stop, and any sudden stop would look like a fade. Two things mark
+        /// the stop itself: a pause between packets that grows by about a second each second (the
+        /// silence measured as it lasts), and data waiting for the other side's answer that piles up
+        /// from one second to the end. The earliest of those and <paramref name="lastTraffic"/> counts.
+        /// </summary>
+        public static double StopAt(IReadOnlyList<Sample> samples, double lastTraffic)
+        {
+            double stop = lastTraffic;
+            int n = samples.Count;
+            if (n < 4) return stop;
+            var end = samples[n - 1];
+
+            int growing = 0;
+            for (int i = n - 1; i > 0 && samples[i].MaxGapMs - samples[i - 1].MaxGapMs >= 500; i--) growing++;
+            if (growing >= 3) stop = Math.Min(stop, end.At + 1 - end.MaxGapMs / 1000);
+
+            int from = n - 1;
+            while (from > 0 && samples[from].UnackedKb >= samples[from - 1].UnackedKb) from--;
+            if (end.InKbs < SilentKbs && end.UnackedKb - samples[from].UnackedKb >= 5)
+            {
+                int first = from + 1;
+                while (first < n && samples[first].UnackedKb <= samples[first - 1].UnackedKb) first++;
+                if (first < n) stop = Math.Min(stop, samples[first].At);
+            }
+            return stop;
         }
 
         private static double Median(IEnumerable<double> values)

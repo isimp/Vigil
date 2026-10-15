@@ -16,6 +16,10 @@ Mods' Unity callbacks and coroutines are timed with a Harmony prefix and finaliz
 
 Spawns are seen at `SpawnSystem.Spawn`, `SpawnArea.SpawnOne` and `CreatureSpawner.Spawn`, after every other mod's prefixes. The game never spawns inside a base area unless the entry allows it, so once a second the creatures hostile to the player (`BaseAI.IsEnemy`) that stand inside a base area within 100 m are noted, each once, with the base's piece and builder and the spawn's record when this game made it (`Core/Recorder/BaseArrivals`). A windmill's wind check casts the game's own 17 cover rays (`Cover.GetCoverForPoint`, from the propeller, 29.5 m each) and names what each blocked ray hits; output is (1 - cover) times the wind, none under 10 % (`Windmill.GetPowerOutput`, `Core/Recorder/BaseArrivals.cs` `WindCheck`).
 
+## Drops
+
+A connection that ends without a goodbye is read from its last minute (`Core/Recorder/DropAnalysis`): traffic that faded or packets that came further apart before the silence point at the other side's game, a stop all at once at the line. Steam's incoming rate is an estimate that changes in steps of a few seconds and decays after the packets stop, so the comparison uses the seconds before the real stop: the earliest of the last second with traffic, a pause between packets growing by about a second each second, and unconfirmed data piling up from one second to the end (`DropAnalysis.StopAt`).
+
 ## The link to the server's Vigil
 
 Four routed messages (`Vigil_Hello`, `Vigil_HelloReply`, `Vigil_Admin`, `Vigil_AdminReply`) carry one line of named values each. The hello tells each side the other's version and capabilities and whether the player is an admin. The server checks admin status for every question; sharing, spawn logs and parity are open to every player. Settings the server decides (its fog limit) go through ServerSync.

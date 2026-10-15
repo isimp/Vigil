@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.1
+
+A dropped connection whose traffic stopped all at once reads as the line dying again. The incoming rate Steam reports changes in steps and keeps decaying for a few seconds after the packets stop, which made a sudden stop look like a game slowing down; the verdict now compares the seconds before the real stop, found from the pause between packets as it grows and from unconfirmed data piling up.
+
 ## 0.21.0
 
 *Spawns near you* lists the creatures hostile to you that came into a base, each once, with the base and, when your game spawned it, where and when it spawned. The game never spawns inside a base area unless an entry allows it, so these spawned outside and walked in. Each has a *Pin* button that marks your own map where it spawned, or where it came in. *Inspect an object* on a windmill shows its wind: the output now, its cover as rays blocked of 17 with what blocks each, and *Show rays* draws the rays in the world.

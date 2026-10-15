@@ -66,6 +66,41 @@ namespace Vigil.Tests
             Assert.Equal(DropAnalysis.Verdict.GameFroze, DropAnalysis.Read("Bjorn", false, s, DropAnalysis.Ending.Timeout, 30, null).Kind);
         }
 
+        // Steam's incoming rate is an estimate that changes in steps of about 5 s and decays after the
+        // packets stop; the rows below are shaped like the server's and the player's own report of
+        // one drop where both games kept running and the line between them died.
+        private static List<DropAnalysis.Sample> Stepped(double[] steps, int stopAt, int length, bool gapGrows, bool unackedGrows)
+        {
+            var list = new List<DropAnalysis.Sample>();
+            for (int i = 0; i < length; i++)
+            {
+                double inKbs = i / 5 < steps.Length ? steps[i / 5] : 0;
+                double gap = i < stopAt ? 70 : gapGrows ? 800 + 1010 * (i - stopAt) : 0;
+                double unacked = i < stopAt ? (i % 2 == 0 ? 3.4 : 0.5) : unackedGrows ? 30 + 1.4 * (i - stopAt) : 0;
+                list.Add(new DropAnalysis.Sample { At = i, InKbs = inKbs, OutKbs = 100, QueueKb = unacked, UnackedKb = unacked, PingMs = 18, MaxGapMs = gap });
+            }
+            return list;
+        }
+
+        [Fact]
+        public void A_sudden_stop_whose_rate_estimate_decays_afterwards_reads_as_the_line_dying_on_the_server()
+        {
+            // Packets stop at 31; the estimate still says 61 then 8.7 kB/s for a while; nothing is confirmed from then on.
+            var s = Stepped(new[] { 48.8, 74.2, 68.5, 70.1, 72.0, 74.3, 61.0, 8.7 }, stopAt: 31, length: 61, gapGrows: false, unackedGrows: true);
+            var d = DropAnalysis.Read("D'Arcy", false, s, DropAnalysis.Ending.Timeout, 30, null);
+            Assert.Equal(DropAnalysis.Verdict.LineDied, d.Kind);
+            Assert.Contains("connection died", d.Headline);
+        }
+
+        [Fact]
+        public void On_a_players_game_a_pause_growing_by_the_second_is_the_silence_itself_not_a_slowdown()
+        {
+            var s = Stepped(new[] { 110.0, 115.0, 112.0, 118.0, 112.5, 112.5, 79.7 }, stopAt: 31, length: 61, gapGrows: true, unackedGrows: false);
+            var d = DropAnalysis.Read("the server", true, s, DropAnalysis.Ending.Timeout, 30, null);
+            Assert.Equal(DropAnalysis.Verdict.LineDied, d.Kind);
+            Assert.Contains("The server's connection died", d.Headline);
+        }
+
         [Fact]
         public void A_player_whose_game_said_goodbye_left_normally()
         {
