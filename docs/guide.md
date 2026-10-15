@@ -12,7 +12,7 @@ Shift+F9 opens the panel. *Overview* shows alerts (for admins), the recording an
 
 ## With the server
 
-When the server runs Vigil too, the game greets it and learns whether you are an admin (`adminlist.txt`). Admins can ask the server for its state, reports, a player's last minute of connection, a load test or player simulation, and get alerts: drops, the server falling behind or short of memory, log floods, spawns inside bases, shared reports, and a start after a crash. Players can share their own reports and spawn log with the server under *Sharing* (off by default; the server takes them only with `Sharing.Accept`). Before a restart with players on, the server puts a countdown on everyone's screen.
+When the server runs Vigil too, the game greets it and learns whether you are an admin (`adminlist.txt`). Admins can ask the server for its state, reports, a player's last minute of connection, a load test or player simulation, and get alerts: drops, the server falling behind or short of memory, log floods, spawns inside bases, lag and environment reports a player sent, and a start after a crash. Players can share their own reports and spawn log with the server under *Sharing* (off by default; the server takes them only with `Sharing.Accept`). Before a restart with players on, the server puts a countdown on everyone's screen.
 
 ## Spawn marks and cleanup
 

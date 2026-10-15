@@ -90,10 +90,12 @@ namespace Vigil.Core
 
         /// <summary>
         /// How long a kind stays quiet after an alert about the same subject. A server saving its
-        /// world stands still for a second every so often, and spawns in one base come in waves;
-        /// one alert each tells enough. The other kinds are already reported once until they ease.
+        /// world stands still for a second every so often, spawns in one base come in waves, and a
+        /// silent player is reported every second until they are back or gone; one alert each tells
+        /// enough. The other kinds are already reported once until they ease.
         /// </summary>
-        public static double QuietSeconds(AlertKind kind) => kind == AlertKind.Behind ? 600 : kind == AlertKind.BaseSpawns ? 3600 : 0;
+        public static double QuietSeconds(AlertKind kind) =>
+            kind == AlertKind.Behind || kind == AlertKind.Connection ? 600 : kind == AlertKind.BaseSpawns ? 3600 : 0;
     }
 
     /// <summary>Turns what the server's Vigil sees into alerts.</summary>
@@ -107,6 +109,9 @@ namespace Vigil.Core
 
         private static readonly CultureInfo Ci = CultureInfo.InvariantCulture;
         private static readonly Regex FrameMs = new Regex(@"^a (\d+) ms frame", RegexOptions.CultureInvariant);
+        private static readonly Regex PingOf = new Regex(@"^(.+) has a ping of ", RegexOptions.CultureInvariant);
+        private static readonly Regex QueueTo = new Regex(@" waiting to be sent to (.+)$", RegexOptions.CultureInvariant);
+        private static readonly Regex SilentFrom = new Regex(@"^nothing received from (.+) for \d+ ms", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
         /// <summary>
         /// The alert for one of the server's incident reports (<paramref name="who"/> is the player a drop is about);
@@ -131,10 +136,12 @@ namespace Vigil.Core
                     return Make(AlertKind.LogFlood, "The server's log: " + detail, null, file, utc);
                 case "ping":
                     // A player's game words its own ping without a name; only the server's line names one.
-                    return detail.Contains(" has a ping of ") ? Make(AlertKind.Connection, detail, null, file, utc) : null;
+                    var p = PingOf.Match(detail);
+                    return p.Success ? Make(AlertKind.Connection, detail, p.Groups[1].Value, file, utc) : null;
                 case "send-queue":
+                    return Make(AlertKind.Connection, Short(detail), Player(QueueTo, Short(detail)), file, utc);
                 case "silent":
-                    return Make(AlertKind.Connection, Short(detail), null, file, utc);
+                    return Make(AlertKind.Connection, Short(detail), Player(SilentFrom, detail), file, utc);
                 default:
                     return null;
             }
@@ -165,11 +172,17 @@ namespace Vigil.Core
             }).ToList();
         }
 
-        /// <summary>The alert for a report a player shared, from where the server kept it (shared/&lt;player&gt;/&lt;file&gt;).</summary>
+        /// <summary>
+        /// The alert for a report a player sent by hand (a lag report, an environment report), from
+        /// where the server kept it (shared/&lt;player&gt;/&lt;file&gt;); null for the incident reports a
+        /// player's game shares on its own, which arrive every few minutes and are listed among the
+        /// server's reports instead.
+        /// </summary>
         public static Alert FromShared(string path, DateTime utc)
         {
             string player = ReportCatalog.From(path) ?? "A player";
             string kind = ReportCatalog.KindOf(path?.Substring(path.LastIndexOf('/') + 1)) ?? "report";
+            if (kind != "lag report" && kind != "environment") return null;
             string what = kind.EndsWith("report", StringComparison.Ordinal) ? kind : kind + " report";
             string article = "aeiou".IndexOf(what[0]) >= 0 ? "an " : "a ";
             return Make(AlertKind.Shared, player + " shared " + article + what, player, path, utc);
@@ -198,6 +211,12 @@ namespace Vigil.Core
             if (exists(file)) return file;
             if (file.IndexOf('/') >= 0) return null;
             return runs.Select(r => "Vigil-runs/" + r + "/" + file).FirstOrDefault(exists);
+        }
+
+        private static string Player(Regex rule, string text)
+        {
+            var m = rule.Match(text ?? "");
+            return m.Success ? m.Groups[1].Value : null;
         }
 
         private static Alert Make(AlertKind kind, string text, string subject, string file, DateTime utc) =>

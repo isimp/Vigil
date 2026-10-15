@@ -85,6 +85,27 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void Connection_alerts_are_about_the_player_they_name()
+        {
+            Assert.Equal("D'Arcy", Incident("ping", "D'Arcy has a ping of 450 ms").Subject);
+            Assert.Equal("Old Bjorn", Incident("send-queue", "64.8 kB waiting to be sent to Old Bjorn (limit 64 kB); reported once until it has eased for a minute").Subject);
+            Assert.Equal("D'Arcy", Incident("silent", "nothing received from D'Arcy for 2469 ms (limit 1500 ms)").Subject);
+        }
+
+        [Fact]
+        public void A_player_going_silent_alerts_once_not_every_second_and_again_after_ten_minutes()
+        {
+            var book = new AlertBook();
+            int kept = 0;
+            for (int s = 0; s < 30; s++)
+                if (book.Add(AlertSources.FromIncident("silent", "nothing received from D'Arcy for " + (2469 + s * 1000) + " ms (limit 1500 ms)", null, null, Now.AddSeconds(s)))) kept++;
+            Assert.Equal(1, kept);
+            Assert.True(book.Add(AlertSources.FromIncident("silent", "nothing received from Bjorn for 1600 ms (limit 1500 ms)", null, null, Now.AddSeconds(31))));
+            Assert.False(book.Add(AlertSources.FromIncident("send-queue", "64.8 kB waiting to be sent to D'Arcy (limit 64 kB)", null, null, Now.AddMinutes(5))));
+            Assert.True(book.Add(AlertSources.FromIncident("silent", "nothing received from D'Arcy for 1600 ms (limit 1500 ms)", null, null, Now.AddMinutes(11))));
+        }
+
+        [Fact]
         public void A_flood_in_the_server_s_log_is_an_alert_naming_the_line_repeated()
         {
             var a = Incident("log-flood", "260 log lines in one second, most repeated: Unity Log: Destroying abandoned zdo x143");
@@ -139,7 +160,13 @@ namespace Vigil.Tests
             Assert.Equal("Bjorn shared a lag report", a.Text);
             Assert.Equal("shared/Bjorn/Vigil-incident-211400-manual.txt", a.File);
             Assert.Equal("Bjorn shared an environment report", AlertSources.FromShared("shared/Bjorn/Vigil-environment-211400.txt", Now).Text);
-            Assert.Equal("Bjorn shared a drop report", AlertSources.FromShared("shared/Bjorn/Vigil-incident-211400-drop.txt", Now).Text);
+        }
+
+        [Fact]
+        public void Reports_a_player_s_game_shares_on_its_own_are_no_alerts()
+        {
+            foreach (var kind in new[] { "drop", "hitch", "memory", "flood", "slow", "silent", "queue", "ping" })
+                Assert.Null(AlertSources.FromShared("shared/Bjorn/Vigil-incident-211400-" + kind + ".txt", Now));
         }
 
         [Fact]

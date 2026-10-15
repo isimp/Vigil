@@ -18,7 +18,7 @@ Four routed messages (`Vigil_Hello`, `Vigil_HelloReply`, `Vigil_Admin`, `Vigil_A
 
 ## Alerts
 
-The server turns its incidents, shared spawn logs, shared reports and an unclean previous run into alerts, keeps a week of them in `Vigil-state/alerts.tsv`, and an admin's game asks for new ones every 10 s. Falling behind alerts at most once in ten minutes, spawns at one base once an hour.
+The server turns its incidents, shared spawn logs, shared reports and an unclean previous run into alerts, keeps a week of them in `Vigil-state/alerts.tsv`, and an admin's game asks for new ones every 10 s. Falling behind and each player's connection alert at most once in ten minutes, spawns at one base once an hour. Of the reports players share, only those sent by hand (lag and environment reports) alert; what their games share on their own is listed among the server's reports.
 
 ## Load test and player simulation
 
