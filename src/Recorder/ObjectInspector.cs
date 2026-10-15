@@ -50,6 +50,76 @@ namespace Vigil.Recorder
             public List<StoredValue.Row> Values = new List<StoredValue.Row>();
             public List<ScriptsByMod.Entry> Scripts = new List<ScriptsByMod.Entry>();
             public List<KeyValuePair<string, string>> Record = new List<KeyValuePair<string, string>>();
+
+            /// <summary>For a windmill: its wind, else null.</summary>
+            public WindFacts Wind;
+        }
+
+        /// <summary>A windmill's wind as one reading found it, and its rays for drawing.</summary>
+        internal sealed class WindFacts
+        {
+            public string Output, Cover, Open;
+            public List<string[]> Blocked;
+            public Vector3 Hub;
+            public Vector3[] Ends;
+            public bool[] Hit;
+        }
+
+        // The game's 17 cover rays (Cover.CreateCoverRays), used as they are: the game does not normalise them.
+        private static readonly Vector3[] CoverRays =
+        {
+            new Vector3(0f, 1f, 0f), new Vector3(1f, 0f, 0f), new Vector3(-1f, 0f, 0f), new Vector3(0f, 0f, 1f), new Vector3(0f, 0f, -1f),
+            new Vector3(-1f, 0f, -1f), new Vector3(1f, 0f, -1f), new Vector3(-1f, 0f, 1f), new Vector3(1f, 0f, 1f),
+            new Vector3(-1f, 1f, 0f), new Vector3(1f, 1f, 0f), new Vector3(0f, 1f, 1f), new Vector3(0f, 1f, -1f),
+            new Vector3(-1f, 1f, -1f), new Vector3(1f, 1f, -1f), new Vector3(-1f, 1f, 1f), new Vector3(1f, 1f, 1f),
+        };
+
+        private static int s_coverMask = -1;
+
+        /// <summary>
+        /// A windmill's wind the way the game reads it (Cover.GetCoverForPoint from the propeller, every
+        /// ray started half a ray-length out and 29.5 m long, on the same layers), with what each blocked
+        /// ray hit; null for anything else.
+        /// </summary>
+        internal static WindFacts WindOf(GameObject go)
+        {
+            var mill = go != null ? go.GetComponentInParent<Windmill>() : null;
+            if (mill == null || mill.m_propeller == null || EnvMan.instance == null) return null;
+            if (s_coverMask == -1) s_coverMask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "terrain", "vehicle");
+            var hub = mill.m_propeller.position;
+            var rays = new List<WindCheck.Ray>();
+            var ends = new Vector3[CoverRays.Length];
+            var hits = new bool[CoverRays.Length];
+            for (int i = 0; i < CoverRays.Length; i++)
+            {
+                var v = CoverRays[i];
+                var start = hub + v * 0.5f;
+                const float length = WindCheck.RayMetres;
+                bool blocked = Physics.Raycast(start, v, out var hit, length, s_coverMask);
+                hits[i] = blocked;
+                ends[i] = blocked ? hit.point : start + v.normalized * length;
+                rays.Add(new WindCheck.Ray
+                {
+                    Direction = WindCheck.Directions[i], Blocked = blocked, By = blocked ? Blocker(hit, mill) : null,
+                    Metres = blocked ? hit.distance + v.magnitude * 0.5f : length,
+                });
+            }
+            var smelter = mill.GetComponent<Smelter>();
+            return new WindFacts
+            {
+                Output = WindCheck.OutputLine(EnvMan.instance.GetWindIntensity(), rays.Count(r => r.Blocked), smelter != null ? smelter.m_secPerProduct : 0f),
+                Cover = WindCheck.CoverLine(rays), Open = WindCheck.OpenLine(rays), Blocked = WindCheck.BlockedRows(rays), Hub = hub, Ends = ends, Hit = hits,
+            };
+        }
+
+        private static string Blocker(RaycastHit hit, Windmill mill)
+        {
+            var collider = hit.collider;
+            if (collider == null) return null;
+            if (collider.GetComponentInParent<Windmill>() == mill) return "the windmill itself";
+            if (collider.GetComponent<Heightmap>() != null) return "terrain";
+            var view = collider.GetComponentInParent<ZNetView>();
+            return view != null ? OwnershipView.DisplayName(view.gameObject) : collider.gameObject.name;
         }
 
         public ZDOID Id { get; private set; } = ZDOID.None;
@@ -114,6 +184,7 @@ namespace Vigil.Recorder
             facts.Record = Record(zdo);
             facts.Scripts = Scripts(go);
             Extras(go, zdo, facts.Extras);
+            try { facts.Wind = WindOf(go); } catch (Exception) { facts.Wind = null; }
             return facts;
         }
 
@@ -205,7 +276,7 @@ namespace Vigil.Recorder
         private static readonly FieldInfo s_connections = AccessTools.Field(typeof(ZDOExtraData), "s_connections");
 
         /// <summary>Where a creature came from: the spawn log's record, else what the game keeps about it (<see cref="SpawnOrigin"/>).</summary>
-        private static string Origin(GameObject go, ZDO zdo, Character character)
+        internal static string Origin(GameObject go, ZDO zdo, Character character)
         {
             var facts = new SpawnOrigin.Facts
             {

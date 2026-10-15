@@ -218,11 +218,7 @@ namespace Vigil.Recorder
             // Asked and read on a layout pass only, so the pass that draws the card draws what was laid out.
             if (Event.current.type == EventType.Layout)
             {
-                if (_spawnPinsOn != Minimap.instance)
-                {
-                    _spawnPins.Clear();
-                    _spawnPinsOn = Minimap.instance;
-                }
+                CheckPinsMap();
                 if (!_spawnViewAsking && Now - _spawnViewAt >= 10) AskSpawnView();
                 _spawnViewShown = _spawnView;
                 _spawnRowsShown = _spawnGameRows;
@@ -319,18 +315,28 @@ namespace Vigil.Recorder
             place.Label + "@" + Math.Round(place.X).ToString(CultureInfo.InvariantCulture) + "," + Math.Round(place.Z).ToString(CultureInfo.InvariantCulture);
 
         // A pin on this player's own map only (not saved, not shared), gone on leaving the world.
-        private void TogglePin(SpawnView.Place place)
+        private void TogglePin(SpawnView.Place place) => TogglePinAt(PinKey(place), place.X, place.Z, "Spawns: " + place.Label);
+
+        private void TogglePinAt(string key, float x, float z, string label)
         {
             var map = Minimap.instance;
             if (map == null) return;
-            string key = PinKey(place);
+            CheckPinsMap();
             if (_spawnPins.TryGetValue(key, out var pin))
             {
                 map.RemovePin(pin);
                 _spawnPins.Remove(key);
                 return;
             }
-            _spawnPins[key] = map.AddPin(new Vector3(place.X, 0f, place.Z), Minimap.PinType.Icon3, "Spawns: " + place.Label, false, false);
+            _spawnPins[key] = map.AddPin(new Vector3(x, 0f, z), Minimap.PinType.Icon3, label, false, false);
+        }
+
+        // Pins go with the map when the world unloads; a new map starts with none of them.
+        private void CheckPinsMap()
+        {
+            if (_spawnPinsOn == Minimap.instance) return;
+            _spawnPins.Clear();
+            _spawnPinsOn = Minimap.instance;
         }
 
         // ------------------------------------------------------------------ console

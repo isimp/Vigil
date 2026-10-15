@@ -94,6 +94,11 @@ namespace Vigil.Recorder
                 _factsAt = Now;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 try { _facts = _inspector.Read(_ownership, PingOf, Limits.PingMs); } catch (Exception) { _facts = null; }
+                if (_windRays.Shown)
+                {
+                    if (_facts?.Wind != null) _windRays.Show(_facts.Wind.Hub, _facts.Wind.Ends, _facts.Wind.Hit);
+                    else _windRays.Hide();
+                }
                 _recorder?.AddOwnTime(watch.Elapsed.TotalMilliseconds);
             }
 
@@ -108,6 +113,24 @@ namespace Vigil.Recorder
             DrawBusiest();
         }
 
+        private static readonly Ui.Column[] WindColumns = { new Ui.Column("Blocked", 80, false), new Ui.Column("By", 0, false), new Ui.Column("At", 50, true) };
+        private readonly WindRays _windRays = new WindRays();
+
+        private void DrawWind(ObjectInspector.WindFacts wind)
+        {
+            Ui.Heading("Wind");
+            Ui.Row("Output now", wind.Output);
+            Ui.Row("Cover", wind.Cover);
+            Ui.Row("Open rays", wind.Open);
+            if (wind.Blocked.Count > 0) Ui.WrapTable(WindColumns, wind.Blocked);
+            if (Ui.Tool("Show rays", "The 17 rays from the hub in the world, green open, amber blocked", _windRays.Shown ? "Hide" : "Show"))
+                Ui.Later(() =>
+                {
+                    if (_windRays.Shown) _windRays.Hide();
+                    else if (_facts?.Wind != null) _windRays.Show(_facts.Wind.Hub, _facts.Wind.Ends, _facts.Wind.Hit);
+                });
+        }
+
         private void DrawFacts(ObjectInspector.Facts facts)
         {
             Ui.Row("Prefab", facts.Prefab + "   (" + (facts.Mod ?? "the game, or no mod matched") + ")");
@@ -116,6 +139,7 @@ namespace Vigil.Recorder
             Ui.Row("Size", facts.SizeBytes.ToString(CultureInfo.InvariantCulture) + " bytes, all of it each time it is sent");
             Ui.Row("Changes", ChangeWords(facts));
             foreach (var extra in facts.Extras) Ui.Row(extra.Key, extra.Value);
+            if (facts.Wind != null) DrawWind(facts.Wind);
 
             bool valuesOpen = _valuesOpen;
             if (Ui.ExpandRow(FoldColumns, new[] { "Stored values (" + facts.Values.Count.ToString(CultureInfo.InvariantCulture) + ")" }, valuesOpen))

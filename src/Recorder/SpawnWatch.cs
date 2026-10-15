@@ -77,6 +77,7 @@ namespace Vigil.Recorder
                     Entry = string.IsNullOrEmpty(critter.m_name) ? critter.m_prefab.name : critter.m_name,
                     NightOnly = !critter.m_spawnAtDay,
                     AllowedInBase = critter.m_insidePlayerBase,
+                    HuntsPlayers = critter.m_huntPlayer,
                     X = spawnPoint.x, Y = spawnPoint.y, Z = spawnPoint.z,
                 };
                 if (eventSpawner)
@@ -185,7 +186,7 @@ namespace Vigil.Recorder
 
         // The base a spawn appeared in: the piece whose base area it is, its builder (named when that
         // player is loaded here), and where the piece stands.
-        private static void NameBase(SpawnRecord record, EffectArea area)
+        internal static void NameBase(SpawnRecord record, EffectArea area)
         {
             var piece = area.GetComponentInParent<Piece>();
             if (piece == null) return;

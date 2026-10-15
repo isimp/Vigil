@@ -12,6 +12,10 @@ One plugin, `isimp.Vigil`. `src/VigilPlugin.cs` is the host: it starts the switc
 
 Mods' Unity callbacks and coroutines are timed with a Harmony prefix and finalizer, on the main thread only. A deep capture (on a slow stretch or `vigil deep`) times every game method mods patch, installed a few per frame. Vigil's own calls cannot be hooked, since the recorder closes each frame inside its own Update, so the plugin times them itself and reports them as the mod Vigil.
 
+## Spawns, base arrivals and windmills
+
+Spawns are seen at `SpawnSystem.Spawn`, `SpawnArea.SpawnOne` and `CreatureSpawner.Spawn`, after every other mod's prefixes. The game never spawns inside a base area unless the entry allows it, so once a second the creatures hostile to the player (`BaseAI.IsEnemy`) that stand inside a base area within 100 m are noted, each once, with the base's piece and builder and the spawn's record when this game made it (`Core/Recorder/BaseArrivals`). A windmill's wind check casts the game's own 17 cover rays (`Cover.GetCoverForPoint`, from the propeller, 29.5 m each) and names what each blocked ray hits; output is (1 - cover) times the wind, none under 10 % (`Windmill.GetPowerOutput`, `Core/Recorder/BaseArrivals.cs` `WindCheck`).
+
 ## The link to the server's Vigil
 
 Four routed messages (`Vigil_Hello`, `Vigil_HelloReply`, `Vigil_Admin`, `Vigil_AdminReply`) carry one line of named values each. The hello tells each side the other's version and capabilities and whether the player is an admin. The server checks admin status for every question; sharing, spawn logs and parity are open to every player. Settings the server decides (its fog limit) go through ServerSync.

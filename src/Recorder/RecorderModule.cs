@@ -421,6 +421,7 @@ namespace Vigil.Recorder
             try { UpdateOwnership(); } catch (Exception) { }
             try { UpdateInspect(); } catch (Exception) { }
             try { UpdateWeather(); } catch (Exception) { }
+            try { UpdateArrivals(); } catch (Exception) { }
             try { UpdateAlerts(); } catch (Exception e) { _alertsError = e.GetType().Name + " " + e.Message; _alertsAsking = false; }
             if (_watchPatches && !_patchMapWritten && PatchMapDue())
             {

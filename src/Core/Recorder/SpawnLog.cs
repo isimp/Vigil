@@ -35,6 +35,9 @@ namespace Vigil.Core
 
         public bool NightOnly, InsideBase, AllowedInBase, Cancelled;
 
+        /// <summary>The entry sends it after the players (<c>SpawnData.m_huntPlayer</c>).</summary>
+        public bool HuntsPlayers;
+
         /// <summary>The mods with a check that can cancel this kind of spawn, for a cancelled one.</summary>
         public string CancelledBy;
 
