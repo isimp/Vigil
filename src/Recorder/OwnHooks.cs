@@ -159,6 +159,37 @@ namespace Vigil.Recorder
             }
         }
 
+        private MethodBase _one;
+
+        /// <summary>For the self-test: times one patch method by itself until <see cref="EndOne"/>; false while a measurement runs or when it cannot be put in.</summary>
+        public bool BeginOne(MethodBase m, string label)
+        {
+            if (_state != State.Idle || _one != null || m == null || s_acc.ContainsKey(m)) return false;
+            s_acc[m] = new Acc { Label = label };
+            try
+            {
+                _harmony.Patch(m, prefix: new HarmonyMethod(typeof(OwnHooks), nameof(Pre)) { priority = Priority.First },
+                    finalizer: new HarmonyMethod(typeof(OwnHooks), nameof(Fin)) { priority = Priority.Last });
+                _one = m;
+                return true;
+            }
+            catch (Exception)
+            {
+                s_acc.TryRemove(m, out _);
+                return false;
+            }
+        }
+
+        /// <summary>The one patch method's calls and time (the timers' cost taken off), its timer taken off again.</summary>
+        public (long Calls, double Ms) EndOne()
+        {
+            var m = _one;
+            _one = null;
+            if (m == null || !s_acc.TryRemove(m, out var a)) return (0, 0);
+            try { _harmony.Unpatch(m, HarmonyPatchType.All, _harmony.Id); } catch (Exception) { }
+            return (a.Calls, OwnCost.Net(PhaseTimer.TicksToMs(a.Ticks), a.Calls, double.IsNaN(PerCallMs) ? 0 : PerCallMs));
+        }
+
         private void Hook(MethodBase m)
         {
             string id = "own hook " + (m.DeclaringType != null ? m.DeclaringType.Name + "." : "") + m.Name;

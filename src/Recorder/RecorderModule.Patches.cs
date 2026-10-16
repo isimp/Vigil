@@ -40,6 +40,7 @@ namespace Vigil.Recorder
             // Every plugin has loaded: the names of the mods' config sync messages, and the names in their files.
             NetAttribution.LearnSyncNames();
             _ownHooks?.Calibrate();
+            if (_ownHooks != null && !double.IsNaN(_ownHooks.PerCallMs)) PhaseTimer.PairMs = _ownHooks.PerCallMs;
             if (ObjectInspector.Loaded == null && !ObjectInspector.NamesReading) ObjectInspector.ReadNames();
             SkipWinterPatch.Hook(line => _host.Log.LogInfo(line));
             if (!string.IsNullOrEmpty(SkipWinterPatch.Problem)) _host.Log.LogWarning("Vigil: the Skip winter patch stepped aside: " + SkipWinterPatch.Problem);

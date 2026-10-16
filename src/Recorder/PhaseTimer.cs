@@ -37,6 +37,7 @@ namespace Vigil.Recorder
             public MethodBase Method; // deep hooks only, so they can be taken off again
             public bool Dropped;     // deep hook taken off early: called too often to time cheaply
             public bool Coroutine;   // one coroutine type, timed through Unity's coroutine runner
+            public string PatchKind; // a mod's prefix, postfix or finalizer on a split method, timed by itself in a deep capture
             public long FrameTicks; public int FrameCalls;
             public long SecondTicks; public int SecondCalls;
             public long RunTicks; public long RunCalls;
@@ -326,6 +327,11 @@ namespace Vigil.Recorder
         private readonly BudgetedQueue<KeyValuePair<MethodBase, string>> _toHook = new BudgetedQueue<KeyValuePair<MethodBase, string>>();
         private readonly BudgetedQueue<MethodBase> _toUnhook = new BudgetedQueue<MethodBase>();
         private readonly BudgetedQueue<MethodBase> _toSplit = new BudgetedQueue<MethodBase>();
+        private readonly BudgetedQueue<KeyValuePair<MethodBase, Slot>> _toTimePatches = new BudgetedQueue<KeyValuePair<MethodBase, Slot>>();
+        private static readonly string[] TimerOwners = { "isimp.Vigil.timing", "isimp.Vigil.deep", "isimp.Vigil.selftime" };
+
+        /// <summary>One timer pair's own cost per call in ms (calibrated by <see cref="OwnHooks"/>), taken off the mods' patch times; 0 until known.</summary>
+        public static double PairMs;
         private static readonly Dictionary<Slot, MethodBase> s_methodOf = new Dictionary<Slot, MethodBase>();
         private int _spikeSplits;
 
@@ -413,7 +419,8 @@ namespace Vigil.Recorder
                 case DeepState.Running:
                     // Hot hooks come off first, then the split goes on, within one budget per frame.
                     if (_toUnhook.Count > 0) _toUnhook.Step(Unhook, elapsed, budgetMs);
-                    else _toSplit.Step(HookSplit, elapsed, budgetMs);
+                    else if (_toSplit.Count > 0) _toSplit.Step(HookSplit, elapsed, budgetMs);
+                    else _toTimePatches.Step(TimePatch, elapsed, budgetMs);
                     return false;
                 case DeepState.Removing:
                     _toUnhook.Step(Unhook, elapsed, budgetMs);
@@ -466,6 +473,7 @@ namespace Vigil.Recorder
         {
             s_deepRunning = false;
             _toSplit.Clear();
+            _toTimePatches.Clear();
             _toUnhook.Add(_deepMethods);
             _deepMethods.Clear();
             _deep = _toUnhook.Count > 0 ? DeepState.Removing : DeepState.Idle;
@@ -526,9 +534,64 @@ namespace Vigil.Recorder
                     postfix: new HarmonyMethod(typeof(PhaseTimer), nameof(OrigPost)) { priority = int.MaxValue });
                 slot.Split = true;
                 if (!_deepMethods.Contains(m)) _deepMethods.Add(m);
+                QueuePatchesOf(m, slot.Label);
             }
             catch (Exception e) { _failed.Add(id + " (" + e.GetType().Name + ")"); }
             finally { _journal.Done(id); }
+        }
+
+        // A split method's mods' prefixes, postfixes and finalizers, each to be timed by itself (Vigil's
+        // timers left out, Vigil's own hooks in as the mod Vigil).
+        private void QueuePatchesOf(MethodBase m, string label)
+        {
+            Patches info;
+            try { info = Harmony.GetPatchInfo(m); } catch (Exception) { return; }
+            if (info == null) return;
+            var mods = ModAssemblies();
+            var queue = new List<KeyValuePair<MethodBase, Slot>>();
+            void Each(IEnumerable<Patch> patches, string kind)
+            {
+                foreach (var p in patches)
+                {
+                    var pm = p.PatchMethod;
+                    if (pm?.DeclaringType == null || TimerOwners.Contains(p.owner) || s_byMethod.ContainsKey(pm)) continue;
+                    var asm = pm.DeclaringType.Assembly;
+                    string mod = asm == typeof(PhaseTimer).Assembly ? OwnTime.Mod : mods.TryGetValue(asm, out string name) ? name : null;
+                    if (mod == null) continue;
+                    queue.Add(new KeyValuePair<MethodBase, Slot>(pm, new Slot { Label = label + " " + kind, Parent = Nested, Deep = true, Mod = mod, PatchKind = kind, Method = pm }));
+                }
+            }
+            Each(info.Prefixes, "prefix");
+            Each(info.Postfixes, "postfix");
+            Each(info.Finalizers, "finalizer");
+            _toTimePatches.Add(queue);
+        }
+
+        private void TimePatch(KeyValuePair<MethodBase, Slot> kv)
+        {
+            if (s_byMethod.ContainsKey(kv.Key)) return;
+            if (Hook(_deepHarmony, kv.Key, kv.Value)) _deepMethods.Add(kv.Key);
+        }
+
+        /// <summary>The mods' patch methods timed by themselves in this deep capture.</summary>
+        public List<PatchTiming> PatchTimings() =>
+            s_slots.Where(s => s.PatchKind != null && s.DeepCalls > 0).Select(s => new PatchTiming(s.Mod, s.Label, s.DeepCalls, TicksToMs(s.DeepTicks))).ToList();
+
+        /// <summary>How many game methods each mod changes with transpilers.</summary>
+        public static Dictionary<string, int> TranspilersByMod()
+        {
+            var mods = ModAssemblies();
+            var counts = new Dictionary<string, int>();
+            foreach (var original in Harmony.GetAllPatchedMethods().ToList())
+            {
+                Patches info;
+                try { info = Harmony.GetPatchInfo(original); } catch (Exception) { continue; }
+                if (info == null) continue;
+                foreach (string mod in info.Transpilers.Select(t => t.PatchMethod?.DeclaringType != null && mods.TryGetValue(t.PatchMethod.DeclaringType.Assembly, out string m) ? m : null)
+                    .Where(m => m != null).Distinct())
+                    counts[mod] = (counts.TryGetValue(mod, out int n) ? n : 0) + 1;
+            }
+            return counts;
         }
 
         /// <summary>Every loaded mod's assembly with its plugin name, Vigil left out.</summary>

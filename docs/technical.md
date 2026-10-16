@@ -10,7 +10,7 @@ One plugin, `isimp.Vigil`. `src/VigilPlugin.cs` is the host: it starts the switc
 
 ## Timing
 
-Mods' Unity callbacks and coroutines are timed with a Harmony prefix and finalizer, on the main thread only. A deep capture (on a slow stretch or `vigil deep`) times every game method mods patch, installed a few per frame. Vigil's own calls cannot be hooked, since the recorder closes each frame inside its own Update, so the plugin times them itself and reports them as the mod Vigil.
+Mods' Unity callbacks and coroutines are timed with a Harmony prefix and finalizer, on the main thread only. A deep capture (on a slow stretch or `vigil deep`) times every game method mods patch, installed a few per frame. After 2 s it splits the 25 costliest (and any that stalls a frame later) into the game's code and the mods' share, and then times each mod's prefix, postfix and finalizer on those methods by itself (`Core/Recorder/PatchTime`), the timers' own cost per call taken off: the report's first by-mod section gives each mod's own patch code per frame with its costliest patch, and lists the mods whose transpilers change the game's code, which can only be timed inside those methods. A patch the runtime folded into the game's method escapes its own timer. The older by-mod section, which gives every mod patching a method that method's whole time, follows it. The self-test times one other mod's patch on a game method that runs every frame for 2 s. Vigil's own calls cannot be hooked, since the recorder closes each frame inside its own Update, so the plugin times them itself and reports them as the mod Vigil.
 
 ## Vigil's own cost
 

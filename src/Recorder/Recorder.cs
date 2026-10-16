@@ -992,6 +992,7 @@ namespace Vigil.Recorder
         // Methods split into the game's code and the mods' share: the ones that took the most time in the first 2 s.
         private const int SplitMethods = 25;
         private int _deepSplit;
+        private long _deepSplitFrame;
 
         /// <summary>Each frame while a deep capture is under way: install, measure, drop hot hooks, finish, remove.</summary>
         private void StepDeep(float now)
@@ -1009,6 +1010,7 @@ namespace Vigil.Recorder
                 _deepDropDone = true;
                 _timer.DropHotDeepHooks(_frameNo - _deepFramesStart);
                 _deepSplit = _timer.SplitTop(SplitMethods);
+                _deepSplitFrame = _frameNo;
             }
             if (_timer.DeepRunning && _deepUntil > 0 && now >= _deepUntil) FinishDeep();
             if (!_timer.DeepActive)
@@ -1056,7 +1058,14 @@ namespace Vigil.Recorder
                 if (share.Length > 0) sb.AppendLine("               " + share);
             }
             sb.AppendLine();
-            sb.AppendLine("== By mod: time of the game methods each mod patches (a method patched by several mods counts for each) ==");
+            var own = PatchTime.ByMod(_timer.PatchTimings(), Math.Max(1, _frameNo - _deepSplitFrame), PhaseTimer.PairMs);
+            sb.AppendLine("== By mod: their own patch code (prefixes, postfixes, finalizers) on the split methods, per frame ==");
+            sb.AppendLine("   each patch method timed by itself from when the split went on, the timers' own cost per call taken off");
+            if (own.Count == 0) sb.AppendLine("   none timed: no mod patches the split methods, or the capture ended before their timers went on");
+            foreach (var row in own) sb.AppendLine(PatchTime.Line(row));
+            sb.AppendLine("   Transpilers, timed only inside the game's methods they change: " + PatchTime.TranspilerLine(PhaseTimer.TranspilersByMod()));
+            sb.AppendLine();
+            sb.AppendLine("== By mod: game methods each mod patches, timed whole (a method patched by several mods counts for each) ==");
             var perMod = new Dictionary<string, double>();
             foreach (var s in patched)
                 foreach (var m in s.PatchedBy.Split(new[] { ", " }, StringSplitOptions.None))
@@ -1065,7 +1074,7 @@ namespace Vigil.Recorder
                 sb.AppendFormat(ci, "   {0,8:0.000} ms/frame  {1}\r\n", kv.Value / frames, kv.Key);
             sb.AppendLine();
             sb.AppendLine("== Mods' own Update/FixedUpdate/LateUpdate/OnGUI during the capture ==");
-            foreach (var s in _timer.Slots.Where(s => s.Mod != null && s.DeepCalls > 0).OrderByDescending(s => s.DeepTicks).Take(30))
+            foreach (var s in _timer.Slots.Where(s => s.Mod != null && s.PatchKind == null && s.DeepCalls > 0).OrderByDescending(s => s.DeepTicks).Take(30))
                 sb.AppendFormat(ci, "   {0,8:0.000} ms/frame  {1,10:0.0} calls/frame  {2}\r\n", PhaseTimer.TicksToMs(s.DeepTicks) / frames, (double)s.DeepCalls / frames, s.Label);
             if (_timer.DeepDropped.Count > 0)
             {

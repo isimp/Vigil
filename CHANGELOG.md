@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.33.0
+
+Each mod's own patch code in the deep capture report: once the capture has found the costliest game methods, it times every mod's prefix, postfix and finalizer on them by itself and lists the mods by what their own patches cost per frame, each with its costliest patch, and which mods change the game's code with transpilers. The section that gave every mod patching a method that method's whole time stays, under a clearer name.
+
 ## 0.32.0
 
 World-object data by mod: the Network tab's new card captures 60 s of what your game sends (and runs on its own during a deep capture) and shows, for each kind of object, how often it was sent, how big it was each time and how much of that the game's values and each mod's values take, and which values, by changing, made objects send again, movement included. The summary lists the last capture, and the self-test checks the sizes against the objects actually sent.
