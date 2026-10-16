@@ -323,9 +323,9 @@ namespace Vigil.Recorder
                 bool here = _fetchedTo.TryGetValue(a.File, out string local) && File.Exists(local);
                 bool getting = _fetching != null && _fetching.Path == a.File;
                 if (getting) Ui.Tool(when, a.Text, "Getting", enabled: false);
-                else if (Ui.Tool(when, a.Text, here ? "Open" : "Get", enabled: here || _fetching == null))
+                else if (Ui.Tool(when, a.Text, here ? PathClipboard.Label(local) : "Get", enabled: here || _fetching == null))
                 {
-                    if (here) Shell.Open(local);
+                    if (here) PathClipboard.Copy(local);
                     else StartFetch(new ReportCatalog.Entry { Path = a.File });
                 }
                 return;

@@ -106,7 +106,7 @@ internal static partial class Ui
         Rect openRect = default;
         if (r.Path != null)
         {
-            float openWidth = Skin.Quiet.CalcSize(new GUIContent("Open")).x + Skin.U(IconSize + IconGap);
+            float openWidth = Skin.Quiet.CalcSize(new GUIContent(PathCopy.Idle)).x + Skin.U(IconSize + IconGap);
             openRect = new Rect(right - openWidth, head.y + Skin.U(2f), openWidth, Skin.U(22f));
             right = openRect.x - gap;
         }
@@ -136,9 +136,9 @@ internal static partial class Ui
         GUI.Label(new Rect(x, head.y, Mathf.Max(0f, right - x), head.height), r.At.ToString("HH:mm:ss", Ci), Skin.TileLabel);
 
         bool folded = foldable && Report(Key("fold"), GUI.Button(foldRect, GUIContent.none, GUIStyle.none));
-        if (r.Path != null && Report(Key("open"), IconButton(openRect, "Open", Skin.Quiet)))
+        if (r.Path != null && Report(Key("copy"), IconButton(openRect, PathClipboard.Label(r.Path), Skin.Quiet)))
         {
-            Shell.Open(r.Path);
+            PathClipboard.Copy(r.Path);
         }
 
         if (close != null && Report(Key("close"), CloseButton(shutRect)))

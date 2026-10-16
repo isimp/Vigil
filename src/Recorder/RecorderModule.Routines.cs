@@ -34,7 +34,6 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "the weather and why", 3f, WeatherOnce);
             yield return new SelfTestRoutine(Here, "what could spawn at the spot under the crosshair", 3f, SpawnableOnce);
             yield return new SelfTestRoutine(Here, "config fingerprints the same twice", 10f, FingerprintsTwice);
-            yield return new SelfTestRoutine(Here, "Explorer to open files with", 1f, ExplorerThere);
             yield return new SelfTestRoutine(Here, "the share queue's file", 1f, ShareQueueWritable);
             if (!full) yield break;
             yield return new SelfTestRoutine(Here, "the server's status", 12f, StatusAnswered);
@@ -199,14 +198,6 @@ namespace Vigil.Recorder
             checks.Add(first.Count == 0 ? new Check(Here, what, Outcome.Warn, "no config files found")
                 : differ.Count == 0 ? new Check(Here, what, Outcome.Pass, first.Count + " files")
                 : new Check(Here, what, Outcome.Warn, "changed between two reads (a mod writing them?): " + string.Join(", ", differ.Take(3).ToArray())));
-        }
-
-        private IEnumerator ExplorerThere(List<Check> checks)
-        {
-            string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
-            checks.Add(File.Exists(explorer) ? new Check(Here, "Explorer to open files with", Outcome.Pass, explorer)
-                : new Check(Here, "Explorer to open files with", Outcome.Warn, "not found; Open buttons will do nothing"));
-            yield break;
         }
 
         private IEnumerator ShareQueueWritable(List<Check> checks)

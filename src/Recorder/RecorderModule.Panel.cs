@@ -228,7 +228,7 @@ namespace Vigil.Recorder
             }
             Ui.BeginLine();
             GUILayout.FlexibleSpace();
-            if (Ui.Quiet("Open the recordings folder")) Shell.Open(_dir);
+            if (Ui.Quiet(PathClipboard.Label(_dir, "Copy the recordings folder's path"))) PathClipboard.Copy(_dir);
             Ui.EndLine();
         }
 

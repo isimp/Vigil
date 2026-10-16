@@ -128,9 +128,9 @@ namespace Vigil.Recorder
                 string from = ReportCatalog.From(e.Path);
                 string name = Upper(e.Kind) + "   " + when + (from != null ? "   from " + from : e.Path.StartsWith("Vigil-runs/", StringComparison.Ordinal) ? "   (before a restart)" : "");
                 if (getting) Ui.Tool(name, e.Headline, "Getting", enabled: false);
-                else if (Ui.Tool(name, e.Headline, here ? "Open" : "Get", enabled: here || _fetching == null))
+                else if (Ui.Tool(name, e.Headline, here ? PathClipboard.Label(local) : "Get", enabled: here || _fetching == null))
                 {
-                    if (here) Shell.Open(local);
+                    if (here) PathClipboard.Copy(local);
                     else StartFetch(e);
                 }
             }
