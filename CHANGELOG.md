@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.22.0
+
+*Inspect an object* explains the objects the game judges by their surroundings. A fermenter shows its batch, its cover and roof, and that the game starts the batch over while either is missing; a beehive shows its cover against its limit, its biome and daylight; a crop shows what blocks its sun or space and when it is ready, and whether it withers if it is not healthy by then; a smelter or kiln shows its fuel, ore, roof and whether its smoke gets out; a fire shows whether it is wet or blocked; a creature shows how far its taming is and what pauses it, and why it does or does not breed. A fermenter's or beehive's cover rays can be drawn in the world like a windmill's. A new *World* card, *Rested and comfort*, reads where you stand: shelter, your comfort and the pieces that count, the ones skipped and the groups still missing.
+
 ## 0.21.1
 
 A dropped connection whose traffic stopped all at once reads as the line dying again. The incoming rate Steam reports changes in steps and keeps decaying for a few seconds after the packets stop, which made a sudden stop look like a game slowing down; the verdict now compares the seconds before the real stop, found from the pause between packets as it grows and from unconfirmed data piling up.

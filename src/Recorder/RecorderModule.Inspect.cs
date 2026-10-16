@@ -94,11 +94,7 @@ namespace Vigil.Recorder
                 _factsAt = Now;
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 try { _facts = _inspector.Read(_ownership, PingOf, Limits.PingMs); } catch (Exception) { _facts = null; }
-                if (_windRays.Shown)
-                {
-                    if (_facts?.Wind != null) _windRays.Show(_facts.Wind.Hub, _facts.Wind.Ends, _facts.Wind.Hit);
-                    else _windRays.Hide();
-                }
+                if (_windRays.Shown && !ShowRays()) _windRays.Hide();
                 _recorder?.AddOwnTime(watch.Elapsed.TotalMilliseconds);
             }
 
@@ -123,13 +119,40 @@ namespace Vigil.Recorder
             Ui.Row("Cover", wind.Cover);
             Ui.Row("Open rays", wind.Open);
             if (wind.Blocked.Count > 0) Ui.WrapTable(WindColumns, wind.Blocked);
-            if (Ui.Tool("Show rays", "The 17 rays from the hub in the world, green open, amber blocked", _windRays.Shown ? "Hide" : "Show"))
+            RaysTool("The 17 rays from the hub in the world, green open, amber blocked");
+        }
+
+        private void RaysTool(string words)
+        {
+            if (Ui.Tool("Show rays", words, _windRays.Shown ? "Hide" : "Show"))
                 Ui.Later(() =>
                 {
                     if (_windRays.Shown) _windRays.Hide();
-                    else if (_facts?.Wind != null) _windRays.Show(_facts.Wind.Hub, _facts.Wind.Ends, _facts.Wind.Hit);
+                    else ShowRays();
                 });
         }
+
+        // The rays of what is inspected: a windmill's, else a fermenter's or beehive's; false when it has none.
+        private bool ShowRays()
+        {
+            if (_facts?.Wind != null) _windRays.Show(_facts.Wind.Hub, _facts.Wind.Ends, _facts.Wind.Hit);
+            else if (_facts?.PartRays != null) _windRays.Show(_facts.PartRays.Hub, _facts.PartRays.Ends, _facts.PartRays.Hit);
+            else return false;
+            return true;
+        }
+
+        private static void DrawPart(RulesPart part, bool table = true)
+        {
+            Ui.Heading(part.Title);
+            foreach (var row in part.Rows) Ui.Row(row.Label, Toned(row.Value, row.Tone));
+            if (table && part.Table != null && part.Table.Count > 0)
+                Ui.WrapTable(part.Head.Select((h, i) => new Ui.Column(h, i == 0 ? 0 : i == part.Head.Length - 1 ? 190 : 90, false)).ToArray(), part.Table);
+            if (!string.IsNullOrEmpty(part.Note)) Ui.Note(part.Note);
+        }
+
+        private static string Toned(string text, ResultTone tone) =>
+            tone == ResultTone.Good ? "<color=#9BD67C>" + text + "</color>" : tone == ResultTone.Caution ? "<color=#E8B04A>" + text + "</color>"
+            : tone == ResultTone.Bad ? "<color=#E8624F>" + text + "</color>" : text;
 
         private void DrawFacts(ObjectInspector.Facts facts)
         {
@@ -140,6 +163,8 @@ namespace Vigil.Recorder
             Ui.Row("Changes", ChangeWords(facts));
             foreach (var extra in facts.Extras) Ui.Row(extra.Key, extra.Value);
             if (facts.Wind != null) DrawWind(facts.Wind);
+            foreach (var part in facts.Parts) DrawPart(part);
+            if (facts.Wind == null && facts.PartRays != null) RaysTool("The 17 cover rays in the world, green open, amber blocked");
 
             bool valuesOpen = _valuesOpen;
             if (Ui.ExpandRow(FoldColumns, new[] { "Stored values (" + facts.Values.Count.ToString(CultureInfo.InvariantCulture) + ")" }, valuesOpen))

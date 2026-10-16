@@ -164,6 +164,7 @@ namespace Vigil.Recorder
                 yield return new PanelSection("World", "Spawns near you", DrawSpawns, SpawnsBadge);
                 yield return new PanelSection("World", "Spawns across the server", DrawSpawnsAcross, SpawnsAcrossBadge);
                 yield return new PanelSection("World", "What could spawn here", DrawSpawnable, SpawnableBadge);
+                yield return new PanelSection("World", "Rested and comfort", DrawRested, RestedBadge);
                 yield return new PanelSection("World", "Leftovers in the world", DrawLeftovers, LeftoversBadge, PanelZone.Change);
                 yield return new PanelSection("Health", "Mods and configs", DrawParity, ParityBadge);
                 yield return new PanelSection("Tools", "Inspect", DrawInspect, null, PanelZone.Measure);
