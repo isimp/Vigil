@@ -11,10 +11,11 @@ namespace Vigil.Recorder
 {
     /// <summary>
     /// On a player's game: the weather and light as the game has them now, and the changes Vigil
-    /// makes to them. Each game picks and draws its own weather (<c>EnvMan</c>), so every change here
-    /// is this game's only. The weather, the wind and the time of day drawn use the game's own debug
-    /// switches (<c>m_debugEnv</c>, <c>SetDebugWind</c>, <c>m_debugTimeOfDay</c>), which a world's
-    /// unloading clears; the fog has none, so a postfix on <c>EnvMan.SetEnv</c>, which draws the
+    /// makes to them on this game. Each game picks and draws its own weather (<c>EnvMan</c>); the
+    /// server's weather reaches every game running Vigil through <see cref="ServerWeatherPatch"/>. The
+    /// wind and the time of day drawn use the game's own debug switches (<c>SetDebugWind</c>,
+    /// <c>m_debugTimeOfDay</c>), which a world's unloading clears; the fog has none, so a postfix on
+    /// <c>EnvMan.SetEnv</c>, which draws the
     /// weather's fog every fixed step, puts the fog an admin set, or caps it at the fog limiter
     /// (<see cref="WeatherControl.FogDrawn"/>).
     /// </summary>
@@ -33,9 +34,6 @@ namespace Vigil.Recorder
 
         /// <summary>Whether the cap is the server's (it wins while set) rather than the player's own.</summary>
         public static bool LimitFromServer { get; set; }
-
-        /// <summary>The weather Vigil put into the game's debug weather; null when it did not.</summary>
-        public static string SetWeather { get; set; }
 
         /// <summary>The fog the weather itself drew in the last fixed step, before Vigil's change.</summary>
         public static float WeatherFog { get; private set; } = float.NaN;
@@ -71,7 +69,6 @@ namespace Vigil.Recorder
         public static void WorldLeft()
         {
             SetFog = null;
-            SetWeather = null;
             WeatherFog = float.NaN;
         }
 
@@ -88,6 +85,9 @@ namespace Vigil.Recorder
             public List<KeyValuePair<string, string>> Mods = new List<KeyValuePair<string, string>>();
             public List<KeyValuePair<string, bool>> Post = new List<KeyValuePair<string, bool>>();
             public string Quality, Gpu, Api, SetWind, SetTime;
+
+            /// <summary>The world's own clock while the server's freeze draws another hour; null otherwise.</summary>
+            public string RealTime;
         }
 
         /// <summary>The weather and light now; null outside a world.</summary>
@@ -108,6 +108,8 @@ namespace Vigil.Recorder
                 FogColour = "#" + ColorUtility.ToHtmlStringRGB(RenderSettings.fogColor),
             };
             s.Cause = WeatherCause.Of(Sources(env), s.Biome, s.Period, s.NextRoll);
+            if (ServerWeatherPatch.State.HeldAt.HasValue && !env.m_debugTimeOfDay)
+                s.RealTime = DayClock.Clock(DayClock.Fraction(ZNet.instance.GetTimeSeconds(), env.m_dayLengthSec));
             float day = env.GetDayFraction();
             s.Day = env.GetDay().ToString(Ci);
             s.Time = string.Format(Ci, "{0:00}:{1:00}", (int)(day * 24f), (int)(day * 24f * 60f) % 60);
@@ -161,8 +163,11 @@ namespace Vigil.Recorder
         /// <summary>What each of the game's weather overrides holds, in the order the game asks them.</summary>
         private static WeatherSources Sources(EnvMan env)
         {
-            var s = new WeatherSources { DebugEnv = env.m_debugEnv, IntroEnv = env.m_introEnvironment };
-            s.SetByVigil = !string.IsNullOrEmpty(SetWeather) && string.Equals(env.m_debugEnv, SetWeather, StringComparison.Ordinal);
+            var s = new WeatherSources { DebugEnv = env.m_debugEnv, IntroEnv = env.m_introEnvironment, Server = ServerWeatherPatch.State, DayLength = env.m_dayLengthSec };
+            if (!ServerWeatherPatch.State.IsEmpty)
+            {
+                try { s.RollNow = ServerWeatherPatch.RollNow(env, s_currentBiome?.GetValue(env)); } catch (Exception) { }
+            }
             try { s.InIntro = Player.m_localPlayer != null && Player.m_localPlayer.InIntro(); } catch (Exception) { }
             try
             {
@@ -219,7 +224,7 @@ namespace Vigil.Recorder
         public static string SetSummary(State s)
         {
             var parts = new List<string>();
-            if (s.Cause != null && (s.Cause.Kind == WeatherCauseKind.SetInVigil || s.Cause.Kind == WeatherCauseKind.DevCommand)) parts.Add("weather " + s.Weather);
+            if (s.Cause != null && s.Cause.Kind == WeatherCauseKind.DevCommand) parts.Add("weather " + s.Weather + " (a dev command)");
             if (SetFog.HasValue) parts.Add("fog " + SetFog.Value.ToString("0.000", Ci));
             if (s.SetWind != null) parts.Add("wind " + s.SetWind);
             if (s.SetTime != null) parts.Add("time " + s.SetTime);

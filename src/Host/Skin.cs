@@ -590,6 +590,7 @@ internal static class Skin
         Icons["upload"] = Shape(32, 32, (x, y) => NearSegment(x, y, 16f, 8f, 16f, 20f, s) || InTriangle(x, y, 9f, 18f, 23f, 18f, 16f, 26.5f) || NearSegment(x, y, 6f, 4.5f, 26f, 4.5f, s));
         Icons["check"] = Shape(32, 32, TickCoverage);
         Icons["compare"] = Shape(32, 32, (x, y) => BoxCoverage(x, y, 5.5f, 6f, 13.5f, 26f, s * 0.9f) || BoxCoverage(x, y, 18.5f, 6f, 26.5f, 26f, s * 0.9f));
+        Icons["pause"] = Shape(32, 32, (x, y) => NearSegment(x, y, 11.5f, 8f, 11.5f, 24f, s * 1.3f) || NearSegment(x, y, 20.5f, 8f, 20.5f, 24f, s * 1.3f));
         Icons["copy"] = Shape(32, 32, (x, y) => BoxCoverage(x, y, 12f, 5f, 26f, 21f, s * 0.9f)
             || (BoxCoverage(x, y, 6f, 11f, 20f, 27f, s * 0.9f) && !(x > 12f - s * 2f && y < 21f + s * 2f)));
         Icons["trash"] = Shape(32, 32, (x, y) =>

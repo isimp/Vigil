@@ -28,6 +28,8 @@ namespace Vigil.Tests
         [InlineData("Running", "wait")]
         [InlineData("Open the recordings folder", "folder")]
         [InlineData("Run", "play")]
+        [InlineData("Freeze", "pause")]
+        [InlineData("Back", "reset")]
         public void A_buttons_first_word_picks_its_icon(string label, string icon)
         {
             Assert.Equal(icon, ButtonIcon.For(label));
@@ -63,14 +65,14 @@ namespace Vigil.Tests
 
         private static readonly Dictionary<string, int> ActionArgument = new()
         {
-            ["Tool"] = 2, ["ExpandTool"] = 5, ["Button"] = 0, ["Primary"] = 0, ["Danger"] = 0, ["Quiet"] = 0,
+            ["Tool"] = 2, ["PickTool"] = 2, ["ExpandTool"] = 5, ["Button"] = 0, ["Primary"] = 0, ["Danger"] = 0, ["Quiet"] = 0,
         };
 
         /// <summary>The words of every button the panel's code draws: each text in the argument that names the button.</summary>
         private static IEnumerable<(string Label, string Where)> PanelButtonLabels()
         {
             string src = Path.Combine(Root(), "src");
-            var call = new Regex(@"\bUi\.(Tool|ExpandTool|Button|Primary|Danger|Quiet)\(");
+            var call = new Regex(@"\bUi\.(Tool|PickTool|ExpandTool|Button|Primary|Danger|Quiet)\(");
             foreach (var file in Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories))
             {
                 if (Path.GetFileName(file).StartsWith("Ui", StringComparison.Ordinal) && Path.GetFileName(Path.GetDirectoryName(file)) == "Host") continue;

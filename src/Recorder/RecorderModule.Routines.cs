@@ -137,6 +137,10 @@ namespace Vigil.Recorder
             checks.Add(WeatherWatch.HookProblem == null
                 ? new Check(Here, "the fog hook", Outcome.Pass, "in place; limiter " + (WeatherWatch.Limit.HasValue ? WeatherWatch.Limit.Value.ToString("0.###", Ic) + (WeatherWatch.LimitFromServer ? " (the server's)" : "") : "off"))
                 : new Check(Here, "the fog hook", Outcome.Fail, WeatherWatch.HookProblem + "; the fog limiter and setting the fog do nothing"));
+            long dayLength = EnvMan.instance != null ? EnvMan.instance.m_dayLengthSec : 1200;
+            checks.Add(ServerWeatherPatch.Problem == null
+                ? new Check(Here, "the server's weather hooks", Outcome.Pass, "in place; now " + ServerWeatherPatch.State.NowLine(dayLength))
+                : new Check(Here, "the server's weather hooks", Outcome.Fail, ServerWeatherPatch.Problem + "; this game rolls its own weather whatever the server holds"));
             checks.Add(new Check(Here, "the server's fog limit, through ServerSync", Outcome.Pass,
                 (_limitFromServer ? "the server's " + _serverLimitText + " is in charge" : "the server sets none; your own limiter counts")
                 + (_host.Sync.IsSourceOfTruth ? "; this game decides it (no server running Vigil)" : "; taken from the server")));

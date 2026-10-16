@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.26.0
+
+The server's weather, for every player running Vigil: the World tab's weather card lets the server's admins (or the world's host) set one weather for every biome, picked from a list of the biome's weathers and every weather the game knows, which narrows as you type; freeze each biome's weather and the time of day as they are, until everyone sleeps through a night; and go back to the game's own roll. Raids, dungeons and the intro keep their own weather, and the world's time goes on, so days, plants and the world's age are not held. The server keeps the choice over restarts, and the card says who chose it, when, and what the roll would give. The weather can no longer be set on the admin's own game only; the fog drawn, the wind and the time of day drawn still can. The console has `vigil weather set`, `freeze` and `back`.
+
 ## 0.25.0
 
 With *OdinOnDemand follows the game's volume* on, OdinOnDemand's master volume slider in a player's cog panel is the game's music slider, labelled *Music Volume* with its percentage: moving either moves the other, and radios, screens and the girdle play at their own slider times the game's master and music volume. OdinOnDemand's own master volumes per kind of player are no longer counted while the patch is on; they stay in its config for when it is off, and the *Patches* tab shows them. The panel's buttons for reports, alert files and the recordings folder now copy the path to the clipboard (*Copy path*, reading *Copied* for a moment) instead of opening it in Explorer, which opened a folder of its own choosing for some paths.

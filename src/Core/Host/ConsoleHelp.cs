@@ -99,6 +99,7 @@ namespace Vigil.Core
                 string.Format(Ci, "  vigil busiest [radius]       objects around you whose changes take the most to send ({0} m, {1} s)", BusiestRadius, BusiestSeconds),
                 "  vigil weather [report]       the weather and why, fog, wind; a report to compare with others",
                 "  vigil weather limit [server] <fog|off>   cap the fog drawn on your game (or everyone's)",
+                "  vigil weather set <name> | freeze | back   the server's weather for everyone (admins)",
                 string.Format(Ci, "  vigil spawned [server] [min] what your game (or everyone's, for admins) spawned ({0} min)", SpawnedMinutes),
                 "  vigil spawnable              what could spawn at the spot under your crosshair, and why not",
                 "  vigil leftovers [scan|...]   the whole world on the server: removed mods' objects (admins)",
@@ -210,17 +211,22 @@ namespace Vigil.Core
                 case "weather":
                     return new List<string>
                     {
-                        "vigil weather [report | limit [server] <fog|off> | set <name> | fog <density|off>",
-                        "              | wind <angle> <percent> | time <hours:minutes|fraction> | reset]",
-                        "  Without a word: the weather and why (a raid, a zone, a dev command, or the roll from the",
-                        "  biome's list), the fog drawn, the wind, and the mods that change weather or light.",
+                        "vigil weather [report | limit [server] <fog|off> | set <name> | freeze | back",
+                        "              | fog <density|off> | wind <angle> <percent> | time <hours:minutes|fraction> | reset]",
+                        "  Without a word: the weather and why (a raid, a zone, a dev command, the server's weather,",
+                        "  or the roll from the biome's list), the fog drawn, the wind, and the mods that change",
+                        "  weather or light.",
                         "  report writes Vigil-environment-<time>.txt, which the World tab can send to the server and",
                         "  compare with another player's. limit caps the fog drawn on your game (anyone; kept).",
                         "  limit server <fog|off> sets the server's fog limit, which wins over every player's own",
                         "  while it is set (the server's admins; ServerSync passes it on and the server keeps it).",
-                        "  The server's admins, or whoever hosts the world, can also change these on their own game",
-                        "  only, until reset or leaving the world: set picks a weather by name or a part of it, fog",
-                        "  sets the fog drawn, wind its direction and strength, time the time of day drawn.",
+                        "  The server's admins, or whoever hosts the world, choose the server's weather for every",
+                        "  player running Vigil, kept over restarts: set picks one weather for every biome, by name",
+                        "  or a part of it (raids, dungeons and the intro keep their own); freeze keeps each biome's",
+                        "  weather and the time of day as they are, while the world's time goes on, until everyone",
+                        "  sleeps through a night; back gives the game's own roll again. On their own game only,",
+                        "  until reset or leaving the world: fog sets the fog drawn, wind its direction and",
+                        "  strength, time the time of day drawn.",
                     };
                 case "spawned":
                     return new List<string>

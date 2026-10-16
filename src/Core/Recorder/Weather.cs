@@ -8,13 +8,14 @@ namespace Vigil.Core
     /// <summary>Why the weather is what it is: one of the game's overrides, or the roll from the biome's list.</summary>
     internal enum WeatherCauseKind
     {
-        SetInVigil,
         DevCommand,
         Intro,
         Event,
         SpecialArea,
         WorldEvent,
         Zone,
+        ServerSet,
+        ServerHeld,
         Rolled,
     }
 
@@ -22,13 +23,19 @@ namespace Vigil.Core
     internal sealed class WeatherSources
     {
         public string DebugEnv, IntroEnv, EventEnv, EventName, AreaEnv, WorldEventEnv, ZoneEnv;
-        public bool SetByVigil, InIntro;
+        public bool InIntro;
+
+        /// <summary>The server's weather (null or empty for the game's own roll), the day's length to read its times by, and what the roll would give now.</summary>
+        public ServerWeather Server;
+        public long DayLength;
+        public string RollNow;
     }
 
     /// <summary>
-    /// Why the weather is what it is, in the game's own order: the debug weather (a dev command's or
-    /// an admin's in Vigil), the intro, a raid, a special area of a biome, a world event, a place
-    /// with weather of its own (<c>EnvZone</c>); otherwise a roll from the biome's list once a period.
+    /// Why the weather is what it is, in the game's own order: the debug weather (a dev command's),
+    /// the intro, a raid, a special area of a biome, a world event, a place with weather of its own
+    /// (<c>EnvZone</c>); then the server's weather (<see cref="ServerWeather"/>), set or frozen;
+    /// otherwise a roll from the biome's list once a period.
     /// </summary>
     internal static class WeatherCause
     {
@@ -40,13 +47,17 @@ namespace Vigil.Core
 
         public static Cause Of(WeatherSources s, string biome, long period, long secondsToNext)
         {
-            if (!string.IsNullOrEmpty(s.DebugEnv))
-                return s.SetByVigil ? Make(WeatherCauseKind.SetInVigil, "set by an admin in Vigil, on this game only") : Make(WeatherCauseKind.DevCommand, "set by a dev command (env), on this game only");
+            if (!string.IsNullOrEmpty(s.DebugEnv)) return Make(WeatherCauseKind.DevCommand, "set by a dev command (env), on this game only");
             if (s.InIntro && !string.IsNullOrEmpty(s.IntroEnv)) return Make(WeatherCauseKind.Intro, "the intro's weather");
             if (!string.IsNullOrEmpty(s.EventEnv)) return Make(WeatherCauseKind.Event, string.IsNullOrEmpty(s.EventName) ? "a raid" : "the raid " + s.EventName);
             if (!string.IsNullOrEmpty(s.AreaEnv)) return Make(WeatherCauseKind.SpecialArea, "this area always has it");
             if (!string.IsNullOrEmpty(s.WorldEventEnv)) return Make(WeatherCauseKind.WorldEvent, "a world event");
             if (!string.IsNullOrEmpty(s.ZoneEnv)) return Make(WeatherCauseKind.Zone, "this place has its own weather");
+            string roll = string.IsNullOrEmpty(s.RollNow) ? "" : " · the roll would give " + s.RollNow;
+            if (s.Server != null && s.Server.Weather != null)
+                return Make(WeatherCauseKind.ServerSet, "set by the server (" + s.Server.SetBy + ", " + Moment(s.Server.SetAt, s.DayLength) + ")" + roll);
+            if (s.Server != null && s.Server.HeldAt.HasValue)
+                return Make(WeatherCauseKind.ServerHeld, "frozen by the server (" + s.Server.HeldBy + ", " + Moment(s.Server.HeldAt.Value, s.DayLength) + "): the " + biome + " list's roll of then" + (roll.Length > 0 ? roll + " now" : ""));
             return Make(WeatherCauseKind.Rolled, string.Format(CultureInfo.InvariantCulture, "rolled from the {0} list for period {1}, next roll in {2}", biome, period, Span(secondsToNext)));
         }
 
@@ -55,6 +66,8 @@ namespace Vigil.Core
             (string.IsNullOrEmpty(from) ? "" : from + " -> ") + to + " (" + why + ")";
 
         private static Cause Make(WeatherCauseKind kind, string words) => new Cause { Kind = kind, Words = words };
+
+        private static string Moment(double worldSecond, long dayLength) => ServerWeather.When(worldSecond, dayLength).Substring("on ".Length);
 
         private static string Span(long seconds)
         {

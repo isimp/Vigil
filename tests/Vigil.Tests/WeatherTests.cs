@@ -8,9 +8,9 @@ namespace Vigil.Tests
     /// <summary>
     /// The World tab's "Weather and light" card says which weather the player is in and why: the
     /// game takes the first of its overrides (a dev command, the intro, a raid, a special area, a
-    /// world event, a place with weather of its own) and otherwise rolls from the biome's list once
-    /// per period, the same roll on every game with the same list. Admins can set the weather, the
-    /// fog drawn, the wind and the time of day drawn, on their own game only; an environment report
+    /// world event, a place with weather of its own), then the server's weather, and otherwise rolls
+    /// from the biome's list once per period, the same roll on every game with the same list. Admins
+    /// can set the fog drawn, the wind and the time of day drawn, on their own game only; an environment report
     /// can be written, sent to the server (by hand, or on its own when the player ticks it) and
     /// compared with another player's, differences first and lists item by item.
     /// </summary>
@@ -32,8 +32,24 @@ namespace Vigil.Tests
             Assert.Equal("the raid army_eikthyr", WeatherCause.Of(s, "Meadows", 1, 1).Words);
             s.DebugEnv = "Clear";
             Assert.Equal(WeatherCauseKind.DevCommand, WeatherCause.Of(s, "Meadows", 1, 1).Kind);
-            s.SetByVigil = true;
-            Assert.Equal("set by an admin in Vigil, on this game only", WeatherCause.Of(s, "Meadows", 1, 1).Words);
+        }
+
+        [Fact]
+        public void The_servers_weather_comes_after_the_games_overrides_and_says_who_set_it_and_what_the_roll_would_give()
+        {
+            var set = new WeatherSources { Server = ServerWeather.None.Set("ThunderStorm", "Olebole", 412 * 1200L + 740), DayLength = 1200, RollNow = "Clear" };
+            Assert.Equal(WeatherCauseKind.ServerSet, WeatherCause.Of(set, "Meadows", 1, 1).Kind);
+            Assert.Equal("set by the server (Olebole, day 412 at 14:00) · the roll would give Clear", WeatherCause.Of(set, "Meadows", 1, 1).Words);
+            set.ZoneEnv = "Crypt";
+            Assert.Equal(WeatherCauseKind.Zone, WeatherCause.Of(set, "Meadows", 1, 1).Kind);
+
+            var held = new WeatherSources { Server = ServerWeather.None.Freeze("Dom", 413 * 1200L + 600), DayLength = 1200, RollNow = "Rain" };
+            Assert.Equal(WeatherCauseKind.ServerHeld, WeatherCause.Of(held, "Meadows", 1, 1).Kind);
+            Assert.Equal("frozen by the server (Dom, day 413 at 12:00): the Meadows list's roll of then · the roll would give Rain now", WeatherCause.Of(held, "Meadows", 1, 1).Words);
+            held.RollNow = null;
+            Assert.Equal("frozen by the server (Dom, day 413 at 12:00): the Meadows list's roll of then", WeatherCause.Of(held, "Meadows", 1, 1).Words);
+
+            Assert.Equal(WeatherCauseKind.Rolled, WeatherCause.Of(new WeatherSources { Server = ServerWeather.None }, "Meadows", 1, 1).Kind);
         }
 
         [Fact]

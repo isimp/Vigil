@@ -12,10 +12,11 @@ namespace Vigil.Recorder
     /// <summary>
     /// "Weather and light" in the panel's World tab and "vigil weather": the weather and why, the
     /// biome's list as mods leave it, the fog drawn, the wind, the mods that change weather or light
-    /// and the player's post-processing (<see cref="WeatherWatch"/>); the fog limiter for anyone;
-    /// changes to the weather, fog, wind and time of day drawn for the server's admins or the world's
-    /// host, on their own game only; environment reports to send and compare. Every change of weather
-    /// is written to Vigil-events.tsv with its cause, and every change made here too.
+    /// and the player's post-processing (<see cref="WeatherWatch"/>); the fog limiter for anyone; the
+    /// server's weather for every player running Vigil (<see cref="ServerWeather"/>, set or frozen by
+    /// the server's admins or the world's host, kept in the server's config); changes to the fog, wind
+    /// and time of day drawn for them, on their own game only; environment reports to send and compare.
+    /// Every change of weather is written to Vigil-events.tsv with its cause, and every change made here too.
     /// </summary>
     internal sealed partial class RecorderModule
     {
@@ -29,14 +30,15 @@ namespace Vigil.Recorder
 
         private static readonly Ui.Column[] ModColumns = { new Ui.Column("Mod", 150, false), new Ui.Column("Patches", 0, false) };
 
-        private ConfigEntry<string> _fogLimit, _serverFogLimit;
+        private ConfigEntry<string> _fogLimit, _serverFogLimit, _serverWeather;
+        private readonly Ui.Picker _weatherPick = new Ui.Picker();
         private bool _limitFromServer, _sameOpen;
         private string _serverLimitText = "off";
         private WeatherWatch.State _weather;
         private double _weatherAt = double.NegativeInfinity, _weatherCheckedAt = double.NegativeInfinity;
         private string _lastWeather, _lastCauseKind;
         private bool _wasInWorld, _listOpen = true, _modsOpen, _postOpen;
-        private string _limitText = "off", _setWeatherText = "", _setFogText = "0.01", _setWindText = "0 50", _setTimeText = "12:00";
+        private string _limitText = "off", _setFogText = "0.01", _setWindText = "0 50", _setTimeText = "12:00";
         private string _lastReport, _comparePath;
         private EnvironmentReport _compareWith;
         private List<(string Path, EnvironmentReport Report)> _envReports = new List<(string Path, EnvironmentReport Report)>();
@@ -53,7 +55,27 @@ namespace Vigil.Recorder
             ApplyLimit();
             _fogLimit.SettingChanged += (_, __) => ApplyLimit();
             _serverFogLimit.SettingChanged += (_, __) => ApplyLimit();
+            _serverWeather = Config.Bind("Weather", "ServerWeather", "",
+                "Kept by the server: the weather every player running Vigil sees, set for every biome or frozen with the time of day, and who did it when. " +
+                "The server's admins change it in game (the panel or vigil weather set, freeze, back), and the server keeps it over restarts; empty is the game's own roll. " +
+                "Everyone sleeping through a night ends a freeze.");
+            _host.Sync.AddConfigEntry(_serverWeather);
+            ApplyServerWeather();
+            _serverWeather.SettingChanged += (_, __) => ApplyServerWeather();
+            ServerWeatherPatch.Hook();
+            if (ServerWeatherPatch.Problem != null) _host.Log.LogWarning("Vigil: the server's weather stepped aside: " + ServerWeatherPatch.Problem);
+            ServerWeatherPatch.SleptThrough = () =>
+            {
+                _serverWeather.Value = ServerWeatherPatch.State.SleptThrough().Encode();
+                EventLog.Write("weather-set", "the server", "freeze ended: everyone slept through the night");
+            };
             if (!_server) WeatherWatch.Hook();
+        }
+
+        private void ApplyServerWeather()
+        {
+            ServerWeatherPatch.State = ServerWeather.Decode(_serverWeather.Value);
+            _weatherAt = double.NegativeInfinity;
         }
 
         /// <summary>The cap in force: the server's while it sets one (ServerSync keeps it current), else the player's own.</summary>
@@ -105,8 +127,9 @@ namespace Vigil.Recorder
         {
             if (_weather == null) return null;
             bool set = WeatherWatch.SetSummary(_weather) != "nothing";
-            return new PanelBadge(_weather.Weather + (set ? ", set" : _weather.Cause.Kind == WeatherCauseKind.Rolled ? ", rolled" : ", forced"),
-                set ? Skin.Tone.Caution : Skin.Tone.Quiet);
+            bool server = _weather.Cause.Kind == WeatherCauseKind.ServerSet || _weather.Cause.Kind == WeatherCauseKind.ServerHeld;
+            return new PanelBadge(_weather.Weather + (set ? ", set" : server ? ", the server's" : _weather.Cause.Kind == WeatherCauseKind.Rolled ? ", rolled" : ", forced"),
+                set || server ? Skin.Tone.Caution : Skin.Tone.Quiet);
         }
 
         private void DrawWeather()
@@ -132,7 +155,8 @@ namespace Vigil.Recorder
 
             Ui.Row("Weather", s.Weather + ", in " + s.Biome);
             Ui.Row("Why this one", s.Cause.Words);
-            Ui.Row("Time", "day " + s.Day + ", " + s.Time + (s.SetTime != null ? " (drawn at " + s.SetTime + ", set)" : "") + " · wind " + s.Wind + (s.SetWind != null ? " (set)" : ""));
+            Ui.Row("Time", "day " + s.Day + ", " + s.Time + (s.SetTime != null ? " (drawn at " + s.SetTime + ", set)" : "") + (s.RealTime != null ? " (frozen by the server, the world's clock says " + s.RealTime + ")" : "")
+                + " · wind " + s.Wind + (s.SetWind != null ? " (set)" : ""));
             Ui.Row("On you", s.OnYou);
             Ui.Row("Fog drawn", FogWords(s));
 
@@ -210,19 +234,15 @@ namespace Vigil.Recorder
 
         private void DrawWeatherAdmin()
         {
-            Ui.Heading("Admin: changes on this game only");
+            DrawServerWeather();
+            Ui.Heading("Admin: this game only");
             string refusal = AdminRefusal();
             if (refusal != null)
             {
-                Ui.Note(char.ToUpperInvariant(refusal[0]) + refusal.Substring(1) + ". Each game picks and draws its own weather, so a change here shows on the admin's game only.");
+                Ui.Note(char.ToUpperInvariant(refusal[0]) + refusal.Substring(1) + ". Each game draws its own fog, wind and time of day, so a change here shows on the admin's game only.");
                 return;
             }
 
-            if (Ui.Tool("Weather", "Any weather the game knows, by its name or a part only it has", "Set", ref _setWeatherText, 120, ""))
-            {
-                string t = _setWeatherText;
-                Ui.Later(() => _host.RunShown("weather set " + t));
-            }
             if (Ui.Tool("Fog drawn", "A density from 0 to 1, or off for none", "Set", ref _setFogText, 50, ""))
             {
                 string t = _setFogText;
@@ -238,7 +258,36 @@ namespace Vigil.Recorder
                 string t = _setTimeText;
                 Ui.Later(() => _host.RunShown("weather time " + t));
             }
-            if (Ui.Tool("Back to the game's own", "Weather, fog, wind and time as the game has them", "Reset")) Ui.Later(() => _host.RunShown("weather reset"));
+            if (Ui.Tool("Back to the game's own", "Fog, wind and time of day drawn as the game has them", "Reset")) Ui.Later(() => _host.RunShown("weather reset"));
+        }
+
+        /// <summary>The server's weather: what it holds, and for its admins (or the world's host) the weather picker, Freeze and Back.</summary>
+        private void DrawServerWeather()
+        {
+            Ui.Heading("Admin: the server's weather, for everyone");
+            var w = ServerWeatherPatch.State;
+            long dayLength = EnvMan.instance != null ? EnvMan.instance.m_dayLengthSec : 1200;
+            if (ServerWeatherPatch.Problem != null) Ui.Row("On this game", Toned("stepped aside: " + ServerWeatherPatch.Problem, ResultTone.Caution));
+            if (MayChangeServerLimit())
+            {
+                var here = _weather;
+                if (Ui.PickTool("Weather", "For every biome; raids, dungeons and the intro keep their own", "Set", _weatherPick, 150,
+                        typed => WeatherPick.Groups(here?.Biome ?? "biome's", here?.List, WeatherWatch.Known(), typed), primary: true))
+                {
+                    string t = _weatherPick.Value;
+                    Ui.Later(() =>
+                    {
+                        _weatherPick.Open = false;
+                        _host.RunShown("weather set " + t);
+                    });
+                }
+                if (Ui.Tool("Freeze", "Each biome's weather and the time of day stay as they are now; sleeping through a night ends it", "Freeze")) Ui.Later(() => _host.RunShown("weather freeze"));
+                if (Ui.Tool("Back to the game's own roll", "The weather rolls again from the world's time, and the time of day is the world's", "Back")) Ui.Later(() => _host.RunShown("weather back"));
+            }
+            Ui.Row("Now", Toned(w.NowLine(dayLength), w.IsEmpty ? ResultTone.Good : ResultTone.Caution));
+            Ui.Note((MayChangeServerLimit() ? "" : "Only the server's admins (on a server running Vigil) or the world's host choose it. ")
+                + "Every player running Vigil sees the server's weather; a player without Vigil keeps the game's own roll. Days, plants, fermenters and the world's age go on. "
+                + "A frozen hour also decides night spawns and daylight on every game running Vigil; beds go by the world's own clock.");
         }
 
         /// <summary>Why this player may not change the weather here; null when they may.</summary>
@@ -360,6 +409,8 @@ namespace Vigil.Recorder
                 return (cap.HasValue ? "fog limited to " + _fogLimit.Value + " on your game" : "fog limiter off") + note;
             }
 
+            if (verb == "set" || verb == "freeze" || verb == "back") return ServerWeatherCommand(verb, arg);
+
             var s = WeatherWatch.Read(withMods: verb.Length == 0 || verb == "report");
             if (s == null) return "join a world first";
             if (verb.Length == 0) return WeatherLines(s);
@@ -370,14 +421,6 @@ namespace Vigil.Recorder
             var env = EnvMan.instance;
             switch (verb)
             {
-                case "set":
-                    {
-                        string name = WeatherControl.Match(arg, WeatherWatch.Known(), out string why);
-                        if (name == null) return why;
-                        env.m_debugEnv = name;
-                        WeatherWatch.SetWeather = name;
-                        return Changed("weather " + name);
-                    }
                 case "fog":
                     if (!WeatherControl.TryFog(arg, out float fog)) return "fog takes off or a density from 0 to 1";
                     WeatherWatch.SetFog = fog;
@@ -395,12 +438,43 @@ namespace Vigil.Recorder
                     env.m_debugEnv = "";
                     env.ResetDebugWind();
                     env.m_debugTimeOfDay = false;
-                    WeatherWatch.SetWeather = null;
                     WeatherWatch.SetFog = null;
-                    return Changed("reset: the game's own weather, fog, wind and time");
+                    return Changed("reset: the game's own fog, wind and time of day drawn");
                 default:
-                    return "vigil weather [report | limit <fog|off> | set <name> | fog <density|off> | wind <angle> <percent> | time <hours:minutes> | reset]";
+                    return "vigil weather [report | limit [server] <fog|off> | set <name> | freeze | back | fog <density|off> | wind <angle> <percent> | time <hours:minutes> | reset]";
             }
+        }
+
+        /// <summary>"vigil weather set &lt;name&gt; | freeze | back": the server's weather, for every player running Vigil.</summary>
+        private string ServerWeatherCommand(string verb, string arg)
+        {
+            if (!MayChangeServerLimit()) return "only the server's admins (on a server running Vigil) or the world's host choose the server's weather";
+            if (ServerWeatherPatch.Problem != null) return "the server's weather stepped aside on this game: " + ServerWeatherPatch.Problem;
+            if (EnvMan.instance == null || ZNet.instance == null) return "join a world first";
+            double now = ZNet.instance.GetTimeSeconds();
+            string by = Player.m_localPlayer != null ? Player.m_localPlayer.GetPlayerName() : "the server";
+            var w = ServerWeatherPatch.State;
+            switch (verb)
+            {
+                case "set":
+                    {
+                        string name = WeatherControl.Match(arg, WeatherWatch.Known(), out string why);
+                        if (name == null) return why;
+                        w = w.Set(name, by, now);
+                        break;
+                    }
+                case "freeze":
+                    w = w.Freeze(by, now);
+                    break;
+                default:
+                    w = ServerWeather.None;
+                    break;
+            }
+            _serverWeather.Value = w.Encode();
+            ApplyServerWeather();
+            long dayLength = EnvMan.instance.m_dayLengthSec;
+            EventLog.Write("weather-set", by, "server weather: " + w.NowLine(dayLength));
+            return "the server's weather: " + w.NowLine(dayLength) + (w.IsEmpty ? "" : "; for every player running Vigil, ServerSync passes it on");
         }
 
         private string Changed(string what)
