@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.25.0
+
+With *OdinOnDemand follows the game's volume* on, OdinOnDemand's master volume slider in a player's cog panel is the game's music slider, labelled *Music Volume* with its percentage: moving either moves the other, and radios, screens and the girdle play at their own slider times the game's master and music volume. OdinOnDemand's own master volumes per kind of player are no longer counted while the patch is on; they stay in its config for when it is off, and the *Patches* tab shows them. The panel's buttons for reports, alert files and the recordings folder now copy the path to the clipboard (*Copy path*, reading *Copied* for a moment) instead of opening it in Explorer, which opened a folder of its own choosing for some paths.
+
 ## 0.24.0
 
 A second game patch, *Skip winter*: Seasonality's seasons go spring, summer, fall, spring, as the separate SkipWinter mod did, which it replaces. Like every patch it is off unless the server switches it on, and checks itself when it starts: it asks Seasonality for the season after fall and steps aside, saying why, unless the answer is spring.

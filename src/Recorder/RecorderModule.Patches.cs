@@ -17,8 +17,9 @@ namespace Vigil.Recorder
         private void BindPatches()
         {
             _odinVolume = Config.Bind("Patches", "OdinOnDemandVolume", false,
-                "Set on the dedicated server: OdinOnDemand's radios, screens and girdle follow the game's master and music volume from the first join, and AzuMiscPatches' " +
-                "mute in background gives the sound back at 100 % instead of at the master volume, so the game's own sounds keep their level. ServerSync passes it to every " +
+                "Set on the dedicated server: OdinOnDemand's radios, screens and girdle follow the game's master and music volume from the first join, OdinOnDemand's " +
+                "master volume slider is the game's music slider, and AzuMiscPatches' mute in background gives the sound back at 100 % instead of at the master volume, " +
+                "so the game's own sounds keep their level. OdinOnDemand's own master volumes stay in its config for when the patch is off. ServerSync passes it to every " +
                 "player running Vigil; the server's admins can switch it in the panel's Patches tab, and the server keeps the change.");
             _host.Sync.AddConfigEntry(_odinVolume);
             OdinVolumePatch.On = _odinVolume.Value;
@@ -63,12 +64,14 @@ namespace Vigil.Recorder
             }
             else Ui.Text(_odinVolume.Value ? "On" : "Off");
             Ui.EndLine();
-            Ui.Note("Radios, screens and the girdle play at OdinOnDemand's own level × the game's master × music volume, from the first join. After tabbing out, AzuMiscPatches' mute gives the sound back at 100 % instead of at master volume, so the game's own sounds keep their level too.");
+            Ui.Note("Radios, screens and the girdle play at their own slider × the game's master × music volume, from the first join. OdinOnDemand's master volume is the game's music volume: moving either slider moves the other. After tabbing out, AzuMiscPatches' mute gives the sound back at 100 % instead of at master volume, so the game's own sounds keep their level too.");
             Ui.Row("Set by", "the server, for every player running Vigil (Patches.OdinOnDemandVolume)");
             if (!_server)
             {
                 Ui.Row("On this game", Toned(OdinVolumePatch.State, OdinVolumePatch.Problem != null ? ResultTone.Caution : _odinVolume.Value && OdinVolumePatch.OodFound ? ResultTone.Good : ResultTone.Quiet));
                 Ui.Row("Now", OdinVolume.NowLine(OdinVolumePatch.Master, OdinVolumePatch.Music));
+                string own = OdinVolumePatch.OwnMasters;
+                if (own != null) Ui.Row("Its own masters", own);
             }
             Ui.Heading("Skip winter");
             Ui.BeginFormLine("Switch");

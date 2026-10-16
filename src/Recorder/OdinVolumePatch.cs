@@ -6,6 +6,7 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Audio;
+using UnityEngine.UI;
 using Vigil.Core;
 
 namespace Vigil.Recorder
@@ -13,20 +14,31 @@ namespace Vigil.Recorder
     /// <summary>
     /// The game patch "OdinOnDemand follows the game's volume" (<see cref="OdinVolume"/>). A postfix on
     /// OdinOnDemand's once-a-second <c>BasePlayer.UpdateChecks</c>, which sets the player's mixer to its
-    /// own level, moves that level by the game's master and music volume; turning the patch off lets
-    /// OdinOnDemand set its own level again the next second. A postfix on
-    /// <c>EventSystem.OnApplicationFocus</c> after every other mod's puts the listener back at 1 when
-    /// AzuMiscPatches gave it back at the master volume. Both find their targets by name and step aside,
-    /// with the reason, when an update changed them. On a player's game only.
+    /// own master volume, sets the game's master and music volume instead; turning the patch off lets
+    /// OdinOnDemand set its own again the next second. A postfix on the cog panel's
+    /// <c>UIController.ToggleSettingsPanel</c>, which puts OdinOnDemand's master volume on its slider each
+    /// time the panel opens, puts the music volume there instead (the game's 0 to 1 range, labelled
+    /// "Music Volume N %"), or OdinOnDemand's own back once the patch is off; a prefix on the slider's
+    /// <c>OnMasterVolumeChanged</c> sets the game's music volume in place of OdinOnDemand's master volume,
+    /// and saves it once the slider rests. A postfix on <c>EventSystem.OnApplicationFocus</c> after every
+    /// other mod's puts the listener back at 1 when AzuMiscPatches gave it back at the master volume. All
+    /// find their targets by name and step aside together, with the reason, when an update changed one.
+    /// On a player's game only.
     /// </summary>
     internal static class OdinVolumePatch
     {
         private const string HarmonyId = "isimp.Vigil.patches.odinvolume";
         private const string OodGuid = "com.valmedia.odinondemand", AzuGuid = "Azumatt.AzuMiscPatches";
 
-        private static PropertyInfo s_audio, s_settings, s_type;
+        private static PropertyInfo s_audio, s_settings, s_type, s_screens, s_radios, s_girdle;
         private static MethodInfo s_masterFor;
-        private static FieldInfo s_azuMute;
+        private static FieldInfo s_slider, s_panel, s_uiPlayer, s_azuMute;
+
+        // Unity's slider reports a value its new range clamps as a change; Vigil's own range and value
+        // changes are not the player's.
+        private static bool s_settingSlider;
+        private static bool s_savePending;
+        private static float s_movedAt;
 
         /// <summary>The server's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -44,6 +56,8 @@ namespace Vigil.Recorder
 
         public static string State => OdinVolume.StateLine(On, OodFound, OodVersion, Problem, AzuFound, AzuVersion);
 
+        private static bool Working => On && Problem == null;
+
         public static void Hook()
         {
             var ood = Chainloader.PluginInfos.Values.FirstOrDefault(p => p.Metadata.GUID == OodGuid);
@@ -59,14 +73,31 @@ namespace Vigil.Recorder
                 {
                     var player = AccessTools.TypeByName("OdinOnDemand.MPlayer.BasePlayer");
                     var settings = AccessTools.TypeByName("OdinOnDemand.MPlayer.PlayerSettings");
+                    var ui = AccessTools.TypeByName("OdinOnDemand.Utils.UI.UIController");
+                    var config = AccessTools.TypeByName("OdinOnDemand.Utils.Config.OODConfig");
                     var update = player != null ? AccessTools.Method(player, "UpdateChecks") : null;
+                    var toggle = ui != null ? AccessTools.Method(ui, "ToggleSettingsPanel") : null;
+                    var moved = ui != null ? AccessTools.Method(ui, "OnMasterVolumeChanged") : null;
                     s_audio = player != null ? AccessTools.Property(player, "mAudio") : null;
                     s_settings = player != null ? AccessTools.Property(player, "PlayerSettings") : null;
                     s_type = settings != null ? AccessTools.Property(settings, "PlayerType") : null;
-                    s_masterFor = AccessTools.Method("OdinOnDemand.Utils.Config.OODConfig:MasterVolumeFor");
-                    if (update == null || s_audio == null || s_settings == null || s_type == null || s_masterFor == null)
+                    s_slider = ui != null ? AccessTools.Field(ui, "_masterVolumeSliderComponent") : null;
+                    s_panel = ui != null ? AccessTools.Field(ui, "_settingsPanelObj") : null;
+                    s_uiPlayer = ui != null ? AccessTools.Field(ui, "_basePlayer") : null;
+                    s_masterFor = config != null ? AccessTools.Method(config, "MasterVolumeFor") : null;
+                    s_screens = config != null ? AccessTools.Property(config, "MasterVolumeScreen") : null;
+                    s_radios = config != null ? AccessTools.Property(config, "MasterVolumeMusicplayer") : null;
+                    s_girdle = config != null ? AccessTools.Property(config, "MasterVolumeTransport") : null;
+                    if (update == null || s_audio == null || s_settings == null || s_type == null)
                         Problem = "OdinOnDemand's volume update was not found (an update changed it)";
-                    else harmony.Patch(update, postfix: new HarmonyMethod(typeof(OdinVolumePatch), nameof(AfterUpdateChecks)) { priority = Priority.Last });
+                    else if (toggle == null || moved == null || s_slider == null || s_panel == null || s_uiPlayer == null || s_masterFor == null || s_screens == null || s_radios == null || s_girdle == null)
+                        Problem = "OdinOnDemand's master volume slider was not found (an update changed it)";
+                    else
+                    {
+                        harmony.Patch(update, postfix: new HarmonyMethod(typeof(OdinVolumePatch), nameof(AfterUpdateChecks)) { priority = Priority.Last });
+                        harmony.Patch(toggle, postfix: new HarmonyMethod(typeof(OdinVolumePatch), nameof(AfterToggleSettings)) { priority = Priority.Last });
+                        harmony.Patch(moved, prefix: new HarmonyMethod(typeof(OdinVolumePatch), nameof(BeforeMasterMoved)) { priority = Priority.First });
+                    }
                 }
                 catch (Exception e) { Problem = "OdinOnDemand could not be hooked: " + e.GetType().Name + " " + e.Message; }
             }
@@ -87,29 +118,131 @@ namespace Vigil.Recorder
 
         private static void AfterUpdateChecks(object __instance)
         {
-            if (!On || Problem != null) return;
+            SaveIfDue(panelClosed: false);
+            if (!Working) return;
             try
             {
                 var audio = s_audio.GetValue(__instance, null) as AudioSource;
                 AudioMixer mixer = audio != null && audio.outputAudioMixerGroup != null ? audio.outputAudioMixerGroup.audioMixer : null;
                 if (mixer == null) return;
-                object kind = s_type.GetValue(s_settings.GetValue(__instance, null), null);
-                if (!(s_masterFor.Invoke(null, new[] { kind }) is ConfigEntry<float> own)) return;
-                float target = OdinVolume.Db(own.Value, Master, Music);
+                float target = OdinVolume.Db(Master, Music);
                 if (!mixer.GetFloat("MasterVolume", out float now) || Math.Abs(now - target) > 0.01f) mixer.SetFloat("MasterVolume", target);
             }
             catch (Exception) { }
         }
 
+        private static void AfterToggleSettings(object __instance)
+        {
+            try
+            {
+                var panel = s_panel.GetValue(__instance) as GameObject;
+                SaveIfDue(panelClosed: panel != null && !panel.activeSelf);
+                if (!(s_slider.GetValue(__instance) is Slider slider)) return;
+                if (Working) ShowMusic(slider);
+                else if (OdinVolume.IsMusicSlider(slider.maxValue)) GiveBack(__instance, slider);
+            }
+            catch (Exception) { }
+        }
+
+        private static bool BeforeMasterMoved(object __instance, float vol)
+        {
+            if (s_settingSlider) return false;
+            Slider slider = null;
+            try
+            {
+                slider = s_slider.GetValue(__instance) as Slider;
+                switch (OdinVolume.Moved(Working, slider != null && OdinVolume.IsMusicSlider(slider.maxValue)))
+                {
+                    case OdinVolume.SliderMove.SetMusic:
+                        SetMusic(vol);
+                        SetLabel(slider, OdinVolume.SliderLabel(vol));
+                        return false;
+                    case OdinVolume.SliderMove.GiveBack:
+                        GiveBack(__instance, slider);
+                        return false;
+                    default:
+                        return true;
+                }
+            }
+            catch (Exception) { return slider == null || !OdinVolume.IsMusicSlider(slider.maxValue); }
+        }
+
+        private static void ShowMusic(Slider slider)
+        {
+            SetSlider(slider, OdinVolume.SliderMin, OdinVolume.SliderMax, Music);
+            SetLabel(slider, OdinVolume.SliderLabel(Music));
+        }
+
+        private static void GiveBack(object ui, Slider slider)
+        {
+            object kind = s_type.GetValue(s_settings.GetValue(s_uiPlayer.GetValue(ui), null), null);
+            float own = s_masterFor.Invoke(null, new[] { kind }) is ConfigEntry<float> entry ? entry.Value : 0f;
+            SetSlider(slider, OdinVolume.OwnMin, OdinVolume.OwnMax, own);
+            SetLabel(slider, OdinVolume.OwnLabel);
+        }
+
+        private static void SetSlider(Slider slider, float min, float max, float value)
+        {
+            s_settingSlider = true;
+            try
+            {
+                slider.minValue = min;
+                slider.maxValue = max;
+                slider.SetValueWithoutNotify(value);
+            }
+            finally { s_settingSlider = false; }
+        }
+
+        /// <summary>Sets the slider's label, the one text in its row that is the volume's.</summary>
+        private static void SetLabel(Slider slider, string value)
+        {
+            Text label = slider.transform.parent != null ? slider.transform.parent.GetComponentsInChildren<Text>(true).FirstOrDefault(t => OdinVolume.IsVolumeLabel(t.text)) : null;
+            if (label != null && label.text != value) label.text = value;
+        }
+
+        /// <summary>The game's music volume, applied as its settings slider applies it, and saved once the slider rests.</summary>
+        private static void SetMusic(float vol)
+        {
+            float music = Mathf.Clamp01(vol);
+            PlatformPrefs.SetFloat("MusicVolume", music);
+            MusicMan.m_masterMusicVolume = Master * music;
+            s_savePending = true;
+            s_movedAt = Time.realtimeSinceStartup;
+        }
+
+        private static void SaveIfDue(bool panelClosed)
+        {
+            if (!OdinVolume.SaveDue(s_savePending, Time.realtimeSinceStartup - s_movedAt, panelClosed)) return;
+            s_savePending = false;
+            try { PlatformPrefs.Save(); }
+            catch (Exception) { }
+        }
+
         private static void AfterFocus(bool hasFocus)
         {
-            if (!On || Problem != null) return;
+            if (!Working) return;
             try
             {
                 bool muteOn = (s_azuMute?.GetValue(null) as ConfigEntryBase)?.BoxedValue?.ToString() == "On";
                 if (OdinVolume.RestoreListener(hasFocus, AudioListener.volume, PlayerPrefs.GetFloat("MasterVolume", 1f), muteOn)) AudioListener.volume = 1f;
             }
             catch (Exception) { }
+        }
+
+        /// <summary>OdinOnDemand's own master volumes as its config holds them; null before it is hooked.</summary>
+        public static string OwnMasters
+        {
+            get
+            {
+                if (s_screens == null || s_radios == null || s_girdle == null) return null;
+                try
+                {
+                    return s_screens.GetValue(null, null) is ConfigEntry<float> screens && s_radios.GetValue(null, null) is ConfigEntry<float> radios && s_girdle.GetValue(null, null) is ConfigEntry<float> girdle
+                        ? OdinVolume.OwnMastersLine(screens.Value, radios.Value, girdle.Value)
+                        : null;
+                }
+                catch (Exception) { return null; }
+            }
         }
 
         /// <summary>The game's master and music volume, as Valheim reads them.</summary>
