@@ -9,10 +9,12 @@ namespace Vigil.Core
         /// <summary>
         /// The mod whose id starts the name ("guid!name" from Jotunn, "guid ConfigSync" from
         /// ServerSync; the id must be followed by '!' or ' ' or end the name), else the mod whose
-        /// assembly handles the message, else "Valheim" for the game's assemblies, else "unknown".
+        /// assembly handles the message, else "Valheim" for the game's assemblies, else the mod whose
+        /// code holds the name (<paramref name="namedIn"/>; the server has no handler for a message
+        /// between players), else "unknown".
         /// </summary>
         public static string Resolve(string name, string handlerAssembly,
-            IReadOnlyDictionary<string, string> guidToMod, IReadOnlyDictionary<string, string> assemblyToMod)
+            IReadOnlyDictionary<string, string> guidToMod, IReadOnlyDictionary<string, string> assemblyToMod, string namedIn = null)
         {
             if (!string.IsNullOrEmpty(name))
             {
@@ -27,6 +29,7 @@ namespace Vigil.Core
             }
             if (handlerAssembly != null && assemblyToMod.TryGetValue(handlerAssembly, out var mod)) return mod;
             if (handlerAssembly != null && handlerAssembly.StartsWith("assembly_", StringComparison.Ordinal)) return "Valheim";
+            if (handlerAssembly == null && !string.IsNullOrEmpty(namedIn)) return namedIn;
             return handlerAssembly != null ? "unknown (" + handlerAssembly + ")" : "unknown";
         }
     }

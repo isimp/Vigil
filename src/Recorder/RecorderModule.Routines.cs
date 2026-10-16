@@ -177,6 +177,12 @@ namespace Vigil.Recorder
             checks.Add(own.Found && own.NamedIn.Contains("Vigil")
                 ? new Check(Here, what, Outcome.Pass, ObjectInspector.NamesNote + "; Vigil's own load-test mark found by name")
                 : new Check(Here, what, Outcome.Fail, ObjectInspector.NamesNote + "; Vigil's own load-test mark was not found, so the mods' names are not read"));
+
+            // Vigil registers its hello reply by name, so the game's hash function handed that name to the book.
+            const string messages = "the names of the messages on the wire";
+            checks.Add(NetAttribution.Book.LearnedWhileRunning(ValueNames.Hash(Link.RpcHelloReply))
+                ? new Check(Here, messages, Outcome.Pass, NetAttribution.Book.CountLine() + "; Vigil's own message name learned while the game ran")
+                : new Check(Here, messages, Outcome.Fail, "Vigil's own message name was not learned, so names put together while the game runs stay numbers; " + NetAttribution.Book.CountLine()));
         }
 
         private IEnumerator LookOnce(List<Check> checks)

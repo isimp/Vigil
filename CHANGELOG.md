@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29.0
+
+Messages in the traffic tables carry their names instead of bare numbers: Vigil learns every name the game or a mod hashes while the game runs, names each mod's config sync message, and reads the names in the game's and the mods' files once every plugin has loaded. On the server, a message it only routes between players now shows its name and its mod. The summary and the self-test say how many kinds of message seen were named, and from where.
+
 ## 0.28.0
 
 You can walk with the panel open: walking, running, jumping and crouching reach the game as with its inventory open, while attacks, blocking, using things, the hotbar and the game's menus stay held back, and while a field of the panel has the keyboard the keys go to it. After turning the camera with the right mouse off the panel, the cursor comes back where it was instead of the middle of the screen.

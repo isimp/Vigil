@@ -13,7 +13,10 @@ namespace Vigil.Recorder
     /// first four bytes; the name is learned from ZRpc.Invoke when sent, and the receiving
     /// handler (ZRpc's own table) tells which assembly handles it. Routed messages (one package
     /// kind, "RoutedRPC") are split further by <see cref="RpcProbe"/>, which hands each one in
-    /// with its own owner. World-object sync (ZDOData) counts for the game. Only reads.
+    /// with its own owner. World-object sync (ZDOData) counts for the game. A message this game
+    /// never sent is named from <see cref="Book"/>: a postfix on the game's hash function
+    /// (<c>StringExtensionMethods.GetStableHashCode</c>) learns every name hashed while the game runs.
+    /// Only reads.
     /// </summary>
     internal static class NetAttribution
     {
@@ -31,10 +34,25 @@ namespace Vigil.Recorder
         private static Dictionary<string, string> s_guidToMod, s_assemblyToMod;
         [ThreadStatic] private static string t_sending;
 
+        /// <summary>The names of the messages, for every number on the wire (<see cref="MessageNames"/>).</summary>
+        public static readonly MessageNames Book = new MessageNames();
+
         public static void Patch(Harmony harmony)
         {
             Patching.Apply(harmony, AccessTools.Method(typeof(ZRpc), nameof(ZRpc.Invoke), new[] { typeof(string), typeof(object[]) }), "package names",
                 prefix: Patching.M(typeof(NetAttribution), nameof(InvokePrefix)));
+            Patching.Apply(harmony, AccessTools.Method(typeof(StringExtensionMethods), nameof(StringExtensionMethods.GetStableHashCode), new[] { typeof(string) }), "message names learned",
+                postfix: Patching.M(typeof(NetAttribution), nameof(HashPostfix)));
+        }
+
+        // Every name the game or a mod hashes, on any thread; the book keeps the first of each number.
+        private static void HashPostfix(string str, int __result) => Book.Learned(__result, str);
+
+        /// <summary>Once every plugin has loaded: each mod's config sync message, "id ConfigSync".</summary>
+        public static void LearnSyncNames()
+        {
+            Maps();
+            Book.Sync(s_guidToMod);
         }
 
         private static void InvokePrefix(string method)
@@ -59,11 +77,11 @@ namespace Vigil.Recorder
         }
 
         /// <summary>The mod a message belongs to, by its name and the assembly of its handler.</summary>
-        public static string OwnerOf(string name, Delegate handler)
+        public static string OwnerOf(string name, Delegate handler, string namedIn = null)
         {
             Maps();
             string asm = handler?.Method?.DeclaringType?.Assembly.GetName().Name;
-            return NetOwner.Resolve(name, asm, s_guidToMod, s_assemblyToMod);
+            return NetOwner.Resolve(name, asm, s_guidToMod, s_assemblyToMod, namedIn);
         }
 
         /// <summary>The first delegate stored in a handler object (the game's RpcMethod / RoutedMethod wrappers).</summary>
@@ -92,7 +110,7 @@ namespace Vigil.Recorder
             try { package.SetPos(0); hash = package.ReadInt(); }
             catch (Exception) { return; }
             finally { package.SetPos(pos); }
-            string name = hash == 0 ? "ping" : s_names.TryGetValue(hash, out var n) ? n : null;
+            string name = hash == 0 ? "ping" : s_names.TryGetValue(hash, out var n) ? n : Book.NameOf(hash);
             if (name == Routed) return;
             string owner = PackageOwner(rpc, hash, name);
             if (name == null) name = "message " + hash;
@@ -113,7 +131,7 @@ namespace Vigil.Recorder
             catch (Exception) { return null; }
             finally { package.SetPos(pos); }
             if (hash == s_routedHash) return null;
-            string name = hash == 0 ? "ping" : s_names.TryGetValue(hash, out var n) ? n : null;
+            string name = hash == 0 ? "ping" : s_names.TryGetValue(hash, out var n) ? n : Book.NameOf(hash);
             return PackageOwner(rpc, hash, name) + ": " + (name ?? "message " + hash);
         }
 
@@ -131,7 +149,7 @@ namespace Vigil.Recorder
                 if (s_zrpcFunctions?.GetValue(rpc) is IDictionary functions && functions.Contains(hash)) handler = HandlerDelegate(functions[hash]);
             }
             catch (Exception) { }
-            o = OwnerOf(name, handler);
+            o = OwnerOf(name, handler, Book.ModOf(hash));
             if (handler != null || name != null) s_owners[hash] = o;
             return o;
         }

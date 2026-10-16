@@ -133,6 +133,8 @@ namespace Vigil.Recorder
         {
             int hash = data.m_methodHash;
             if (s_methodNames.TryGetValue(hash, out var name)) return name;
+            name = NetAttribution.Book.NameOf(hash);
+            if (name != null) { s_methodNames[hash] = name; return name; }
             s_failedResolves.TryGetValue(hash, out int failed);
             if (failed < ResolveAttempts)
             {
@@ -143,8 +145,9 @@ namespace Vigil.Recorder
             return "hash:" + hash;
         }
 
-        // A received message names its method only by hash; the handler registered for that hash
-        // carries the method, whose name is the RPC's name in almost every case.
+        // A received message names its method only by hash: the name book knows it when the name was
+        // hashed here or found in a file, else the handler registered for that hash carries the
+        // method, whose name is the RPC's name in most cases.
         private static string Resolve(ZRoutedRpc.RoutedRPCData data) => HandlerOf(data)?.Method.Name;
 
         /// <summary>"mod: method" of a routed message about to be handled.</summary>
@@ -158,7 +161,7 @@ namespace Vigil.Recorder
             if (s_owners.TryGetValue(data.m_methodHash, out var o)) return o;
             var handler = HandlerOf(data);
             s_methodNames.TryGetValue(data.m_methodHash, out var name);
-            o = NetAttribution.OwnerOf(name, handler);
+            o = NetAttribution.OwnerOf(name, handler, NetAttribution.Book.ModOf(data.m_methodHash));
             if (handler != null || name != null) s_owners[data.m_methodHash] = o;
             return o;
         }

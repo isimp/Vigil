@@ -203,6 +203,7 @@ namespace Vigil.Recorder
                     }
                     var names = ValueNames.Build(fields, texts);
                     s_names = names;
+                    NetAttribution.Book.Files(names);
                     int mods = files.Select(f => f.Key).Where(k => k != ValueNames.Game).Distinct().Count();
                     s_namesNote = string.Format(Ci, "{0:N0} names from the game and {1} mods, read in {2:0.0} s{3}", names.Count, mods, watch.Elapsed.TotalSeconds,
                         unreadable > 0 ? "; " + unreadable + " files could not be read" : "");

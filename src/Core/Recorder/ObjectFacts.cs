@@ -114,6 +114,10 @@ namespace Vigil.Core
             return new Name(entry.Text, namedIn, true);
         }
 
+        /// <summary>The one mod whose code carries the name; null for the game's names, names in several mods' code, or unknown numbers.</summary>
+        public string SoleMod(int hash) =>
+            _byHash.TryGetValue(hash, out var entry) && !entry.Game && entry.Sources.Count == 1 ? entry.Sources[0] : null;
+
         // The first text of a number stays; the same text from another mod adds that mod.
         private void Add(string text, string source)
         {

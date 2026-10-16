@@ -16,7 +16,7 @@ namespace Vigil;
 /// </summary>
 internal sealed class Link
 {
-    private const string RpcHello = "Vigil_Hello", RpcHelloReply = "Vigil_HelloReply", RpcAdmin = "Vigil_Admin", RpcAdminReply = "Vigil_AdminReply";
+    internal const string RpcHello = "Vigil_Hello", RpcHelloReply = "Vigil_HelloReply", RpcAdmin = "Vigil_Admin", RpcAdminReply = "Vigil_AdminReply";
 
     private readonly bool _server;
     private readonly Func<string, Dictionary<string, string>, ZNetPeer, Dictionary<string, object>> _dispatch;
