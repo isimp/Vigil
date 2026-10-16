@@ -117,7 +117,7 @@ namespace Vigil.Recorder
             var rows = Rows(null);
             string path = Path.Combine(dir, "Vigil-patches.tsv");
             string text = PatchMap.Format(rows);
-            ThreadPool.QueueUserWorkItem(_ => { try { File.WriteAllText(path, text); } catch (Exception) { } });
+            ThreadPool.QueueUserWorkItem(_ => OwnThreads.Timed(() => { try { File.WriteAllText(path, text); } catch (Exception) { } }));
             if (ResultStore.Shared.Shown)
             {
                 var result = InspectResult.Patches(DateTime.Now, rows);

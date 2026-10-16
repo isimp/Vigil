@@ -168,6 +168,7 @@ namespace Vigil.Recorder
                 yield return new PanelSection("Patches", "Game patches", DrawPatches, PatchesBadge);
                 yield return new PanelSection("World", "Leftovers in the world", DrawLeftovers, LeftoversBadge, PanelZone.Change);
                 yield return new PanelSection("Health", "Mods and configs", DrawParity, ParityBadge);
+                yield return new PanelSection("Health", "Vigil's own cost", DrawOwnCost, OwnCostBadge, PanelZone.Measure);
                 yield return new PanelSection("Tools", "Inspect", DrawInspect, null, PanelZone.Measure);
                 yield return new PanelSection("Tools", "Load test", DrawLoad, LoadBadge, PanelZone.Load);
             }

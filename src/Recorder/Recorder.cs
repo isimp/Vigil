@@ -102,7 +102,7 @@ namespace Vigil.Recorder
         private int _lastGc;
         private string _note;
         private int _slowSeconds;
-        private long _probeTicks;
+        private long _probeTicks, _probeRunTicks;
         private long _frameWorkTicks;
         private readonly Dictionary<string, long> _secModTicks = new Dictionary<string, long>();
         private readonly Dictionary<string, long> _secModAlloc = new Dictionary<string, long>();
@@ -277,8 +277,22 @@ namespace Vigil.Recorder
             }
             long probe = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
             _probeTicks += probe;
+            _probeRunTicks += probe;
             _frameWorkTicks += probe;
         }
+
+        /// <summary>The recorder's own frame work over the session (probe_ms summed), for Vigil's own cost.</summary>
+        public long ProbeRunTicks => _probeRunTicks;
+
+        /// <summary>Frames over the session, and their mean length.</summary>
+        public long FramesAll => _framesAll.Count;
+
+        public double MeanFrameMs => _framesAll.MeanMs;
+
+        /// <summary>When this session started, and how long ago in minutes.</summary>
+        public DateTime Started => _started;
+
+        public double MinutesRunning => Math.Max(1.0 / 60, (Time.realtimeSinceStartup - _startedAt) / 60.0);
 
         /// <summary>The ticks of this per-frame work (probe_ms) since the last call, which Vigil's own row in the per-mod timing leaves out.</summary>
         public long TakeFrameWorkTicks()
@@ -735,7 +749,7 @@ namespace Vigil.Recorder
             costs.Add(new KeyValuePair<string, double>("game log line", watch.Elapsed.TotalMilliseconds - before));
             double mainMs = watch.Elapsed.TotalMilliseconds;
             _ownMs += (float)mainMs;
-            ThreadPool.QueueUserWorkItem(_ =>
+            ThreadPool.QueueUserWorkItem(_ => OwnThreads.Timed(() =>
             {
                 try
                 {
@@ -751,7 +765,7 @@ namespace Vigil.Recorder
                 }
                 catch (Exception) { }
                 EventLog.Write("incident", kind, detail + " -> " + file);
-            });
+            }));
         }
 
         private static string IncidentCostLine(double mainMs, List<KeyValuePair<string, double>> costs)
@@ -1077,7 +1091,7 @@ namespace Vigil.Recorder
             }
             catch (Exception) { }
             string text = sb.ToString();
-            ThreadPool.QueueUserWorkItem(_ => { try { File.WriteAllText(path, text); } catch (Exception) { } });
+            ThreadPool.QueueUserWorkItem(_ => OwnThreads.Timed(() => { try { File.WriteAllText(path, text); } catch (Exception) { } }));
             Hud("Vigil: deep capture finished, report " + Path.GetFileName(path));
         }
 

@@ -29,6 +29,7 @@ namespace Vigil.Tests
         [InlineData("Open the recordings folder", "folder")]
         [InlineData("Run", "play")]
         [InlineData("Freeze", "pause")]
+        [InlineData("Measure", "wait")]
         [InlineData("Back", "reset")]
         public void A_buttons_first_word_picks_its_icon(string label, string icon)
         {

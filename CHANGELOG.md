@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.30.0
+
+What Vigil itself costs, in one place: a *Vigil's own cost* card in the Health tab and a block at the top of the summary give its time per frame (its own loops, its hooks in the game's methods and its timers on the mods' callbacks) and its share of your frame, what the open panel adds, its time on threads of its own, how fast its recordings grow and its own network messages. Its hooks are timed for 10 s two minutes into a session and whenever you press *Measure*, the timers' own cost taken off. Memory per mod cannot be told by the game's runtime and is said to be not measured.
+
 ## 0.29.0
 
 Messages in the traffic tables carry their names instead of bare numbers: Vigil learns every name the game or a mod hashes while the game runs, names each mod's config sync message, and reads the names in the game's and the mods' files once every plugin has loaded. On the server, a message it only routes between players now shows its name and its mod. The summary and the self-test say how many kinds of message seen were named, and from where.

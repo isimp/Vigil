@@ -34,6 +34,10 @@ namespace Vigil.Core
             return text;
         }
 
+        /// <summary>One kind's bytes over the session, the window in progress included.</summary>
+        public long BytesOf(string label) =>
+            (_run.TryGetValue(label, out var run) ? run.Bytes : 0) + (_window.TryGetValue(label, out var window) ? window.Bytes : 0);
+
         /// <summary>The window in progress, formatted, without ending it.</summary>
         public string Peek(float seconds, int top) => Format(_window, seconds, top);
 

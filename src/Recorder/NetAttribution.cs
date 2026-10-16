@@ -135,6 +135,11 @@ namespace Vigil.Recorder
             return PackageOwner(rpc, hash, name) + ": " + (name ?? "message " + hash);
         }
 
+        /// <summary>Vigil's own messages over the session, each way, in bytes.</summary>
+        public static long OwnBytesOut => s_outByMod.BytesOf(OwnTime.Mod);
+
+        public static long OwnBytesIn => s_inByMod.BytesOf(OwnTime.Mod);
+
         /// <summary>A routed message, counted by <see cref="RpcProbe"/> with its owner already known.</summary>
         public static void RoutedSent(string owner, string label, int bytes) => Count(s_outByMod, s_outByKind, s_secOut, owner, label, bytes);
         public static void RoutedReceived(string owner, string label, int bytes) => Count(s_inByMod, s_inByKind, s_secIn, owner, label, bytes);

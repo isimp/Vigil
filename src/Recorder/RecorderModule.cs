@@ -168,6 +168,7 @@ namespace Vigil.Recorder
             }
 
             _timer = new PhaseTimer(_journal, allocations);
+            _ownHooks = new OwnHooks(_journal);
             _timer.HookGame();
             EventLog.Start(dir, harmony);
             DropWatch.Start(harmony);
@@ -424,6 +425,7 @@ namespace Vigil.Recorder
             try { UpdateWeather(); } catch (Exception) { }
             try { UpdateArrivals(); } catch (Exception) { }
             try { UpdatePatches(); } catch (Exception) { }
+            try { UpdateOwnCost(); } catch (Exception) { }
             try { OdinVolumePatch.TrialTick(); } catch (Exception) { }
             try { UpdateAlerts(); } catch (Exception e) { _alertsError = e.GetType().Name + " " + e.Message; _alertsAsking = false; }
             if (_watchPatches && !_patchMapWritten && PatchMapDue())
@@ -500,6 +502,7 @@ namespace Vigil.Recorder
                 if (WorldContext.MissingCount > 0) header.Add(WorldContext.MissingCount + " objects in the world have a prefab no installed mod provides; where they are: Vigil-missing-prefabs.tsv.");
                 foreach (var p in Patching.Problems) header.Add("Not measured: " + p);
                 header.Add(string.Format(CultureInfo.InvariantCulture, "World-object uploads: {0:0.0} MB in all.", s_runBytes / 1048576.0));
+                header.AddRange(OwnCostLines());
                 File.WriteAllText(_summaryPath, _recorder.Summary(header));
             }
             catch (Exception) { }

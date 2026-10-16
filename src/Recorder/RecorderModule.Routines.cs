@@ -36,6 +36,7 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "config fingerprints the same twice", 10f, FingerprintsTwice);
             yield return new SelfTestRoutine(Here, "the share queue's file", 1f, ShareQueueWritable);
             foreach (var trial in TrialRoutines()) yield return trial;
+            yield return new SelfTestRoutine(Here, "Vigil's own cost", 1f, OwnCostOnce);
             if (!full) yield break;
             yield return new SelfTestRoutine(Here, "the server's status", 12f, StatusAnswered);
             yield return new SelfTestRoutine(Here, "your last minute as the server keeps it", 12f, OwnLinkOnServer);

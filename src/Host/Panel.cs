@@ -152,9 +152,17 @@ internal sealed class Panel
         }
     }
 
+    /// <summary>Frames the panel was open in, for what drawing it costs.</summary>
+    public static long OpenFrames { get; private set; }
+
     public void Update()
     {
         UpdateLook();
+        if (IsOpen)
+        {
+            OpenFrames++;
+        }
+
         if (!IsOpen)
         {
             if (_key.Value.IsDown() && MayOpen())

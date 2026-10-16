@@ -23,7 +23,7 @@ namespace Vigil.Recorder
             WriteMods(Path.Combine(dir, "Vigil-mods.tsv"));
             WriteSystem(Path.Combine(dir, "Vigil-system.txt"));
             string configs = Path.Combine(dir, "Vigil-configs.tsv");
-            new Thread(() => WriteConfigs(Paths.ConfigPath, configs)) { IsBackground = true, Name = "Vigil.ConfigHashes" }.Start();
+            new Thread(() => OwnThreads.Timed(() => WriteConfigs(Paths.ConfigPath, configs))) { IsBackground = true, Name = "Vigil.ConfigHashes" }.Start();
         }
 
         private static void WriteMods(string path)

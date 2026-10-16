@@ -19,6 +19,18 @@ namespace Vigil.Tests
             Lines(report).Single(l => l.Contains(label));
 
         [Fact]
+        public void One_kinds_bytes_over_the_session_count_the_window_in_progress_too()
+        {
+            var t = new MessageTally();
+            t.Add("Vigil", 100);
+            t.EndWindow(10f, 10);
+            t.Add("Vigil", 50);
+            t.Add("Valheim", 7);
+            Assert.Equal(150, t.BytesOf("Vigil"));
+            Assert.Equal(0, t.BytesOf("Scry"));
+        }
+
+        [Fact]
         public void AWindowShowsHowOftenEachKindWasSentPerSecond()
         {
             var t = new MessageTally();

@@ -187,7 +187,7 @@ namespace Vigil.Recorder
 
             s_reading = true;
             s_namesNote = "reading";
-            var thread = new Thread(() =>
+            var thread = new Thread(() => OwnThreads.Timed(() =>
             {
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 int unreadable = 0;
@@ -210,7 +210,7 @@ namespace Vigil.Recorder
                 }
                 catch (Exception e) { s_namesNote = "reading the names failed: " + e.GetType().Name; }
                 finally { s_reading = false; }
-            }) { IsBackground = true, Name = "Vigil value names" };
+            })) { IsBackground = true, Name = "Vigil value names" };
             thread.Start();
         }
 
