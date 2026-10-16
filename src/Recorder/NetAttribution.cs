@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Reflection;
 using BepInEx.Bootstrap;
 using HarmonyLib;
@@ -45,14 +46,47 @@ namespace Vigil.Recorder
                 postfix: Patching.M(typeof(NetAttribution), nameof(HashPostfix)));
         }
 
-        // Every name the game or a mod hashes, on any thread; the book keeps the first of each number.
-        private static void HashPostfix(string str, int __result) => Book.Learned(__result, str);
+        /// <summary>Kept current every frame: the game is in a world, where a new name gets the mod that hashed it.</summary>
+        public static volatile bool InWorld;
 
-        /// <summary>Once every plugin has loaded: each mod's config sync message, "id ConfigSync".</summary>
+        private static readonly OwnerLooks s_looks = new OwnerLooks(2000, 60);
+        private static Dictionary<Assembly, string> s_modAssemblies;
+
+        // Every name the game or a mod hashes, on any thread; the book keeps the first of each number. A
+        // name new to the book in a world gets the mod whose code hashed it (one look at the call stack,
+        // capped per minute; the game's own wrappers and Vigil skipped; no mod on the way: the game).
+        private static void HashPostfix(string str, int __result)
+        {
+            if (str == null || Book.Knows(__result)) return;
+            string owner = InWorld && s_modAssemblies != null && s_looks.Allow(Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency) ? CallerOf() : null;
+            Book.Learned(__result, str, owner);
+        }
+
+        private static string CallerOf()
+        {
+            try
+            {
+                var trace = new StackTrace(2, false);
+                for (int i = 0; i < trace.FrameCount; i++)
+                {
+                    var asm = trace.GetFrame(i)?.GetMethod()?.DeclaringType?.Assembly;
+                    if (asm == null || asm == typeof(NetAttribution).Assembly) continue;
+                    if (s_modAssemblies.TryGetValue(asm, out string mod)) return mod;
+                }
+                return ValueNames.Game;
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>Looks at who hashed a name that were refused by the per-minute cap.</summary>
+        public static long OwnerLooksRefused => s_looks.Refused;
+
+        /// <summary>Once every plugin has loaded: each mod's config sync message, "id ConfigSync", and the mods' assemblies for the owners of new names.</summary>
         public static void LearnSyncNames()
         {
             Maps();
             Book.Sync(s_guidToMod);
+            s_modAssemblies = PhaseTimer.ModAssemblies();
         }
 
         private static void InvokePrefix(string method)

@@ -182,6 +182,14 @@ namespace Vigil.Recorder
                 ? new Check(Here, what, Outcome.Pass, ObjectInspector.NamesNote + "; Vigil's own load-test mark found by name")
                 : new Check(Here, what, Outcome.Fail, ObjectInspector.NamesNote + "; Vigil's own load-test mark was not found, so the mods' names are not read"));
 
+            // Names first hashed in a world carry the mod that hashed them.
+            const string owners = "the mods behind names put together while playing";
+            var (byMods, byGame) = NetAttribution.Book.OwnerCounts();
+            checks.Add(byMods + byGame == 0
+                ? new Check(Here, owners, Outcome.Info, "no name first hashed in this world yet")
+                : new Check(Here, owners, Outcome.Pass, (byMods + byGame).ToString("N0", Ic) + " names first hashed in this world: " + byMods.ToString("N0", Ic) + " by a mod, "
+                    + byGame.ToString("N0", Ic) + " by the game; " + NetAttribution.OwnerLooksRefused.ToString("N0", Ic) + " looks over the per-minute cap"));
+
             // Vigil registers its hello reply by name, so the game's hash function handed that name to the book.
             const string messages = "the names of the messages on the wire";
             checks.Add(NetAttribution.Book.LearnedWhileRunning(ValueNames.Hash(Link.RpcHelloReply))

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.34.0
+
+Names that mods put together while playing are in no file, so their bytes and messages showed as unknown. Vigil now notes which mod hashed each name it has not seen before, once the game is in a world, and gives those values and messages to that mod. The look is capped at 2,000 a minute, and the self-test says how many names got a mod.
+
 ## 0.33.1
 
 The panel's tables size their columns by what is in them: no more columns cutting their text off while one column takes all the room; when the card is too narrow, numbers keep their width and the longest text gives way, ending in "…". A crop's space check also counts the vines within its vine radius, as the game does, so a plant held back by a vine is explained. The self-test names a timed patch by its mod.

@@ -87,7 +87,7 @@ namespace Vigil.Recorder
             var owners = new Dictionary<string, int>(StringComparer.Ordinal);
             void Add(int hash, int b)
             {
-                string owner = Owner(ObjectInspector.NameOf(hash));
+                string owner = Named(hash).Owner;
                 if (owner == ObjectDataTally.Game) return;
                 owners.TryGetValue(owner, out int had);
                 owners[owner] = had + b;
@@ -104,8 +104,17 @@ namespace Vigil.Recorder
 
         private static long Id(ZDOID id) => (id.UserID * 397) ^ id.ID;
 
-        private static string Owner(ValueNames.Name name) =>
-            !name.Found ? ObjectDataTally.Unknown : name.NamedIn == ValueNames.Game ? ObjectDataTally.Game : name.NamedIn;
+        // A value's name and owner: from the files (the game first), else as learned while playing, with the mod that hashed it.
+        private static (string Text, string Owner) Named(int hash)
+        {
+            var name = ObjectInspector.NameOf(hash);
+            if (name.Found) return (name.Text, name.NamedIn == ValueNames.Game ? ObjectDataTally.Game : name.NamedIn);
+            var book = NetAttribution.Book;
+            string text = book.LearnedText(hash);
+            if (text == null) return ("#" + hash, ObjectDataTally.Unknown);
+            string owner = book.LearnedOwner(hash);
+            return (text, owner == null ? ObjectDataTally.Unknown : owner == ValueNames.Game ? ObjectDataTally.Game : owner);
+        }
 
         private static void AfterSet(ZDOID zid, int hash, bool __result)
         {
@@ -114,8 +123,8 @@ namespace Vigil.Recorder
             {
                 var zdo = ZDOMan.instance?.GetZDO(zid);
                 if (zdo == null || !zdo.IsOwner()) return;
-                var name = ObjectInspector.NameOf(hash);
-                s_tally?.Changed(RecorderModule.NameOf(zdo.GetPrefab()), name.Found ? name.Text : "#" + hash, Owner(name));
+                var (text, owner) = Named(hash);
+                s_tally?.Changed(RecorderModule.NameOf(zdo.GetPrefab()), text, owner);
             }
             catch (Exception) { }
         }

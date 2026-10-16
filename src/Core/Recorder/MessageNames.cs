@@ -11,8 +11,9 @@ namespace Vigil.Core
     /// three sources, best first: names hashed while the game runs (the game's hash function hands
     /// every name it hashes to <see cref="Learned"/>, names put together at run time included), each
     /// mod's config sync message ("id ConfigSync", as ServerSync names it), and the texts in the game's
-    /// and the mods' files (<see cref="ValueNames"/>). It also counts the kinds of message it was asked
-    /// about, for how many it could name.
+    /// and the mods' files (<see cref="ValueNames"/>). A name learned while playing can carry the mod that
+    /// hashed it (the game's for its own), which counts where no file ties the name to one mod. It also
+    /// counts the kinds of message it was asked about, for how many it could name.
     /// </summary>
     internal sealed class MessageNames
     {
@@ -21,6 +22,7 @@ namespace Vigil.Core
 
         private readonly int _most;
         private readonly ConcurrentDictionary<int, string> _learned = new ConcurrentDictionary<int, string>();
+        private readonly ConcurrentDictionary<int, string> _owners = new ConcurrentDictionary<int, string>();
         private readonly ConcurrentDictionary<int, byte> _seen = new ConcurrentDictionary<int, byte>();
         private volatile Dictionary<int, KeyValuePair<string, string>> _sync = new Dictionary<int, KeyValuePair<string, string>>();
         private volatile ValueNames _files;
@@ -30,12 +32,28 @@ namespace Vigil.Core
             _most = most;
         }
 
-        /// <summary>A name the game or a mod hashed; any thread. The first name of a number stays, and the book stops at its limit.</summary>
-        public void Learned(int hash, string text)
+        /// <summary>A name the game or a mod hashed, and who hashed it when that was looked at (<see cref="ValueNames.Game"/> for the game); any thread. The first name of a number stays, and the book stops at its limit.</summary>
+        public void Learned(int hash, string text, string owner = null)
         {
             if (text == null || _learned.ContainsKey(hash) || _learned.Count >= _most) return;
-            _learned.TryAdd(hash, text);
+            if (_learned.TryAdd(hash, text) && owner != null) _owners[hash] = owner;
         }
+
+        /// <summary>Whether the book has learned a name for this number while the game ran.</summary>
+        public bool Knows(int hash) => _learned.ContainsKey(hash);
+
+        /// <summary>How many learned names have a mod noted as their owner, and how many the game.</summary>
+        public (int Mods, int Game) OwnerCounts()
+        {
+            int game = _owners.Values.Count(o => o == ValueNames.Game);
+            return (_owners.Count - game, game);
+        }
+
+        /// <summary>The name learned for this number while the game ran (not counted as a message seen); null when none.</summary>
+        public string LearnedText(int hash) => _learned.TryGetValue(hash, out var text) ? text : null;
+
+        /// <summary>Who hashed the name first, when that was looked at; null otherwise.</summary>
+        public string LearnedOwner(int hash) => _owners.TryGetValue(hash, out var owner) ? owner : null;
 
         /// <summary>Whether the name of this number was hashed while the game ran (not counted as seen on the wire).</summary>
         public bool LearnedWhileRunning(int hash) => _learned.ContainsKey(hash);
@@ -67,11 +85,14 @@ namespace Vigil.Core
             return Text(hash, out _);
         }
 
-        /// <summary>The mod a name belongs to when only its config sync or one mod's code says so; null otherwise.</summary>
+        /// <summary>The mod a name belongs to: its config sync, the one mod whose code holds it, else the mod that hashed it while playing; null otherwise.</summary>
         public string ModOf(int hash)
         {
             if (_sync.TryGetValue(hash, out var sync)) return sync.Value;
-            return _files?.SoleMod(hash);
+            string files = _files?.SoleMod(hash);
+            if (files != null) return files;
+            string learned = LearnedOwner(hash);
+            return learned == ValueNames.Game ? null : learned;
         }
 
         /// <summary>"3 of 4 kinds of message seen named: 1 learned while the game ran, 1 from the files, 1 config sync".</summary>
@@ -104,6 +125,47 @@ namespace Vigil.Core
             }
             source = Source.None;
             return null;
+        }
+    }
+
+    /// <summary>
+    /// A cap on how often something may be done in a window of time: at most <c>most</c> times in each
+    /// <c>windowSeconds</c>, the window starting at the first time asked; the times refused are counted.
+    /// For the look at who hashed a new name, so a mod making new names all the time costs little.
+    /// </summary>
+    internal sealed class OwnerLooks
+    {
+        private readonly int _most;
+        private readonly double _window;
+        private readonly object _gate = new object();
+        private double _start = double.NegativeInfinity;
+        private int _count;
+
+        public OwnerLooks(int most, double windowSeconds)
+        {
+            _most = most;
+            _window = windowSeconds;
+        }
+
+        public long Refused { get; private set; }
+
+        public bool Allow(double now)
+        {
+            lock (_gate)
+            {
+                if (now - _start >= _window)
+                {
+                    _start = now;
+                    _count = 0;
+                }
+                if (_count >= _most)
+                {
+                    Refused++;
+                    return false;
+                }
+                _count++;
+                return true;
+            }
         }
     }
 }

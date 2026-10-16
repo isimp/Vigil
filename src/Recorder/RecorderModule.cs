@@ -428,6 +428,7 @@ namespace Vigil.Recorder
             try { UpdateArrivals(); } catch (Exception) { }
             try { UpdatePatches(); } catch (Exception) { }
             try { UpdateOwnCost(); } catch (Exception) { }
+            NetAttribution.InWorld = _server ? ZNet.instance != null : Player.m_localPlayer != null;
             try { UpdateObjectData(); } catch (Exception) { }
             try { OdinVolumePatch.TrialTick(); } catch (Exception) { }
             try { UpdateAlerts(); } catch (Exception e) { _alertsError = e.GetType().Name + " " + e.Message; _alertsAsking = false; }
