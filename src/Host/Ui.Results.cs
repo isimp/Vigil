@@ -477,7 +477,12 @@ internal static partial class Ui
 
         float size = Skin.U(12f), indent = Skin.U(18f);
         Skin.Icon(new Rect(row.x, row.y + (row.height - size) / 2f, size, size), open ? Skin.ChevronDown : Skin.ChevronRight, Skin.Dim);
-        Cells(new Rect(row.x + indent, row.y, row.width - indent, row.height), columns, i => i < cells.Length ? cells[i] : "", false);
+        if (Event.current.type == EventType.Repaint)
+        {
+            var area = new Rect(row.x + indent, row.y, row.width - indent, row.height);
+            // Rows like this stand under a heading-only Table, one per entry: the set widths keep them lined up.
+            Cells(area, columns, FixedWidths(columns, area.width), i => i < cells.Length ? cells[i] : "", false);
+        }
         return Report(Key("row"), GUI.Button(row, GUIContent.none, GUIStyle.none));
     }
 

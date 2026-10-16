@@ -169,7 +169,7 @@ namespace Vigil.Recorder
             });
         }
 
-        /// <summary>What blocks a crop's sky (null for nothing), and what stands in its way: anything solid, or a healthy plant, within its grow radius.</summary>
+        /// <summary>What blocks a crop's sky (null for nothing), and what stands in its way: anything solid, or a healthy plant, within its grow radius, and a vine within its vine radius where it has one.</summary>
         internal static string CropSurroundings(Plant plant, out List<string> inWay)
         {
             var pos = plant.transform.position;
@@ -184,6 +184,17 @@ namespace Vigil.Recorder
                 float d = Vector3.Distance(pos, c.ClosestPoint(pos));
                 if (other == null) found.Add(NameOf(c) + " (" + d.ToString("0.0", Ci) + " m)");
                 else if (other.GetStatus() == Plant.Status.Healthy) found.Add(OwnershipView.DisplayName(other.gameObject) + ", healthy (" + d.ToString("0.0", Ci) + " m)");
+            }
+            // A plant that grows near vines (m_growRadiusVines) also wants none within that radius.
+            if (plant.m_growRadiusVines > 0f)
+            {
+                foreach (var c in Physics.OverlapSphere(pos, plant.m_growRadiusVines, s_spaceMask))
+                {
+                    var vine = c.GetComponentInParent<Vine>();
+                    if (vine == null) continue;
+                    float d = Vector3.Distance(pos, c.ClosestPoint(pos));
+                    found.Add("a vine, " + OwnershipView.DisplayName(vine.gameObject) + " (" + d.ToString("0.0", Ci) + " m)");
+                }
             }
             inWay = found.Distinct().ToList();
             return sky;

@@ -129,7 +129,9 @@ namespace Vigil.Recorder
                     && !p.PatchMethod.ContainsGenericParameters && (p.PatchMethod.DeclaringType == null || !p.PatchMethod.DeclaringType.ContainsGenericParameters));
                 if (patch == null) continue;
                 target = patch.PatchMethod;
-                label = patch.owner + "'s " + (info.Prefixes.Contains(patch) ? "prefix" : "postfix") + " on " + name;
+                var asm = target.DeclaringType?.Assembly;
+                string mod = asm != null && PhaseTimer.ModAssemblies().TryGetValue(asm, out string m) ? m : patch.owner;
+                label = mod + "'s " + (info.Prefixes.Contains(patch) ? "prefix" : "postfix") + " on " + name;
                 break;
             }
             if (target == null)

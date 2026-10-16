@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Globalization;
 using UnityEngine;
 using Vigil.Core;
@@ -418,7 +419,13 @@ internal static partial class Ui
         public bool Right { get; }
     }
 
-    /// <summary>A table: a row of headings unless every heading is null, then a row per entry, hairlines between.</summary>
+    /// <summary>
+    /// A table: a row of headings unless every heading is null, then a row per entry, hairlines
+    /// between. The columns are as wide as what is in them (<see cref="TableLayout"/>): the one of
+    /// width 0 takes the room to spare, and when the room is short the numbers keep their width and the
+    /// widest text gives way, cut with "…". A heading with no rows heads ExpandRows and keeps the set
+    /// widths, as they do. Drawn on the repaint pass only, where the row's width is known.
+    /// </summary>
     public static void Table(IList<Column> columns, IEnumerable<string[]> rows)
     {
         bool headed = false;
@@ -427,21 +434,102 @@ internal static partial class Ui
             headed |= c.Header != null;
         }
 
+        var list = rows as IList<string[]> ?? rows.ToList();
+        bool paint = Event.current.type == EventType.Repaint;
+        float[] widths = null;
         int was = _rows;
         _rows = 0;
         if (headed)
         {
             var head = NextRow(Skin.U(22f));
-            Cells(head, columns, i => columns[i].Header ?? "", true);
+            if (paint)
+            {
+                // A heading with no rows heads a list of ExpandRows, which keep the set widths.
+                widths = list.Count == 0 ? FixedWidths(columns, head.width) : MeasuredWidths(columns, list, head.width);
+                Cells(head, columns, widths, i => columns[i].Header ?? "", true);
+            }
         }
 
-        foreach (var cells in rows)
+        foreach (var cells in list)
         {
             var row = NextRow(Skin.U(26f));
-            Cells(row, columns, i => i < cells.Length ? cells[i] : "", false);
+            if (!paint)
+            {
+                continue;
+            }
+
+            widths ??= MeasuredWidths(columns, list, row.width);
+            Cells(row, columns, widths, i => i < cells.Length ? cells[i] : "", false);
         }
 
         _rows = was;
+    }
+
+    private const float CellGap = 10f, TextFloor = 60f;
+    private static readonly Dictionary<(GUIStyle, string), float> TextWidths = new();
+
+    // A text's width in a style, kept, since a table measures the same texts every frame.
+    private static float TextWidth(GUIStyle style, string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return 0f;
+        }
+
+        if (TextWidths.TryGetValue((style, text), out float w))
+        {
+            return w;
+        }
+
+        if (TextWidths.Count > 8000)
+        {
+            TextWidths.Clear();
+        }
+
+        w = style.CalcSize(new GUIContent(text)).x;
+        TextWidths[(style, text)] = w;
+        return w;
+    }
+
+    private static GUIStyle CellStyle(Column c, bool head) => head ? (c.Right ? Skin.CellHeadRight : Skin.CellHead) : (c.Right ? Skin.CellRight : Skin.Cell);
+
+    private static float[] MeasuredWidths(IList<Column> columns, IList<string[]> rows, float rowWidth)
+    {
+        var cols = new TableLayout.Col[columns.Count];
+        for (int i = 0; i < columns.Count; i++)
+        {
+            float needed = TextWidth(CellStyle(columns[i], true), columns[i].Header);
+            foreach (var cells in rows)
+            {
+                if (i < cells.Length)
+                {
+                    needed = Mathf.Max(needed, TextWidth(CellStyle(columns[i], false), cells[i]));
+                }
+            }
+
+            cols[i] = new TableLayout.Col(needed + Skin.U(2f), columns[i].Width <= 0f, columns[i].Right);
+        }
+
+        return TableLayout.Widths(rowWidth - Skin.U(CellGap) * Mathf.Max(0, columns.Count - 1), cols, Skin.U(TextFloor));
+    }
+
+    // The fixed widths and the rest, as WrapTable's rows lay out, for its row of headings.
+    private static float[] FixedWidths(IList<Column> columns, float rowWidth)
+    {
+        float gap = Skin.U(CellGap), fixedWidth = 0f;
+        foreach (var c in columns)
+        {
+            fixedWidth += Skin.U(c.Width) + gap;
+        }
+
+        float rest = Mathf.Max(Skin.U(TextFloor), rowWidth - fixedWidth);
+        var widths = new float[columns.Count];
+        for (int i = 0; i < columns.Count; i++)
+        {
+            widths[i] = columns[i].Width > 0f ? Skin.U(columns[i].Width) : rest;
+        }
+
+        return widths;
     }
 
     /// <summary>
@@ -461,7 +549,7 @@ internal static partial class Ui
         if (headed)
         {
             var head = NextRow(Skin.U(22f));
-            Cells(head, columns, i => columns[i].Header ?? "", true);
+            Cells(head, columns, FixedWidths(columns, head.width), i => columns[i].Header ?? "", true);
         }
 
         float gap = Skin.U(10f);
@@ -497,22 +585,15 @@ internal static partial class Ui
         _rows = was;
     }
 
-    private static void Cells(Rect row, IList<Column> columns, System.Func<int, string> text, bool head)
+    private static void Cells(Rect row, IList<Column> columns, float[] widths, System.Func<int, string> text, bool head)
     {
-        float gap = Skin.U(10f), fixedWidth = 0f;
-        foreach (var c in columns)
-        {
-            fixedWidth += Skin.U(c.Width) + gap;
-        }
-
-        float rest = Mathf.Max(Skin.U(60f), row.width - fixedWidth);
-        float x = row.x;
+        float gap = Skin.U(CellGap), x = row.x;
         for (int i = 0; i < columns.Count; i++)
         {
-            float width = columns[i].Width > 0f ? Skin.U(columns[i].Width) : rest;
-            var style = head ? (columns[i].Right ? Skin.CellHeadRight : Skin.CellHead) : (columns[i].Right ? Skin.CellRight : Skin.Cell);
-            GUI.Label(new Rect(x, row.y, width, row.height), text(i), style);
-            x += width + gap;
+            var style = CellStyle(columns[i], head);
+            string t = TableLayout.Fit(text(i), widths[i], s => TextWidth(style, s));
+            GUI.Label(new Rect(x, row.y, widths[i], row.height), t, style);
+            x += widths[i] + gap;
         }
     }
 

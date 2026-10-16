@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.33.1
+
+The panel's tables size their columns by what is in them: no more columns cutting their text off while one column takes all the room; when the card is too narrow, numbers keep their width and the longest text gives way, ending in "…". A crop's space check also counts the vines within its vine radius, as the game does, so a plant held back by a vine is explained. The self-test names a timed patch by its mod.
+
 ## 0.33.0
 
 Each mod's own patch code in the deep capture report: once the capture has found the costliest game methods, it times every mod's prefix, postfix and finalizer on them by itself and lists the mods by what their own patches cost per frame, each with its costliest patch, and which mods change the game's code with transpilers. The section that gave every mod patching a method that method's whole time stays, under a clearer name.
