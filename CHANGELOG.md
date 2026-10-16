@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.23.0
+
+A new *Patches* tab holds Vigil's own game patches, each off unless the server switches it on for every player running Vigil; the server's admins switch them in the tab. The first, *OdinOnDemand follows the game's volume*, makes OdinOnDemand's radios, screens and girdle follow the game's master and music volume from the first join instead of playing at full level until the game has once lost focus, and gives the sound back at 100 % after AzuMiscPatches' mute in background, so the game's own sounds keep their level after tabbing out.
+
 ## 0.22.0
 
 *Inspect an object* explains the objects the game judges by their surroundings. A fermenter shows its batch, its cover and roof, and that the game starts the batch over while either is missing; a beehive shows its cover against its limit, its biome and daylight; a crop shows what blocks its sun or space and when it is ready, and whether it withers if it is not healthy by then; a smelter or kiln shows its fuel, ore, roof and whether its smoke gets out; a fire shows whether it is wet or blocked; a creature shows how far its taming is and what pauses it, and why it does or does not breed. A fermenter's or beehive's cover rays can be drawn in the world like a windmill's. A new *World* card, *Rested and comfort*, reads where you stand: shelter, your comfort and the pieces that count, the ones skipped and the groups still missing.

@@ -20,7 +20,7 @@ namespace Vigil;
 /// </summary>
 internal sealed class Panel
 {
-    public static readonly string[] Tabs = { "Overview", "Network", "World", "Tools", "Health" };
+    public static readonly string[] Tabs = { "Overview", "Network", "World", "Tools", "Health", "Patches" };
 
     private readonly VigilPlugin _host;
     private readonly ConfigEntry<KeyboardShortcut> _key;

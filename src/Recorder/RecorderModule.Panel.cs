@@ -165,6 +165,7 @@ namespace Vigil.Recorder
                 yield return new PanelSection("World", "Spawns across the server", DrawSpawnsAcross, SpawnsAcrossBadge);
                 yield return new PanelSection("World", "What could spawn here", DrawSpawnable, SpawnableBadge);
                 yield return new PanelSection("World", "Rested and comfort", DrawRested, RestedBadge);
+                yield return new PanelSection("Patches", "Game patches", DrawPatches, PatchesBadge);
                 yield return new PanelSection("World", "Leftovers in the world", DrawLeftovers, LeftoversBadge, PanelZone.Change);
                 yield return new PanelSection("Health", "Mods and configs", DrawParity, ParityBadge);
                 yield return new PanelSection("Tools", "Inspect", DrawInspect, null, PanelZone.Measure);
@@ -494,6 +495,9 @@ namespace Vigil.Recorder
                 checks.Add(SpawnWatch.HookProblem == null
                     ? new SelfTestReport.Check(area, "spawn hooks", SelfTestReport.Result.Pass, SpawnWatch.Log.Records.Count + " spawns seen this session")
                     : new SelfTestReport.Check(area, "spawn hooks", SelfTestReport.Result.Warn, SpawnWatch.HookProblem + "; the spawn log stays empty"));
+                checks.Add(OdinVolumePatch.Problem == null
+                    ? new SelfTestReport.Check(area, "game patch: OdinOnDemand follows the game's volume", SelfTestReport.Result.Pass, OdinVolumePatch.State)
+                    : new SelfTestReport.Check(area, "game patch: OdinOnDemand follows the game's volume", SelfTestReport.Result.Warn, OdinVolumePatch.State));
             }
             checks.Add(Writable(_dir)
                 ? new SelfTestReport.Check(area, "recordings folder writable", SelfTestReport.Result.Pass, _dir)

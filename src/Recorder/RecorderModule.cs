@@ -177,6 +177,7 @@ namespace Vigil.Recorder
             BindSharing();
             BindOwnership();
             BindWeather();
+            BindPatches();
             StartSpawnWatch();
             _load = new LoadTest(_server, dir, VigilVersion.Value, _recorder, _timer, s => Logger.LogInfo(s));
             BindAlerts();
@@ -422,6 +423,7 @@ namespace Vigil.Recorder
             try { UpdateInspect(); } catch (Exception) { }
             try { UpdateWeather(); } catch (Exception) { }
             try { UpdateArrivals(); } catch (Exception) { }
+            try { UpdatePatches(); } catch (Exception) { }
             try { UpdateAlerts(); } catch (Exception e) { _alertsError = e.GetType().Name + " " + e.Message; _alertsAsking = false; }
             if (_watchPatches && !_patchMapWritten && PatchMapDue())
             {
