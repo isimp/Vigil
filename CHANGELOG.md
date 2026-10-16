@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.0
+
+You can walk with the panel open: walking, running, jumping and crouching reach the game as with its inventory open, while attacks, blocking, using things, the hotbar and the game's menus stay held back, and while a field of the panel has the keyboard the keys go to it. After turning the camera with the right mouse off the panel, the cursor comes back where it was instead of the middle of the screen.
+
 ## 0.27.1
 
 The self-test's check of OdinOnDemand's cog slider failed on every run, as it looked for the cog panels among the game's objects; it now finds them through the radios that hold them, and a failure there no longer keeps the music volume trial from running.

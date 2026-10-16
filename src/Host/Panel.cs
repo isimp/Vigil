@@ -12,8 +12,9 @@ namespace Vigil;
 /// The panel: one window, opened and closed with its key (Shift+F9 unless changed), also closed with
 /// Escape or its close button, with a tab per kind of task. Each area adds its sections to the tabs;
 /// buttons run the same commands as the console, and the last answer shows at the bottom. While it is
-/// open the game takes no keys or mouse (it treats the panel like one of its own text boxes) and the
-/// cursor is free; the window is drawn only while open, so a closed panel costs nothing. Its header
+/// open the player can walk, as with the game's inventory open, the game takes no other keys or mouse
+/// (it treats the panel like one of its own text boxes) and the cursor is free; while a field of the
+/// panel has the keyboard, the keys go to it. The window is drawn only while open, so a closed panel costs nothing. Its header
 /// moves it and the grip in its corner resizes it; where it was left, its size, the tab last used and
 /// the cards and results folded are kept in Vigil-state/panel.txt on this machine. A card's title
 /// line folds it; its edge and a tag in its zone's colour say what its tools do to the game.
@@ -56,7 +57,7 @@ internal sealed class Panel
     {
         _host = host;
         _key = config.Bind("Panel", "Key", new KeyboardShortcut(KeyCode.F9, KeyCode.LeftShift),
-            "Opens and closes the panel. Escape closes it too. While it is open the game takes no keys or mouse.");
+            "Opens and closes the panel. Escape closes it too. While it is open you can walk, as with the inventory open; the game takes no other keys or mouse, and keys go to a panel field while it has the keyboard.");
         _scale = config.Bind("Panel", "Scale", 1f, new ConfigDescription("Size of the panel and its text.", new AcceptableValueRange<float>(0.75f, 2f)));
         _placeFile = Path.Combine(stateDir, "panel.txt");
     }
@@ -71,6 +72,16 @@ internal sealed class Panel
     public static bool Looking { get; private set; }
 
     private static bool _lookEnded;
+
+    /// <summary>Where the cursor was when the look began (screen pixels from the bottom left), and for how many frames to put it back there once it is free.</summary>
+    public static Vector2 CursorBackTo { get; private set; }
+
+    public static int CursorBackLeft { get; set; }
+
+    private static Vector2 _lookFrom;
+
+    /// <summary>Whether a field of the panel has the keyboard, so keys go to it rather than to walking.</summary>
+    public static bool Typing => GUIUtility.keyboardControl != 0;
 
     /// <summary>Where the panel was last drawn, in screen pixels from the top left, for telling clicks off it.</summary>
     private Rect _drawn;
@@ -122,6 +133,7 @@ internal sealed class Panel
                 _lookEnded = false;
             }
 
+            CursorBackLeft = 0;
             return;
         }
 
@@ -129,11 +141,14 @@ internal sealed class Panel
         {
             var m = Input.mousePosition;
             Looking = !_drawn.Contains(new Vector2(m.x, Screen.height - m.y));
+            _lookFrom = m;
         }
         else if (Looking && !Input.GetMouseButton(1))
         {
             Looking = false;
             _lookEnded = true;
+            CursorBackTo = _lookFrom;
+            CursorBackLeft = PanelControls.CursorBackFrames;
         }
     }
 
@@ -550,10 +565,15 @@ internal sealed class Panel
 }
 
 /// <summary>
-/// Keeps the game's hands off the keyboard and mouse while the panel is open. The game already
-/// stops moving, looking, attacking and opening its menu while one of its text boxes is up, and
-/// frees the cursor: <c>TextInput.IsVisible</c> answering yes gets all of that at once. The mouse
-/// wheel is read apart from that, so it is held back as well, and only scrolls the panel.
+/// Keeps the game's hands off the keyboard and mouse while the panel is open, but for walking
+/// (<see cref="PanelControls"/>). The game stops moving, looking, attacking and opening its menu while
+/// one of its text boxes is up, and frees the cursor: <c>TextInput.IsVisible</c> answering yes gets all
+/// of that at once. It answers no to the game's movement (<c>PlayerController.TakeInput</c> asked
+/// without look) while no panel field has the keyboard, and <c>PlayerController.InInventoryEtc</c>
+/// answers yes, so the player walks, runs, jumps and crouches but does not attack, block or dodge,
+/// as with the inventory open. The mouse wheel is read apart from that, so it is held back as well,
+/// and only scrolls the panel. After a look the cursor is put back where the look began
+/// (<c>ZInput.SetMousePosition</c>, once the cursor is free).
 /// </summary>
 internal static class PanelInput
 {
@@ -565,6 +585,9 @@ internal static class PanelInput
     /// <summary>Lives as long as the game: the patches stay in.</summary>
     private static Harmony _harmony;
 
+    /// <summary>True while the game's movement asks whether it may take input.</summary>
+    private static bool _movementAsks;
+
     public static void Patch(string id)
     {
         _harmony ??= new Harmony(id);
@@ -572,10 +595,12 @@ internal static class PanelInput
         Put(harmony, AccessTools.Method(typeof(TextInput), nameof(TextInput.IsVisible)), nameof(TextBox), "keys held back from the game");
         Put(harmony, AccessTools.Method(typeof(ZInput), "Internal_GetMouseScrollWheel"), nameof(Wheel), "mouse wheel held back from the camera");
         Put(harmony, AccessTools.Method(typeof(PlayerController), "LateUpdate"), nameof(Look), "camera look with right mouse off the panel");
-        Put(harmony, AccessTools.Method(typeof(GameCamera), nameof(GameCamera.UpdateMouseCapture)), nameof(Capture), "cursor held while looking");
+        Put(harmony, AccessTools.Method(typeof(GameCamera), nameof(GameCamera.UpdateMouseCapture)), nameof(Capture), "cursor held while looking, put back after");
+        Put(harmony, AccessTools.Method(typeof(PlayerController), "TakeInput"), nameof(AfterTakeInput), "walking with the panel open", nameof(BeforeTakeInput));
+        Put(harmony, AccessTools.Method(typeof(PlayerController), "InInventoryEtc"), nameof(HoldAttacks), "attacks held back with the panel open");
     }
 
-    private static void Put(Harmony harmony, System.Reflection.MethodInfo original, string postfix, string what)
+    private static void Put(Harmony harmony, System.Reflection.MethodInfo original, string postfix, string what, string prefix = null)
     {
         try
         {
@@ -585,7 +610,7 @@ internal static class PanelInput
                 return;
             }
 
-            harmony.Patch(original, postfix: new HarmonyMethod(typeof(PanelInput), postfix));
+            harmony.Patch(original, prefix: prefix != null ? new HarmonyMethod(typeof(PanelInput), prefix) : null, postfix: new HarmonyMethod(typeof(PanelInput), postfix));
             Installed++;
         }
         catch (Exception e)
@@ -596,7 +621,19 @@ internal static class PanelInput
 
     private static void TextBox(ref bool __result)
     {
-        if (Panel.IsOpen)
+        if (PanelControls.SeesTextBox(Panel.IsOpen, _movementAsks, Panel.Typing))
+        {
+            __result = true;
+        }
+    }
+
+    private static void BeforeTakeInput(bool look) => _movementAsks = !look;
+
+    private static void AfterTakeInput() => _movementAsks = false;
+
+    private static void HoldAttacks(ref bool __result)
+    {
+        if (PanelControls.HoldsAttacks(Panel.IsOpen))
         {
             __result = true;
         }
@@ -625,6 +662,13 @@ internal static class PanelInput
         if (Panel.IsOpen && Panel.Looking)
         {
             ZCursor.LockState = CursorLockMode.Locked;
+            return;
+        }
+
+        if (PanelControls.PutCursorBack(Panel.CursorBackLeft, ZCursor.LockState == CursorLockMode.Locked))
+        {
+            Panel.CursorBackLeft--;
+            ZInput.SetMousePosition(Panel.CursorBackTo);
         }
     }
 
