@@ -152,6 +152,7 @@ namespace Vigil.Recorder
                 postfix: Patching.M(typeof(RecorderModule), nameof(SerializePostfix)));
             _rpc = new RpcProbe(harmony, Path.Combine(dir, "Vigil-rpc.txt"));
             NetAttribution.Patch(harmony);
+            ObjectCapture.Patch(harmony);
             _net = new NetMonitor(harmony);
             WorldContext.MissingPath = Path.Combine(dir, "Vigil-missing-prefabs.tsv");
             _world = new WorldContext(harmony);
@@ -301,6 +302,7 @@ namespace Vigil.Recorder
             if (!s_byZdo.TryGetValue(__instance.m_uid, out var o)) s_byZdo[__instance.m_uid] = o = new One { Prefab = prefab };
             o.Count++; o.Bytes += size; o.Pos = __instance.GetPosition(); o.Mine = __instance.IsOwner();
             LoadTest.CountSent(__instance, size);
+            ObjectCapture.Sent(__instance, size);
         }
 
         public override void FixedUpdate()
@@ -426,6 +428,7 @@ namespace Vigil.Recorder
             try { UpdateArrivals(); } catch (Exception) { }
             try { UpdatePatches(); } catch (Exception) { }
             try { UpdateOwnCost(); } catch (Exception) { }
+            try { UpdateObjectData(); } catch (Exception) { }
             try { OdinVolumePatch.TrialTick(); } catch (Exception) { }
             try { UpdateAlerts(); } catch (Exception e) { _alertsError = e.GetType().Name + " " + e.Message; _alertsAsking = false; }
             if (_watchPatches && !_patchMapWritten && PatchMapDue())
@@ -503,6 +506,7 @@ namespace Vigil.Recorder
                 foreach (var p in Patching.Problems) header.Add("Not measured: " + p);
                 header.Add(string.Format(CultureInfo.InvariantCulture, "World-object uploads: {0:0.0} MB in all.", s_runBytes / 1048576.0));
                 header.AddRange(OwnCostLines());
+                header.AddRange(ObjectDataLines());
                 File.WriteAllText(_summaryPath, _recorder.Summary(header));
             }
             catch (Exception) { }

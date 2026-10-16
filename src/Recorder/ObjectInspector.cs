@@ -227,6 +227,9 @@ namespace Vigil.Recorder
                 .Select(f => new KeyValuePair<string, int>(f.Name, (int)f.GetValue(null)))
                 .ToList();
 
+        /// <summary>A stored value's name and whose code holds it, from the names known now.</summary>
+        public static ValueNames.Name NameOf(int hash) => Names().Of(hash);
+
         /// <summary>The names to use now: the full ones once read (the first call starts the reading), else the game's list alone.</summary>
         private static ValueNames Names()
         {

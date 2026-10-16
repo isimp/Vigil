@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.32.0
+
+World-object data by mod: the Network tab's new card captures 60 s of what your game sends (and runs on its own during a deep capture) and shows, for each kind of object, how often it was sent, how big it was each time and how much of that the game's values and each mod's values take, and which values, by changing, made objects send again, movement included. The summary lists the last capture, and the self-test checks the sizes against the objects actually sent.
+
 ## 0.31.0
 
 The messages that keep coming at a fixed rate whatever the players do, per sender: the Network tab's new *Steady messages, per player* card shows the server's admins each one with its mod, who sends it, how often, how many kB per minute and in how many 10 s windows of the last 12 minutes it came, and each machine's summary lists its own.

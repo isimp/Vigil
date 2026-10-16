@@ -160,6 +160,7 @@ namespace Vigil.Recorder
                 yield return new PanelSection("Network", "The server", DrawServer, ServerBadge);
                 yield return new PanelSection("Network", "The server's reports", DrawReports, ReportsBadge);
                 yield return new PanelSection("Network", "Steady messages, per player", DrawSteady, SteadyBadge);
+                yield return new PanelSection("Network", "World-object data by mod", DrawObjectData, ObjectDataBadge, PanelZone.Measure);
                 yield return new PanelSection("World", "Who runs what", DrawOwnership, OwnershipBadge, PanelZone.Measure);
                 yield return new PanelSection("World", "Inspect an object", DrawObject, ObjectBadge);
                 yield return new PanelSection("World", "Weather and light", DrawWeather, WeatherBadge);
