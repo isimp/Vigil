@@ -122,7 +122,7 @@ namespace Vigil.Tests
         [Fact]
         public void WhatThisVigilCanDoIsOneLine()
         {
-            Assert.Equal("load,players,recording,status,selftest,link,reports,parity,leftovers,alerts", Greeting.Own);
+            Assert.Equal("load,players,recording,status,selftest,link,reports,parity,leftovers,alerts,steady", Greeting.Own);
         }
     }
 }

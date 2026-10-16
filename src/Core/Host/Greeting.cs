@@ -26,8 +26,11 @@ namespace Vigil.Core
         /// <summary>A server that keeps a week of alerts for its admins (drops, falling behind, crashes and more) and hands out the new ones.</summary>
         public const string Alerts = "alerts";
 
+        /// <summary>A server that lists, for its admins, the messages that keep coming at a fixed rate, per sender.</summary>
+        public const string Steady = "steady";
+
         /// <summary>What this Vigil can do, as it tells the other side.</summary>
-        public const string Own = Load + "," + Players + "," + Recording + "," + Status + "," + SelfTest + "," + Link + "," + Reports + "," + Parity + "," + Leftovers + "," + Alerts;
+        public const string Own = Load + "," + Players + "," + Recording + "," + Status + "," + SelfTest + "," + Link + "," + Reports + "," + Parity + "," + Leftovers + "," + Alerts + "," + Steady;
 
         /// <summary>Whether any player, not only an admin, may ask the server's Vigil this: to take a shared report or spawn log, or for its mods and configs.</summary>
         public static bool ForEveryone(string command) => command == Share || command == SpawnLog || command == Parity;

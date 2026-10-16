@@ -30,6 +30,9 @@ namespace Vigil.Recorder
 
         private readonly string _path;
 
+        /// <summary>The senders of messages that keep coming at a fixed rate (<see cref="SteadyMessages"/>), counted in the report's 10 s windows.</summary>
+        public static readonly SteadyMessages Steady = new SteadyMessages();
+
         public RpcProbe(Harmony harmony, string path)
         {
             _path = path;
@@ -61,7 +64,11 @@ namespace Vigil.Recorder
                 string label = Label(__instance);
                 s_sent.Add(label, pkg.Size());
                 Count(s_secondSent, label);
-                NetAttribution.RoutedSent(Owner(__instance), label, pkg.Size());
+                string owner = Owner(__instance);
+                NetAttribution.RoutedSent(owner, label, pkg.Size());
+                // A message this machine starts; one the server only passes on keeps its sender and was counted when it came in.
+                if (__instance.m_senderPeerID == ZDOMan.GetSessionID())
+                    Steady.Add(owner, MethodName(__instance), ZNet.instance != null && ZNet.instance.IsServer() ? "the server" : "this game", pkg.Size());
             }
             catch (Exception) { }
         }
@@ -76,9 +83,23 @@ namespace Vigil.Recorder
                 if (ZNet.instance != null && ZNet.instance.IsServer()) label += "  from " + Sender(__instance.m_senderPeerID);
                 s_received.Add(label, pkg.Size());
                 Count(s_secondReceived, label);
-                NetAttribution.RoutedReceived(Owner(__instance), label, pkg.Size());
+                string owner = Owner(__instance);
+                NetAttribution.RoutedReceived(owner, label, pkg.Size());
+                Steady.Add(owner, MethodName(__instance), From(__instance.m_senderPeerID), pkg.Size());
             }
             catch (Exception) { }
+        }
+
+        // Who sent a routed message: a player by name (the server knows every peer, a player's game the player list), else the server.
+        private static string From(long uid)
+        {
+            if (ZNet.instance == null) return "?";
+            if (ZNet.instance.IsServer()) return Sender(uid);
+            var peer = ZNet.instance.GetServerPeer();
+            if (peer != null && peer.m_uid == uid) return "the server";
+            foreach (var p in ZNet.instance.GetPlayerList())
+                if (p.m_characterID.UserID == uid) return p.m_name;
+            return "another player";
         }
 
         private static readonly Dictionary<string, int> s_secondSent = new Dictionary<string, int>();
@@ -199,6 +220,7 @@ namespace Vigil.Recorder
 
         public void Report(float span)
         {
+            Steady.EndWindow(span);
             string text = "\r\n[" + DateTime.Now.ToString("HH:mm:ss") + "] " + span.ToString("0.0") + " s\r\n" +
                 " sent: " + s_sent.EndWindow(span, Top) +
                 " received: " + s_received.EndWindow(span, Top) +

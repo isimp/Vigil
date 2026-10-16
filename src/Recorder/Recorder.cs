@@ -1135,6 +1135,9 @@ namespace Vigil.Recorder
                 sb.AppendFormat(ci, "   {0}: {1:0.0} MB received, {2:0.0} MB sent\r\n", kv.Value.Name, kv.Value.RunBytesIn / 1048576.0, kv.Value.RunBytesOut / 1048576.0);
             sb.AppendFormat(ci, "   world updates received: {0:0.0} MB\r\n", _net.RunZdoDownBytes / 1048576.0);
             sb.AppendLine("   message names: " + NetAttribution.Book.CountLine());
+            var steady = RpcProbe.Steady.Steady();
+            sb.AppendLine("   steady messages (in most 10 s windows of the last 12 minutes, at a similar rate): " + (steady.Count == 0 ? "none" : steady.Count.ToString(ci)));
+            foreach (var row in steady.Take(25)) sb.AppendLine("      " + SteadyMessages.Line(row));
             sb.AppendLine("   routed messages:");
             sb.Append(_rpc.Summary(Mathf.Max(1f, _inWorldSeconds)));
             sb.AppendLine("   traffic by mod (every package, bytes):");

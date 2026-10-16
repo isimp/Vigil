@@ -157,7 +157,7 @@ internal sealed class Link
         {
             reply = _dispatch(command ?? "", d, peer)
                 ?? new Dictionary<string, object> { { "ok", 0 }, { "text", "the server's Vigil " + VigilVersion.Value + " does not know \"" + command + "\"" } };
-            if (command != "status" && command != "link" && command != "report" && command != "share" && command != "parity" && command != Greeting.SpawnLog && command != SpawnView.Command && command != Greeting.Leftovers && command != Greeting.Alerts)
+            if (command != "status" && command != "link" && command != "report" && command != "share" && command != "parity" && command != Greeting.SpawnLog && command != SpawnView.Command && command != Greeting.Leftovers && command != Greeting.Alerts && command != Greeting.Steady)
             {
                 _log("Vigil: " + (peer?.m_playerName ?? "an admin") + " asked for " + command);
             }

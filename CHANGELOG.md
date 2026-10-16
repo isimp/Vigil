@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.31.0
+
+The messages that keep coming at a fixed rate whatever the players do, per sender: the Network tab's new *Steady messages, per player* card shows the server's admins each one with its mod, who sends it, how often, how many kB per minute and in how many 10 s windows of the last 12 minutes it came, and each machine's summary lists its own.
+
 ## 0.30.0
 
 What Vigil itself costs, in one place: a *Vigil's own cost* card in the Health tab and a block at the top of the summary give its time per frame (its own loops, its hooks in the game's methods and its timers on the mods' callbacks) and its share of your frame, what the open panel adds, its time on threads of its own, how fast its recordings grow and its own network messages. Its hooks are timed for 10 s two minutes into a session and whenever you press *Measure*, the timers' own cost taken off. Memory per mod cannot be told by the game's runtime and is said to be not measured.

@@ -100,6 +100,7 @@ namespace Vigil.Recorder
             if (command == Greeting.Leftovers) return LeftoversReply(args, from);
             if (command == "parity") return ParityReply();
             if (command == Greeting.Alerts) return AlertsReply(args);
+            if (command == Greeting.Steady) return SteadyReply();
             if (command == "link")
             {
                 args.TryGetValue("who", out string who);
@@ -158,6 +159,7 @@ namespace Vigil.Recorder
                 yield return new PanelSection("Network", "This connection", DrawConnection, ConnectionBadge);
                 yield return new PanelSection("Network", "The server", DrawServer, ServerBadge);
                 yield return new PanelSection("Network", "The server's reports", DrawReports, ReportsBadge);
+                yield return new PanelSection("Network", "Steady messages, per player", DrawSteady, SteadyBadge);
                 yield return new PanelSection("World", "Who runs what", DrawOwnership, OwnershipBadge, PanelZone.Measure);
                 yield return new PanelSection("World", "Inspect an object", DrawObject, ObjectBadge);
                 yield return new PanelSection("World", "Weather and light", DrawWeather, WeatherBadge);
