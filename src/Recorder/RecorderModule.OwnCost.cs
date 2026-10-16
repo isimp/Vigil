@@ -41,20 +41,31 @@ namespace Vigil.Recorder
             var f = new OwnCostFacts();
             if (_recorder == null) return f;
             long frames = Math.Max(1, _recorder.FramesAll);
-            long loops = 0, panel = 0, timerCalls = 0;
+            long loops = 0, panel = 0, selfTest = 0, timerCalls = 0;
             foreach (var s in _timer?.Slots ?? new List<PhaseTimer.Slot>())
             {
                 if (s.Deep) continue;
                 if (s.Mod == OwnTime.Mod)
                 {
                     if (s.Label != null && s.Label.EndsWith("Panel.OnGUI", StringComparison.Ordinal)) panel += s.RunTicks;
+                    else if (s.Label != null && s.Label.IndexOf("SelfTestRun", StringComparison.Ordinal) >= 0) selfTest += s.RunTicks;
                     else loops += s.RunTicks;
                 }
                 else timerCalls += s.RunCalls;
             }
             double minutes = _recorder.MinutesRunning;
             f.FrameMs = _recorder.MeanFrameMs;
-            f.LoopsMs = PhaseTimer.TicksToMs(loops + _recorder.ProbeRunTicks) / frames;
+            // The recorder's frame work holds the deep capture's stepping and the reports taken: those are tools.
+            double steady = PhaseTimer.TicksToMs(loops + _recorder.ProbeRunTicks - OwnTools.DeepTicks) - OwnTools.ReportMs;
+            f.LoopsMs = Math.Max(0, steady) / frames;
+            if (OwnTools.SelfTestRuns > 0)
+                f.Tools.Add(new ToolCost("self-test", PhaseTimer.TicksToMs(selfTest), OwnTools.SelfTestFrames, OwnTools.SelfTestSeconds, OwnTools.SelfTestRuns));
+            if (OwnTools.DeepRuns > 0)
+                f.Tools.Add(new ToolCost("deep capture", PhaseTimer.TicksToMs(OwnTools.DeepTicks), OwnTools.DeepFrames, OwnTools.DeepSeconds, OwnTools.DeepRuns));
+            f.ReportCount = OwnTools.Reports;
+            f.ReportMs = OwnTools.ReportMs;
+            f.FramesAll = _recorder.FramesAll;
+            f.SessionMinutes = _recorder.MinutesRunning;
             f.PanelMs = PhaseTimer.TicksToMs(panel);
             f.PanelOpenFrames = Panel.OpenFrames;
             f.TimerCallsPerFrame = timerCalls / (double)frames;
@@ -92,6 +103,8 @@ namespace Vigil.Recorder
         {
             var f = OwnFacts();
             yield return "Vigil itself: " + OwnCost.FrameLine(f);
+            yield return "   tools: " + OwnCost.ToolsLine(f);
+            yield return "   session: " + OwnCost.SessionLine(f);
             yield return "   hooks: " + OwnCost.HooksLine(f.Hooks);
             yield return "   panel: " + OwnCost.PanelLine(f);
             yield return "   other threads: " + OwnCost.ThreadsLine(f);
@@ -170,6 +183,8 @@ namespace Vigil.Recorder
             var f = OwnFacts();
             Ui.Row("Frame time", OwnCost.FrameLine(f));
             Ui.Row("Panel open", OwnCost.PanelLine(f));
+            Ui.Row("Tools", OwnCost.ToolsLine(f));
+            Ui.Row("Session", OwnCost.SessionLine(f));
             Ui.Row("Hooks", _ownHooks != null && _ownHooks.Running ? "measuring for " + OwnHooks.Seconds.ToString("0") + " s ..." : OwnCost.HooksLine(f.Hooks));
             if (_ownHooks != null && !_ownHooks.Running && Ui.Tool("Measure its hooks", "Times Vigil's hooks in the game's methods for 10 s, the timers' own cost taken off", "Measure"))
                 Ui.Later(() => _ownHooks.Start());

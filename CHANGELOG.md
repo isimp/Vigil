@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.0
+
+*Vigil's own cost* shows its steady work as the headline and its one-off tools apart: the self-test and deep captures per frame while they ran, and the reports taken per report. A session line gives the cost with the tools spread over the whole session. The summary's block follows the card.
+
 ## 0.34.0
 
 Names that mods put together while playing are in no file, so their bytes and messages showed as unknown. Vigil now notes which mod hashed each name it has not seen before, once the game is in a world, and gives those values and messages to that mod. The look is capped at 2,000 a minute, and the self-test says how many names got a mod.

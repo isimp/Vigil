@@ -749,6 +749,8 @@ namespace Vigil.Recorder
             costs.Add(new KeyValuePair<string, double>("game log line", watch.Elapsed.TotalMilliseconds - before));
             double mainMs = watch.Elapsed.TotalMilliseconds;
             _ownMs += (float)mainMs;
+            OwnTools.Reports++;
+            OwnTools.ReportMs += mainMs;
             ThreadPool.QueueUserWorkItem(_ => OwnThreads.Timed(() =>
             {
                 try
@@ -974,6 +976,7 @@ namespace Vigil.Recorder
             if (_deepBlocked) return "deep capture is off for this session: the last session died while one was running";
             Try(() => File.WriteAllText(Path.Combine(_dir, "Vigil-state", "deep.active"), DateTime.Now.ToString("HH:mm:ss")));
             int n = _timer.BeginDeep();
+            OwnTools.DeepRuns++;
             _deepSeconds = seconds;
             _deepUntil = -1;
             _deepReason = reason;
@@ -998,6 +1001,15 @@ namespace Vigil.Recorder
         private void StepDeep(float now)
         {
             if (!_timer.DeepActive) return;
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            OwnTools.DeepFrames++;
+            OwnTools.DeepSeconds += Time.unscaledDeltaTime;
+            try { StepDeepTimed(now); }
+            finally { OwnTools.DeepTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started; }
+        }
+
+        private void StepDeepTimed(float now)
+        {
             if (_timer.StepDeep(_s.DeepBudgetMs))
             {
                 _deepRunStarted = now;

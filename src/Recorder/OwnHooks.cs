@@ -225,6 +225,24 @@ namespace Vigil.Recorder
         }
     }
 
+    /// <summary>
+    /// Vigil's one-off tools, counted apart from its steady work: the self-test (frames, seconds and
+    /// runs; its time on the game's thread is its coroutine's), deep captures (Vigil's own stepping:
+    /// putting timers in and out, the report; the timers' effect inside the game's methods is not in
+    /// it) and the reports taken (their time on the game's thread).
+    /// </summary>
+    internal static class OwnTools
+    {
+        public static long SelfTestFrames;
+        public static double SelfTestSeconds;
+        public static int SelfTestRuns;
+        public static long DeepTicks, DeepFrames;
+        public static double DeepSeconds;
+        public static int DeepRuns;
+        public static long Reports;
+        public static double ReportMs;
+    }
+
     /// <summary>Vigil's work on threads of its own (reports and the summary put together and written, names and config hashes read), in elapsed time.</summary>
     internal static class OwnThreads
     {

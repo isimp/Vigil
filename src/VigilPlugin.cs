@@ -335,6 +335,8 @@ public sealed class VigilPlugin : BaseUnityPlugin
     private System.Collections.IEnumerator SelfTestRun(bool full, bool fromConsole)
     {
         _selfTestRunning = true;
+        Vigil.Recorder.OwnTools.SelfTestRuns++;
+        var whole = System.Diagnostics.Stopwatch.StartNew();
 
         // Each step's time is Vigil's own: the frame a slow step stalls is no hitch.
         var step = System.Diagnostics.Stopwatch.StartNew();
@@ -361,6 +363,7 @@ public sealed class VigilPlugin : BaseUnityPlugin
                 var run = Guarded(routines[i], checks);
                 while (run.MoveNext())
                 {
+                    Vigil.Recorder.OwnTools.SelfTestFrames++;
                     _recorder.AddOwnTime(step.Elapsed.TotalMilliseconds);
                     yield return run.Current;
                     step.Restart();
@@ -371,6 +374,7 @@ public sealed class VigilPlugin : BaseUnityPlugin
         {
             _selfTestRunning = false;
             _selfTestStep = null;
+            Vigil.Recorder.OwnTools.SelfTestSeconds += whole.Elapsed.TotalSeconds;
         }
 
         var lines = WriteSelfTest("this game", checks);

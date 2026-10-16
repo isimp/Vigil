@@ -27,6 +27,25 @@ namespace Vigil.Core
         public List<HookCost> Hooks = new List<HookCost>();
     }
 
+    /// <summary>One of Vigil's one-off tools over the session: its time on the game's thread, and the frames, seconds and runs it ran for.</summary>
+    internal sealed class ToolCost
+    {
+        public ToolCost(string name, double ms, long frames, double seconds, int runs)
+        {
+            Name = name;
+            Ms = ms;
+            Frames = frames;
+            Seconds = seconds;
+            Runs = runs;
+        }
+
+        public string Name { get; }
+        public double Ms { get; }
+        public long Frames { get; }
+        public double Seconds { get; }
+        public int Runs { get; }
+    }
+
     /// <summary>What goes into Vigil's own cost.</summary>
     internal sealed class OwnCostFacts
     {
@@ -47,10 +66,22 @@ namespace Vigil.Core
         public HookMeasure Hooks;
 
         public double ThreadSecondsPerMinute, FilesKbPerMinute, NetOutKbs, NetInKbs;
+
+        /// <summary>The one-off tools that ran (the self-test, deep captures), apart from the steady work in <see cref="LoopsMs"/>.</summary>
+        public List<ToolCost> Tools = new List<ToolCost>();
+
+        /// <summary>The reports taken: how many, and their time on the game's thread in all.</summary>
+        public long ReportCount;
+        public double ReportMs;
+
+        /// <summary>Frames and minutes over the session, for the cost with the tools.</summary>
+        public long FramesAll;
+        public double SessionMinutes;
     }
 
     /// <summary>
-    /// Vigil's own cost in words, for its card and the summary: its loops every frame; its hooks in
+    /// Vigil's own cost in words, for its card and the summary: its steady work (one-off tools apart:
+    /// the self-test, deep captures and reports, each per frame while it ran); its loops every frame; its hooks in
     /// the game's methods, which run on hot paths and so are timed only now and then, for a few
     /// seconds, the timers' own cost per call taken off (<see cref="Net"/>); its always-on timers on
     /// the mods' callbacks, at their calls times one timer pair's cost; the panel's extra while drawn;
@@ -72,6 +103,23 @@ namespace Vigil.Core
         public static double TotalMs(OwnCostFacts f) => f.LoopsMs + HooksMsPerFrame(f.Hooks) + TimersMsPerFrame(f);
 
         public static string Badge(OwnCostFacts f) => Ms(TotalMs(f)) + " ms per frame";
+
+        /// <summary>"while they ran: self-test 6.2 ms per frame over 41 s (2 runs) · deep capture 1.9 ms per frame over 95 s · reports 18 ms each, 7 written".</summary>
+        public static string ToolsLine(OwnCostFacts f)
+        {
+            var parts = f.Tools.Where(t => t.Frames > 0).Select(t => t.Name + " " + (t.Ms / t.Frames).ToString("0.0", Ci) + " ms per frame over "
+                + Math.Round(t.Seconds).ToString("0", Ci) + " s" + (t.Runs > 1 ? " (" + t.Runs.ToString(Ci) + " runs)" : "")).ToList();
+            if (f.ReportCount > 0) parts.Add("reports " + Math.Round(f.ReportMs / f.ReportCount).ToString("0", Ci) + " ms each, " + f.ReportCount.ToString(Ci) + " written");
+            return parts.Count == 0 ? "none ran this session" : "while they ran: " + string.Join(" · ", parts.ToArray());
+        }
+
+        /// <summary>The steady cost per frame with the tools' time spread over every frame of the session.</summary>
+        public static double SessionMs(OwnCostFacts f) =>
+            TotalMs(f) + (f.FramesAll > 0 ? (f.Tools.Sum(t => t.Ms) + f.ReportMs) / f.FramesAll : 0);
+
+        /// <summary>"1.79 ms per frame with the tools, over 14 min".</summary>
+        public static string SessionLine(OwnCostFacts f) =>
+            Ms(SessionMs(f)) + " ms per frame with the tools, over " + Math.Round(f.SessionMinutes).ToString("0", Ci) + " min";
 
         public static string FrameLine(OwnCostFacts f)
         {

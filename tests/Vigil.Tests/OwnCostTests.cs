@@ -78,6 +78,39 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void Tools_are_shown_apart_per_frame_while_they_ran()
+        {
+            var f = Facts(Measured());
+            f.Tools = new List<ToolCost> { new ToolCost("self-test", ms: 4092, frames: 660, seconds: 41, runs: 2), new ToolCost("deep capture", ms: 3610, frames: 1900, seconds: 95, runs: 1) };
+            f.ReportCount = 7;
+            f.ReportMs = 126;
+            Assert.Equal("while they ran: self-test 6.2 ms per frame over 41 s (2 runs) · deep capture 1.9 ms per frame over 95 s · reports 18 ms each, 7 written", OwnCost.ToolsLine(f));
+        }
+
+        [Fact]
+        public void With_no_tool_run_the_tools_line_says_so()
+        {
+            Assert.Equal("none ran this session", OwnCost.ToolsLine(Facts()));
+            var started = Facts();
+            started.Tools = new List<ToolCost> { new ToolCost("deep capture", ms: 0, frames: 0, seconds: 0, runs: 1) };
+            Assert.Equal("none ran this session", OwnCost.ToolsLine(started));
+        }
+
+        [Fact]
+        public void The_session_line_adds_the_tools_over_all_frames_to_the_steady_cost()
+        {
+            var f = Facts(Measured());
+            f.Tools = new List<ToolCost> { new ToolCost("self-test", ms: 1000, frames: 100, seconds: 5, runs: 1) };
+            f.ReportCount = 2;
+            f.ReportMs = 40;
+            f.FramesAll = 10400;
+            f.SessionMinutes = 14;
+            Assert.Equal(0.412 + 1040.0 / 10400, OwnCost.SessionMs(f), 6);
+            Assert.Equal("0.51 ms per frame with the tools, over 14 min", OwnCost.SessionLine(f));
+            Assert.Equal("0.41 ms per frame", OwnCost.Badge(f));
+        }
+
+        [Fact]
         public void Threads_files_network_and_memory_read_as_mocked()
         {
             var f = Facts();
