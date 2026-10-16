@@ -33,7 +33,8 @@ namespace Vigil.Recorder
 
         private static PropertyInfo s_audio, s_settings, s_type, s_screens, s_radios, s_girdle;
         private static MethodInfo s_masterFor;
-        private static Type s_playerType, s_uiType;
+        private static Type s_playerType;
+        private static PropertyInfo s_ui;
         private static FieldInfo s_slider, s_panel, s_uiPlayer, s_azuMute;
 
         // Unity's slider reports a value its new range clamps as a change; Vigil's own range and value
@@ -81,7 +82,7 @@ namespace Vigil.Recorder
                     var settings = AccessTools.TypeByName("OdinOnDemand.MPlayer.PlayerSettings");
                     var ui = AccessTools.TypeByName("OdinOnDemand.Utils.UI.UIController");
                     s_playerType = player;
-                    s_uiType = ui;
+                    s_ui = player != null ? AccessTools.Property(player, "UIController") : null;
                     var config = AccessTools.TypeByName("OdinOnDemand.Utils.Config.OODConfig");
                     var update = player != null ? AccessTools.Method(player, "UpdateChecks") : null;
                     var toggle = ui != null ? AccessTools.Method(ui, "ToggleSettingsPanel") : null;
@@ -255,14 +256,15 @@ namespace Vigil.Recorder
             return levels;
         }
 
-        /// <summary>Every cog panel OdinOnDemand built on this game: its slider's range, value and label (null when the panel has none yet).</summary>
+        /// <summary>Every cog panel OdinOnDemand built on this game, found through the players that hold them (a panel is no Unity object): its slider's range, value and label.</summary>
         public static List<(float Min, float Max, float Value, string Label)> Sliders()
         {
             var found = new List<(float, float, float, string)>();
-            if (s_uiType == null || s_slider == null) return found;
-            foreach (var o in UnityEngine.Object.FindObjectsByType(s_uiType, FindObjectsSortMode.None))
+            if (s_playerType == null || s_ui == null || s_slider == null) return found;
+            foreach (var o in UnityEngine.Object.FindObjectsByType(s_playerType, FindObjectsSortMode.None))
             {
-                if (!(s_slider.GetValue(o) is Slider slider) || slider == null) continue;
+                object ui = s_ui.GetValue(o, null);
+                if (ui == null || !(s_slider.GetValue(ui) is Slider slider) || slider == null) continue;
                 var label = slider.transform.parent != null ? slider.transform.parent.GetComponentsInChildren<Text>(true).FirstOrDefault(t => OdinVolume.IsVolumeLabel(t.text)) : null;
                 found.Add((slider.minValue, slider.maxValue, slider.value, label != null ? label.text : null));
             }

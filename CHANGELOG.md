@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.27.1
+
+The self-test's check of OdinOnDemand's cog slider failed on every run, as it looked for the cog panels among the game's objects; it now finds them through the radios that hold them, and a failure there no longer keeps the music volume trial from running.
+
 ## 0.27.0
 
 The self-test now tries Vigil against the game itself, on your game only, and puts everything back. It compares Vigil's object readings with the game's own within 30 m: the cover rays at fermenters, beehives and fires, a beehive's space, a crop's sun and space, a smelter's blocked smoke, and the comfort where you stand. It tries the server's weather on your game for a few seconds (set, frozen, back) and compares the roll Vigil works out with the game's. It checks OdinOnDemand's level against the game's master and music volume and its cog slider against the music slider, and tries a music volume from the slider without saving it. It makes a map pin and copies a path, then takes both back.

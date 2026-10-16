@@ -195,13 +195,18 @@ namespace Vigil.Recorder
                 : new Check(Here, what, Outcome.Fail, (levels.Count - agree).ToString(Ic) + " of " + levels.Count.ToString(Ic) + " not at " + OdinVolume.Db(master, music).ToString("0.0", Ic) + " dB: "
                     + string.Join(", ", levels.Where(l => !OdinVolume.MixerAgrees(l, master, music)).Select(l => l.ToString("0.0", Ic) + " dB").ToArray())));
 
+            // Its own check, so a failure reading the panels does not keep the trial below from running.
             const string slider = "OdinOnDemand's master slider as the game's music slider";
-            var sliders = OdinVolumePatch.Sliders();
-            string label = OdinVolume.SliderLabel(music);
-            int right = sliders.Count(s => Mathf.Approximately(s.Min, OdinVolume.SliderMin) && Mathf.Approximately(s.Max, OdinVolume.SliderMax) && Mathf.Abs(s.Value - music) < 0.01f && s.Label == label);
-            checks.Add(sliders.Count == 0 ? new Check(Here, slider, Outcome.Info, "open a radio's cog panel once to check its slider")
-                : right == sliders.Count ? new Check(Here, slider, Outcome.Pass, sliders.Count.ToString(Ic) + " panel(s): 0 to 100 %, at the music volume, labelled \"" + label + "\"")
-                : new Check(Here, slider, Outcome.Fail, string.Join("; ", sliders.Select(s => s.Min.ToString("0.##", Ic) + " to " + s.Max.ToString("0.##", Ic) + ", at " + s.Value.ToString("0.##", Ic) + ", \"" + s.Label + "\"").ToArray())));
+            try
+            {
+                var sliders = OdinVolumePatch.Sliders();
+                string label = OdinVolume.SliderLabel(music);
+                int right = sliders.Count(s => Mathf.Approximately(s.Min, OdinVolume.SliderMin) && Mathf.Approximately(s.Max, OdinVolume.SliderMax) && Mathf.Abs(s.Value - music) < 0.01f && s.Label == label);
+                checks.Add(sliders.Count == 0 ? new Check(Here, slider, Outcome.Info, "open a radio's cog panel once to check its slider")
+                    : right == sliders.Count ? new Check(Here, slider, Outcome.Pass, sliders.Count.ToString(Ic) + " panel(s): 0 to 100 %, at the music volume, labelled \"" + label + "\"")
+                    : new Check(Here, slider, Outcome.Fail, string.Join("; ", sliders.Select(s => s.Min.ToString("0.##", Ic) + " to " + s.Max.ToString("0.##", Ic) + ", at " + s.Value.ToString("0.##", Ic) + ", \"" + s.Label + "\"").ToArray())));
+            }
+            catch (Exception e) { checks.Add(new Check(Here, slider, Outcome.Fail, e.GetType().Name + " " + e.Message)); }
 
             const string tried = "a music volume set from the slider, tried and put back";
             float trial = OdinVolume.TrialMusic(music);
