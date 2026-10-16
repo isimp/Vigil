@@ -498,6 +498,9 @@ namespace Vigil.Recorder
                 checks.Add(OdinVolumePatch.Problem == null
                     ? new SelfTestReport.Check(area, "game patch: OdinOnDemand follows the game's volume", SelfTestReport.Result.Pass, OdinVolumePatch.State)
                     : new SelfTestReport.Check(area, "game patch: OdinOnDemand follows the game's volume", SelfTestReport.Result.Warn, OdinVolumePatch.State));
+                checks.Add(SkipWinterPatch.Problem == null
+                    ? new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Pass, SkipWinterPatch.State)
+                    : new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Warn, SkipWinterPatch.State));
             }
             checks.Add(Writable(_dir)
                 ? new SelfTestReport.Check(area, "recordings folder writable", SelfTestReport.Result.Pass, _dir)

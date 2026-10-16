@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.24.0
+
+A second game patch, *Skip winter*: Seasonality's seasons go spring, summer, fall, spring, as the separate SkipWinter mod did, which it replaces. Like every patch it is off unless the server switches it on, and checks itself when it starts: it asks Seasonality for the season after fall and steps aside, saying why, unless the answer is spring.
+
 ## 0.23.0
 
 A new *Patches* tab holds Vigil's own game patches, each off unless the server switches it on for every player running Vigil; the server's admins switch them in the tab. The first, *OdinOnDemand follows the game's volume*, makes OdinOnDemand's radios, screens and girdle follow the game's master and music volume from the first join instead of playing at full level until the game has once lost focus, and gives the sound back at 100 % after AzuMiscPatches' mute in background, so the game's own sounds keep their level after tabbing out.
