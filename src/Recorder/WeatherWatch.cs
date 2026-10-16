@@ -108,7 +108,7 @@ namespace Vigil.Recorder
                 FogColour = "#" + ColorUtility.ToHtmlStringRGB(RenderSettings.fogColor),
             };
             s.Cause = WeatherCause.Of(Sources(env), s.Biome, s.Period, s.NextRoll);
-            if (ServerWeatherPatch.State.HeldAt.HasValue && !env.m_debugTimeOfDay)
+            if (ServerWeatherPatch.Current.HeldAt.HasValue && !env.m_debugTimeOfDay)
                 s.RealTime = DayClock.Clock(DayClock.Fraction(ZNet.instance.GetTimeSeconds(), env.m_dayLengthSec));
             float day = env.GetDayFraction();
             s.Day = env.GetDay().ToString(Ci);
@@ -160,11 +160,19 @@ namespace Vigil.Recorder
             return s;
         }
 
+        /// <summary>The weather the game's own overrides give now, the first in its order; null when none does and the roll (or the server's weather) counts.</summary>
+        public static string GameOverride(EnvMan env)
+        {
+            var s = Sources(env);
+            string intro = s.InIntro ? s.IntroEnv : null;
+            return new[] { s.DebugEnv, intro, s.EventEnv, s.AreaEnv, s.WorldEventEnv, s.ZoneEnv }.FirstOrDefault(e => !string.IsNullOrEmpty(e));
+        }
+
         /// <summary>What each of the game's weather overrides holds, in the order the game asks them.</summary>
         private static WeatherSources Sources(EnvMan env)
         {
-            var s = new WeatherSources { DebugEnv = env.m_debugEnv, IntroEnv = env.m_introEnvironment, Server = ServerWeatherPatch.State, DayLength = env.m_dayLengthSec };
-            if (!ServerWeatherPatch.State.IsEmpty)
+            var s = new WeatherSources { DebugEnv = env.m_debugEnv, IntroEnv = env.m_introEnvironment, Server = ServerWeatherPatch.Current, DayLength = env.m_dayLengthSec };
+            if (!ServerWeatherPatch.Current.IsEmpty)
             {
                 try { s.RollNow = ServerWeatherPatch.RollNow(env, s_currentBiome?.GetValue(env)); } catch (Exception) { }
             }

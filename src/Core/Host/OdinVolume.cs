@@ -52,6 +52,16 @@ namespace Vigil.Core
             return Math.Max(MinDb, 20f * (float)Math.Log10(factor));
         }
 
+        /// <summary>The music volume the self-test tries: a quarter away from the player's, towards the middle.</summary>
+        public static float TrialMusic(float music)
+        {
+            float m = Clamp01(music);
+            return m > 0.5f ? m - 0.25f : m + 0.25f;
+        }
+
+        /// <summary>Whether a mixer's level is the one the game's master and music volume call for.</summary>
+        public static bool MixerAgrees(float mixerDb, float master, float music) => Math.Abs(mixerDb - Db(master, music)) <= 0.05f;
+
         /// <summary>Whether a slider with this top is the music slider (the game's 0 to 1), not OdinOnDemand's own (to 15 dB).</summary>
         public static bool IsMusicSlider(float maxValue) => maxValue <= SliderMax + 0.001f;
 

@@ -145,6 +145,13 @@ namespace Vigil.Core
             return (minutes / 60).ToString("00", Ci) + ":" + (minutes % 60).ToString("00", Ci);
         }
 
+        /// <summary>Whether two day fractions are within <paramref name="tolerance"/> of each other, across midnight too.</summary>
+        public static bool Near(float a, float b, float tolerance)
+        {
+            float d = Math.Abs(a - b) % 1f;
+            return Math.Min(d, 1f - d) <= tolerance;
+        }
+
         /// <summary>Whether a bed takes a sleeper at this day fraction: in the afternoon or at night, as the game's rule has it.</summary>
         public static bool SleepTime(float fraction) => (fraction >= 0.5f && fraction <= 0.75f) || fraction <= 0.25f || fraction >= 0.75f;
     }

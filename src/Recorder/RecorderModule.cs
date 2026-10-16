@@ -424,6 +424,7 @@ namespace Vigil.Recorder
             try { UpdateWeather(); } catch (Exception) { }
             try { UpdateArrivals(); } catch (Exception) { }
             try { UpdatePatches(); } catch (Exception) { }
+            try { OdinVolumePatch.TrialTick(); } catch (Exception) { }
             try { UpdateAlerts(); } catch (Exception e) { _alertsError = e.GetType().Name + " " + e.Message; _alertsAsking = false; }
             if (_watchPatches && !_patchMapWritten && PatchMapDue())
             {

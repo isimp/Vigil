@@ -37,6 +37,9 @@ internal static class PathClipboard
         s_copiedAt = Time.unscaledTime;
     }
 
+    /// <summary>No button reads "Copied" any more (the self-test's copy is not the player's).</summary>
+    public static void Forget() => s_copied = null;
+
     /// <summary>The words of the copy button for <paramref name="path"/>.</summary>
     public static string Label(string path, string idle = PathCopy.Idle) =>
         PathCopy.Label(s_copied, s_copiedAt, path, Time.unscaledTime, idle);

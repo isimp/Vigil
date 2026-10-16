@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.27.0
+
+The self-test now tries Vigil against the game itself, on your game only, and puts everything back. It compares Vigil's object readings with the game's own within 30 m: the cover rays at fermenters, beehives and fires, a beehive's space, a crop's sun and space, a smelter's blocked smoke, and the comfort where you stand. It tries the server's weather on your game for a few seconds (set, frozen, back) and compares the roll Vigil works out with the game's. It checks OdinOnDemand's level against the game's master and music volume and its cog slider against the music slider, and tries a music volume from the slider without saving it. It makes a map pin and copies a path, then takes both back.
+
 ## 0.26.0
 
 The server's weather, for every player running Vigil: the World tab's weather card lets the server's admins (or the world's host) set one weather for every biome, picked from a list of the biome's weathers and every weather the game knows, which narrows as you type; freeze each biome's weather and the time of day as they are, until everyone sleeps through a night; and go back to the game's own roll. Raids, dungeons and the intro keep their own weather, and the world's time goes on, so days, plants and the world's age are not held. The server keeps the choice over restarts, and the card says who chose it, when, and what the roll would give. The weather can no longer be set on the admin's own game only; the fog drawn, the wind and the time of day drawn still can. The console has `vigil weather set`, `freeze` and `back`.

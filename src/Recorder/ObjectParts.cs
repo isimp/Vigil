@@ -159,27 +159,38 @@ namespace Vigil.Recorder
             if (plant == null || ZNet.instance == null) return null;
             var zdo = plant.GetComponent<ZNetView>()?.GetZDO();
             if (zdo == null) return null;
+            string sky = CropSurroundings(plant, out var inWay);
+            var now = ZNet.instance.GetTime();
+            double since = (now - new DateTime(zdo.GetLong(ZDOVars.s_plantTime, now.Ticks))).TotalSeconds;
+            return ObjectRules.Growing(new PlantFacts
+            {
+                Status = plant.GetStatus().ToString(), Kind = OwnershipView.DisplayName(plant.gameObject), SkyBlocker = sky, InWay = inWay,
+                GrowSeconds = GrowTime(plant), MinSeconds = plant.m_growTime, MaxSeconds = plant.m_growTimeMax, Since = since, DestroyIfCantGrow = plant.m_destroyIfCantGrow,
+            });
+        }
+
+        /// <summary>What blocks a crop's sky (null for nothing), and what stands in its way: anything solid, or a healthy plant, within its grow radius.</summary>
+        internal static string CropSurroundings(Plant plant, out List<string> inWay)
+        {
             var pos = plant.transform.position;
             if (s_roofMask == -1) s_roofMask = LayerMask.GetMask("Default", "static_solid", "piece");
             if (s_spaceMask == -1) s_spaceMask = LayerMask.GetMask("Default", "static_solid", "Default_small", "piece", "piece_nonsolid");
             string sky = Physics.Raycast(pos, Vector3.up, out var roof, 100f, s_roofMask) ? NameOf(roof.collider) + " (" + roof.distance.ToString("0", Ci) + " m above)" : null;
-            var inWay = new List<string>();
+            var found = new List<string>();
             foreach (var c in Physics.OverlapSphere(pos, plant.m_growRadius, s_spaceMask))
             {
                 var other = c.GetComponent<Plant>();
                 if (other == plant) continue;
                 float d = Vector3.Distance(pos, c.ClosestPoint(pos));
-                if (other == null) inWay.Add(NameOf(c) + " (" + d.ToString("0.0", Ci) + " m)");
-                else if (other.GetStatus() == Plant.Status.Healthy) inWay.Add(OwnershipView.DisplayName(other.gameObject) + ", healthy (" + d.ToString("0.0", Ci) + " m)");
+                if (other == null) found.Add(NameOf(c) + " (" + d.ToString("0.0", Ci) + " m)");
+                else if (other.GetStatus() == Plant.Status.Healthy) found.Add(OwnershipView.DisplayName(other.gameObject) + ", healthy (" + d.ToString("0.0", Ci) + " m)");
             }
-            var now = ZNet.instance.GetTime();
-            double since = (now - new DateTime(zdo.GetLong(ZDOVars.s_plantTime, now.Ticks))).TotalSeconds;
-            return ObjectRules.Growing(new PlantFacts
-            {
-                Status = plant.GetStatus().ToString(), Kind = OwnershipView.DisplayName(plant.gameObject), SkyBlocker = sky, InWay = inWay.Distinct().ToList(),
-                GrowSeconds = GrowTime(plant), MinSeconds = plant.m_growTime, MaxSeconds = plant.m_growTimeMax, Since = since, DestroyIfCantGrow = plant.m_destroyIfCantGrow,
-            });
+            inWay = found.Distinct().ToList();
+            return sky;
         }
+
+        /// <summary>Whether the game holds a smelter's smoke blocked now; null when that cannot be read.</summary>
+        internal static bool? SmokeBlocked(Smelter s) => s_smelterSmoke != null ? (bool)s_smelterSmoke.GetValue(s) : (bool?)null;
 
         // As Plant.GetGrowTime: the plant's own seed picks a time between its two limits, the shared random state put back after.
         private static double GrowTime(Plant plant)
@@ -207,7 +218,7 @@ namespace Vigil.Recorder
         }
 
         // What sits in the smoke's way: the first thing the spawner's own test sphere hits.
-        private static string VentBlocker(SmokeSpawner spawner)
+        internal static string VentBlocker(SmokeSpawner spawner)
         {
             if (spawner == null) return null;
             var p = spawner.transform.position;

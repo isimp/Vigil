@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Bootstrap;
@@ -32,6 +33,7 @@ namespace Vigil.Recorder
 
         private static PropertyInfo s_audio, s_settings, s_type, s_screens, s_radios, s_girdle;
         private static MethodInfo s_masterFor;
+        private static Type s_playerType, s_uiType;
         private static FieldInfo s_slider, s_panel, s_uiPlayer, s_azuMute;
 
         // Unity's slider reports a value its new range clamps as a change; Vigil's own range and value
@@ -39,6 +41,10 @@ namespace Vigil.Recorder
         private static bool s_settingSlider;
         private static bool s_savePending;
         private static float s_movedAt;
+
+        // A music volume the self-test tries: the player's own to put back, and when at the latest.
+        private static float? s_trialOwnMusic;
+        private static float s_trialUntil;
 
         /// <summary>The server's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -74,6 +80,8 @@ namespace Vigil.Recorder
                     var player = AccessTools.TypeByName("OdinOnDemand.MPlayer.BasePlayer");
                     var settings = AccessTools.TypeByName("OdinOnDemand.MPlayer.PlayerSettings");
                     var ui = AccessTools.TypeByName("OdinOnDemand.Utils.UI.UIController");
+                    s_playerType = player;
+                    s_uiType = ui;
                     var config = AccessTools.TypeByName("OdinOnDemand.Utils.Config.OODConfig");
                     var update = player != null ? AccessTools.Method(player, "UpdateChecks") : null;
                     var toggle = ui != null ? AccessTools.Method(ui, "ToggleSettingsPanel") : null;
@@ -154,7 +162,7 @@ namespace Vigil.Recorder
                 switch (OdinVolume.Moved(Working, slider != null && OdinVolume.IsMusicSlider(slider.maxValue)))
                 {
                     case OdinVolume.SliderMove.SetMusic:
-                        SetMusic(vol);
+                        SetMusic(vol, save: true);
                         SetLabel(slider, OdinVolume.SliderLabel(vol));
                         return false;
                     case OdinVolume.SliderMove.GiveBack:
@@ -201,13 +209,64 @@ namespace Vigil.Recorder
         }
 
         /// <summary>The game's music volume, applied as its settings slider applies it, and saved once the slider rests.</summary>
-        private static void SetMusic(float vol)
+        private static void SetMusic(float vol, bool save)
         {
             float music = Mathf.Clamp01(vol);
             PlatformPrefs.SetFloat("MusicVolume", music);
             MusicMan.m_masterMusicVolume = Master * music;
+            if (!save) return;
             s_savePending = true;
             s_movedAt = Time.realtimeSinceStartup;
+        }
+
+        /// <summary>The self-test sets the music volume as the slider would, without saving it, for at most <paramref name="seconds"/>; <see cref="EndMusicTrial"/> or <see cref="TrialTick"/> puts the player's own back.</summary>
+        public static void TryMusic(float music, float seconds)
+        {
+            if (!s_trialOwnMusic.HasValue) s_trialOwnMusic = Music;
+            s_trialUntil = Time.realtimeSinceStartup + seconds;
+            SetMusic(music, save: false);
+        }
+
+        public static void EndMusicTrial()
+        {
+            if (!s_trialOwnMusic.HasValue) return;
+            float own = s_trialOwnMusic.Value;
+            s_trialOwnMusic = null;
+            SetMusic(own, save: false);
+        }
+
+        /// <summary>Every frame: a music trial whose seconds ran out ends, so a self-test cut short leaves the player's volume as it was.</summary>
+        public static void TrialTick()
+        {
+            if (s_trialOwnMusic.HasValue && Time.realtimeSinceStartup >= s_trialUntil) EndMusicTrial();
+        }
+
+        /// <summary>Every OdinOnDemand player loaded on this game, with its mixer's level now (NaN when it has none).</summary>
+        public static List<float> MixerLevels()
+        {
+            var levels = new List<float>();
+            if (s_playerType == null || s_audio == null) return levels;
+            foreach (var o in UnityEngine.Object.FindObjectsByType(s_playerType, FindObjectsSortMode.None))
+            {
+                var audio = s_audio.GetValue(o, null) as AudioSource;
+                AudioMixer mixer = audio != null && audio.outputAudioMixerGroup != null ? audio.outputAudioMixerGroup.audioMixer : null;
+                levels.Add(mixer != null && mixer.GetFloat("MasterVolume", out float db) ? db : float.NaN);
+            }
+            return levels;
+        }
+
+        /// <summary>Every cog panel OdinOnDemand built on this game: its slider's range, value and label (null when the panel has none yet).</summary>
+        public static List<(float Min, float Max, float Value, string Label)> Sliders()
+        {
+            var found = new List<(float, float, float, string)>();
+            if (s_uiType == null || s_slider == null) return found;
+            foreach (var o in UnityEngine.Object.FindObjectsByType(s_uiType, FindObjectsSortMode.None))
+            {
+                if (!(s_slider.GetValue(o) is Slider slider) || slider == null) continue;
+                var label = slider.transform.parent != null ? slider.transform.parent.GetComponentsInChildren<Text>(true).FirstOrDefault(t => OdinVolume.IsVolumeLabel(t.text)) : null;
+                found.Add((slider.minValue, slider.maxValue, slider.value, label != null ? label.text : null));
+            }
+            return found;
         }
 
         private static void SaveIfDue(bool panelClosed)

@@ -18,6 +18,8 @@ namespace Vigil.Recorder
     /// the server's check that everyone sleeps (<c>Game.UpdateSleeping</c>) go by the world's real
     /// clock; and when the server skips to the morning (<c>EnvMan.SkipToMorning</c>), the freeze ends.
     /// Every target is found by name; when one is missing, nothing is hooked and the reason is kept.
+    /// The self-test tries a weather on this game alone (<see cref="Try"/>): the hooks follow the
+    /// trial instead of the server's until it ends, or until its seconds run out on their own.
     /// </summary>
     internal static class ServerWeatherPatch
     {
@@ -26,12 +28,26 @@ namespace Vigil.Recorder
         private static MethodInfo s_select;
         private static FieldInfo s_afternoon, s_night;
         private static bool s_borrowedTime;
+        private static ServerWeather s_trial;
+        private static float s_trialUntil;
 
         /// <summary>What the server holds, kept current by the config entry.</summary>
         public static ServerWeather State = ServerWeather.None;
 
         /// <summary>On the server: called when everyone slept through a night while a freeze held.</summary>
         public static Action SleptThrough;
+
+        /// <summary>What this game follows: a self-test's trial while it lasts, else the server's.</summary>
+        public static ServerWeather Current => s_trial != null && Time.realtimeSinceStartup < s_trialUntil ? s_trial : State;
+
+        /// <summary>This game alone follows <paramref name="trial"/> for at most <paramref name="seconds"/>.</summary>
+        public static void Try(ServerWeather trial, float seconds)
+        {
+            s_trial = trial;
+            s_trialUntil = Time.realtimeSinceStartup + seconds;
+        }
+
+        public static void EndTrial() => s_trial = null;
 
         /// <summary>Why the hooks did not go in; null when they are in.</summary>
         public static string Problem { get; private set; } = "not put in yet";
@@ -79,16 +95,17 @@ namespace Vigil.Recorder
             }
         }
 
-        private static bool Holding => State.HeldAt.HasValue;
+        private static bool Holding => Current.HeldAt.HasValue;
 
         private static void AfterOverride(ref string __result)
         {
-            if (State.Weather != null) __result = State.WeatherFor(__result);
+            var w = Current;
+            if (w.Weather != null) __result = w.WeatherFor(__result);
         }
 
         private static void BeforeUpdateEnvironment(ref long sec)
         {
-            if (Holding) sec = State.RollSecond(sec);
+            if (Holding) sec = Current.RollSecond(sec);
         }
 
         private static void BeforeFixedUpdate(EnvMan __instance)
@@ -96,7 +113,7 @@ namespace Vigil.Recorder
             s_borrowedTime = false;
             if (!Holding || __instance.m_debugTimeOfDay) return;
             __instance.m_debugTimeOfDay = true;
-            __instance.m_debugTime = State.HeldDayFraction(__instance.m_dayLengthSec) ?? 0f;
+            __instance.m_debugTime = Current.HeldDayFraction(__instance.m_dayLengthSec) ?? 0f;
             s_borrowedTime = true;
         }
 
@@ -135,7 +152,7 @@ namespace Vigil.Recorder
 
         private static void AfterSkipToMorning()
         {
-            if (Holding && ZNet.instance != null && ZNet.instance.IsServer()) SleptThrough?.Invoke();
+            if (State.HeldAt.HasValue && ZNet.instance != null && ZNet.instance.IsServer()) SleptThrough?.Invoke();
         }
 
         /// <summary>What the game's own roll would give now where this game's camera is, the server's weather aside; null when it cannot tell.</summary>
