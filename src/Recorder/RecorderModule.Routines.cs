@@ -32,6 +32,7 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "the value names from the game and the mods", 30f, NamesOnce);
             yield return new SelfTestRoutine(Here, "the busiest objects within 16 m, watched 2 s", 5f, BusiestOnce);
             yield return new SelfTestRoutine(Here, "a join kept in its hitch report", 1f, JoinTimingOnce);
+            yield return new SelfTestRoutine(Here, "join packages built twice come out the same", 30f, JoinPackagesTwice);
             yield return new SelfTestRoutine(Here, "the weather and why", 3f, WeatherOnce);
             yield return new SelfTestRoutine(Here, "what could spawn at the spot under the crosshair", 3f, SpawnableOnce);
             yield return new SelfTestRoutine(Here, "config fingerprints the same twice", 10f, FingerprintsTwice);

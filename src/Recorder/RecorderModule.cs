@@ -181,6 +181,7 @@ namespace Vigil.Recorder
             BindSharing();
             BindOwnership();
             BindWeather();
+            BindJoinPackages();
             BindPatches();
             StartSpawnWatch();
             _load = new LoadTest(_server, dir, VigilVersion.Value, _recorder, _timer, s => Logger.LogInfo(s));
@@ -425,6 +426,7 @@ namespace Vigil.Recorder
             {
                 // Every plugin has finished loading by the first frame.
                 _started = true;
+                HookJoinPackages();
                 if (_timeCoroutines.Value && !_timer.HookCoroutines()) _sessionNotes.Add("Coroutines are not timed this session (see Hooks not installed).");
                 if (_timeModCallbacks.Value)
                 {
@@ -454,6 +456,7 @@ namespace Vigil.Recorder
             try { UpdateOwnership(); } catch (Exception) { }
             try { UpdateInspect(); } catch (Exception) { }
             try { UpdateWeather(); } catch (Exception) { }
+            try { UpdateJoinPackages(); } catch (Exception) { }
             try { UpdateArrivals(); } catch (Exception) { }
             try { UpdatePatches(); } catch (Exception) { }
             try { UpdateOwnCost(); } catch (Exception) { }
@@ -543,6 +546,7 @@ namespace Vigil.Recorder
                 header.Add(string.Format(CultureInfo.InvariantCulture, "World-object uploads: {0:0.0} MB in all.", s_runBytes / 1048576.0));
                 header.AddRange(OwnCostLines());
                 header.AddRange(ObjectDataLines());
+                header.AddRange(JoinPackagesLines());
                 File.WriteAllText(_summaryPath, _recorder.Summary(header));
             }
             catch (Exception) { }

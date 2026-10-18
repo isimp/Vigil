@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.36.0
+
+Every join stood the server still for about 1.5 s while Drop That and Spawn That built the config packages for the joining player from scratch. The server now builds them once and sends every later join the same bytes (`Server fixes.JoinPackages`, on by default); a dedicated server builds them a minute after its world is up, while nobody is connected. They are built again after `dropthat:reload` or when the world's location count changes, and either mod builds its own again when a part Vigil uses is missing from its version. The events file and the summary say what was built and sent, and the self-test checks that two builds come out the same.
+
 ## 0.35.1
 
 A player's join is now timed from their connection on, so the first join on an empty server shows which mods' messages took the time, and the server records while a player is still joining. A long frame no longer ends the 10 s window before its hitch report reads it, and the minute's summary no longer empties that window, so a report shows the messages that made the frame long instead of "0 calls".

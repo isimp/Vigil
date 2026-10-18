@@ -241,6 +241,8 @@ namespace Vigil.Recorder
         public static int DeepRuns;
         public static long Reports;
         public static double ReportMs;
+        public static double JoinAheadMs;
+        public static int JoinAheadRuns;
     }
 
     /// <summary>Vigil's work on threads of its own (reports and the summary put together and written, names and config hashes read), in elapsed time.</summary>

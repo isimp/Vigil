@@ -14,6 +14,8 @@ Shift+F9 opens the panel. *Overview* shows alerts (for admins), the recording an
 
 When the server runs Vigil too, the game greets it and learns whether you are an admin (`adminlist.txt`). Admins can ask the server for its state, reports, a player's last minute of connection, a load test or player simulation, and get alerts: drops, the server falling behind or short of memory, log floods, spawns inside bases, lag and environment reports a player sent, and a start after a crash. Players can share their own reports and spawn log with the server under *Sharing* (off by default; the server takes them only with `Sharing.Accept`). Before a restart with players on, the server puts a countdown on everyone's screen.
 
+Drop That and Spawn That build the config packages they send a joining player from scratch for every join, and the server stands still meanwhile, about 1.5 s for both. With `Server fixes.JoinPackages` on (the default), the server builds them once and sends every later join the same bytes; a dedicated server builds them a minute after its world is up, while nobody is connected. They are built again after `dropthat:reload` or when the world's location count changes. `Vigil-events.tsv` says when they were built and which join got them from the cache, and the summary how much standing still that saved.
+
 ## Spawn marks and cleanup
 
 F6 (or `vigil spawns`) marks every spot around you where a creature could still spawn: outside base protection and with nothing solid above or below. `vigil missing` lists objects of removed mods near you, and `vigil missing remove` deletes them; back up the world first.

@@ -55,13 +55,15 @@ namespace Vigil.Recorder
             }
             double minutes = _recorder.MinutesRunning;
             f.FrameMs = _recorder.MeanFrameMs;
-            // The recorder's frame work holds the deep capture's stepping and the reports taken: those are tools.
-            double steady = PhaseTimer.TicksToMs(loops + _recorder.ProbeRunTicks - OwnTools.DeepTicks) - OwnTools.ReportMs;
+            // The recorder's frame work holds the deep capture's stepping, the reports taken and the join packages built ahead: those are tools.
+            double steady = PhaseTimer.TicksToMs(loops + _recorder.ProbeRunTicks - OwnTools.DeepTicks) - OwnTools.ReportMs - OwnTools.JoinAheadMs;
             f.LoopsMs = Math.Max(0, steady) / frames;
             if (OwnTools.SelfTestRuns > 0)
                 f.Tools.Add(new ToolCost("self-test", PhaseTimer.TicksToMs(selfTest), OwnTools.SelfTestFrames, OwnTools.SelfTestSeconds, OwnTools.SelfTestRuns));
             if (OwnTools.DeepRuns > 0)
                 f.Tools.Add(new ToolCost("deep capture", PhaseTimer.TicksToMs(OwnTools.DeepTicks), OwnTools.DeepFrames, OwnTools.DeepSeconds, OwnTools.DeepRuns));
+            if (OwnTools.JoinAheadRuns > 0)
+                f.Tools.Add(new ToolCost("join packages built ahead", OwnTools.JoinAheadMs, OwnTools.JoinAheadRuns, OwnTools.JoinAheadMs / 1000.0, OwnTools.JoinAheadRuns));
             f.ReportCount = OwnTools.Reports;
             f.ReportMs = OwnTools.ReportMs;
             f.FramesAll = _recorder.FramesAll;
