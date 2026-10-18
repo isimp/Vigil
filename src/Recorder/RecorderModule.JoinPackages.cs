@@ -10,31 +10,33 @@ using Outcome = Vigil.Core.SelfTestReport.Result;
 namespace Vigil.Recorder
 {
     /// <summary>
-    /// Server fixes > JoinPackages: Drop That's and Spawn That's join packages built once and sent
-    /// to every later join (<see cref="JoinPackagesPatch"/>), built ahead on a dedicated server; the
-    /// summary's lines, and the self-test's check that two builds give the same bytes.
+    /// The Patches tab's join packages (Patches.JoinPackages): Drop That's and Spawn That's join
+    /// packages built once and sent to every later join (<see cref="JoinPackagesPatch"/>), built
+    /// ahead on a dedicated server; the tab's rows, the summary's lines, and the self-test's check
+    /// that two builds give the same bytes.
     /// </summary>
     internal sealed partial class RecorderModule
     {
-        private ConfigEntry<bool> _joinPackages;
+        private const string DropThatGuid = "asharppen.valheim.drop_that", SpawnThatGuid = "asharppen.valheim.spawn_that";
 
-        private void BindJoinPackages()
-        {
-            _joinPackages = Config.Bind("Server fixes", "JoinPackages", true,
-                "On a server: Drop That and Spawn That build the config packages they send each joining player from scratch, on the server's main loop (0.7 to 0.9 s each, everyone else standing still meanwhile). " +
-                "On, the first build is kept and every later join gets the same bytes; a dedicated server builds them a minute after its world is up, while nobody is connected. " +
-                "They are built again after dropthat:reload or when the world's location count changes. Off leaves both mods to build their own.");
-            JoinPackagesPatch.Enabled = _joinPackages.Value;
-            _joinPackages.SettingChanged += (_, __) => JoinPackagesPatch.Enabled = _joinPackages.Value;
-        }
-
-        // On the first frame, when every plugin is loaded (Drop That and Spawn That may load after Vigil).
+        // With the other patches on the first frame, when every plugin is loaded (Drop That and Spawn That may load after Vigil).
         private void HookJoinPackages()
         {
             JoinPackagesPatch.Hook();
             foreach (var p in new[] { JoinPackagesPatch.DropThatProblem, JoinPackagesPatch.SpawnThatProblem })
-                if (p != null && p != "not installed") _host.Log.LogWarning("Vigil: " + p);
+                if (p != null && p != JoinMod.NotInstalled) _host.Log.LogWarning("Vigil: " + p);
         }
+
+        /// <summary>The tab's "On this game": the two mods as this game has them.</summary>
+        private static string JoinGameLine() => JoinPackages.GameLine(
+            new JoinMod("Drop That", PluginVersion(DropThatGuid), JoinPackagesPatch.DropThatProblem),
+            new JoinMod("Spawn That", PluginVersion(SpawnThatGuid), JoinPackagesPatch.SpawnThatProblem));
+
+        private static bool JoinLeftAlone() =>
+            new JoinMod("Drop That", null, JoinPackagesPatch.DropThatProblem).LeftAlone || new JoinMod("Spawn That", null, JoinPackagesPatch.SpawnThatProblem).LeftAlone;
+
+        private static string PluginVersion(string guid) =>
+            BepInEx.Bootstrap.Chainloader.PluginInfos.TryGetValue(guid, out var info) ? info.Metadata.Version.ToString() : null;
 
         private void UpdateJoinPackages()
         {

@@ -25,6 +25,15 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_server_tells_an_admin_what_its_join_packages_saved_and_an_older_server_tells_nothing()
+        {
+            var s = Sample();
+            s.JoinPackages = "Drop That: built once in 819 ms, sent from the cache to 1 join (about 0.8 s of standing still saved) · Spawn That: built once in 766 ms, sent from the cache to 1 join (about 0.8 s of standing still saved)";
+            Assert.Equal(s.JoinPackages, ServerStatus.Decode(s.Encode()).JoinPackages);
+            Assert.Null(ServerStatus.Decode(Sample().Encode()).JoinPackages);
+        }
+
+        [Fact]
         public void TheServersStateArrivesAsItWasSent()
         {
             var back = ServerStatus.Decode(Sample().Encode());

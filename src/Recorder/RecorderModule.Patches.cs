@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages;
         private bool _patchesHooked;
 
         private void BindPatches()
@@ -30,6 +30,14 @@ namespace Vigil.Recorder
             _host.Sync.AddConfigEntry(_skipWinter);
             SkipWinterPatch.On = _skipWinter.Value;
             _skipWinter.SettingChanged += (_, __) => SkipWinterPatch.On = _skipWinter.Value;
+            _joinPackages = Config.Bind("Patches", "JoinPackages", false,
+                "Set on the dedicated server: Drop That and Spawn That build the config packages they send each joining player from scratch, on the server's main loop (0.7 to 0.9 s each, everyone else standing still meanwhile). " +
+                "On, the server builds them once and every later join gets the same bytes; a dedicated server builds them a minute after its world is up, while nobody is connected. " +
+                "They are built again after dropthat:reload or when the world's location count changes. It takes effect where players join (the server, or a game hosting its world); " +
+                "ServerSync passes the switch to every player running Vigil, and the server's admins can switch it in the panel's Patches tab.");
+            _host.Sync.AddConfigEntry(_joinPackages);
+            JoinPackagesPatch.Enabled = _joinPackages.Value;
+            _joinPackages.SettingChanged += (_, __) => JoinPackagesPatch.Enabled = _joinPackages.Value;
         }
 
         /// <summary>On the first frame, when every plugin has loaded: the patches find the mods they work on (skip winter on the server too, where the season changes).</summary>
@@ -45,9 +53,10 @@ namespace Vigil.Recorder
             SkipWinterPatch.Hook(line => _host.Log.LogInfo(line));
             if (!string.IsNullOrEmpty(SkipWinterPatch.Problem)) _host.Log.LogWarning("Vigil: the Skip winter patch stepped aside: " + SkipWinterPatch.Problem);
             if (!_server) OdinVolumePatch.Hook();
+            HookJoinPackages();
         }
 
-        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0)) + " of 2 on", Skin.Tone.Quiet);
+        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0)) + " of 3 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -98,6 +107,34 @@ namespace Vigil.Recorder
             Ui.Note("Seasonality's seasons go spring, summer, fall, spring: when the next season would be winter, it is spring. A season set by hand is left alone. It takes effect where the season changes, which is the server.");
             Ui.Row("Set by", "the server, for every player running Vigil (Patches.SkipWinter)");
             Ui.Row("On this game", Toned(SkipWinterPatch.State, SkipWinterPatch.Problem != null ? ResultTone.Caution : _skipWinter.Value && SkipWinterPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            Ui.Heading("Join packages built once");
+            Ui.BeginFormLine("Switch");
+            if (may)
+            {
+                int picked = Ui.Choice(_joinPackages.Value ? 0 : 1, OnOffWords);
+                if (picked >= 0 && (picked == 0) != _joinPackages.Value)
+                {
+                    bool on = picked == 0;
+                    Ui.Later(() =>
+                    {
+                        _joinPackages.Value = on;
+                        EventLog.Write("patch-set", PlayerName(), "JoinPackages " + (on ? "on" : "off"));
+                    });
+                }
+            }
+            else Ui.Text(_joinPackages.Value ? "On" : "Off");
+            Ui.EndLine();
+            Ui.Note("Drop That and Spawn That build the config packages for each joining player from scratch, and the server stands still meanwhile (about 1.5 s for both). On, the server builds them once and every later join gets the same bytes; a dedicated server builds them a minute after its world is up, while nobody is connected. Built again after dropthat:reload or when the world's location count changes.");
+            Ui.Row("Set by", "the server, for every player running Vigil (Patches.JoinPackages)");
+            bool found = JoinPackagesPatch.DropThatProblem == null || JoinPackagesPatch.SpawnThatProblem == null;
+            Ui.Row("On this game", Toned(JoinGameLine(), JoinLeftAlone() ? ResultTone.Caution : _joinPackages.Value && found ? ResultTone.Good : ResultTone.Quiet));
+            if (_server) Ui.Row("On the server", Toned(JoinPackages.ServerLine(JoinPackagesPatch.Lines()), ResultTone.Quiet));
+            else if (may)
+            {
+                PollServer(true, 10);
+                Ui.Row("On the server", Toned(JoinPackages.ServerRow(_serverStatus?.JoinPackages, asked: _serverStatus != null), ResultTone.Quiet));
+            }
 
             Ui.Note(may ? "You can switch patches: the server keeps the change and passes it on." : "Only the server's admins (or the world's host) switch patches; everyone sees them. A patch whose target changed in an update steps aside and says so here and in the self-test.");
         }

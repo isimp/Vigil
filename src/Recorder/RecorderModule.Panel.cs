@@ -126,6 +126,7 @@ namespace Vigil.Recorder
             {
                 Version = VigilVersion.Value, Recording = RecordingStatus(), Incidents = _recorder.IncidentsWritten,
                 LastIncident = _recorder.RecentIncidents.LastOrDefault(), UptimeMinutes = Time.realtimeSinceStartup / 60.0,
+                JoinPackages = JoinPackages.ServerLine(JoinPackagesPatch.Lines()),
             };
             var row = _recorder.Last;
             if (row != null)

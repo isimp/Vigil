@@ -181,7 +181,6 @@ namespace Vigil.Recorder
             BindSharing();
             BindOwnership();
             BindWeather();
-            BindJoinPackages();
             BindPatches();
             StartSpawnWatch();
             _load = new LoadTest(_server, dir, VigilVersion.Value, _recorder, _timer, s => Logger.LogInfo(s));
@@ -426,7 +425,6 @@ namespace Vigil.Recorder
             {
                 // Every plugin has finished loading by the first frame.
                 _started = true;
-                HookJoinPackages();
                 if (_timeCoroutines.Value && !_timer.HookCoroutines()) _sessionNotes.Add("Coroutines are not timed this session (see Hooks not installed).");
                 if (_timeModCallbacks.Value)
                 {

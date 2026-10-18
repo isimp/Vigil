@@ -19,6 +19,9 @@ namespace Vigil.Core
         }
 
         public string Version, Recording, LastIncident;
+
+        /// <summary>What the server's join packages saved (<see cref="JoinPackages"/>); null from a server older than 0.37.0.</summary>
+        public string JoinPackages;
         public double Fps = double.NaN, FrameAvgMs = double.NaN, FrameMaxMs = double.NaN, CpuPct = double.NaN, PrivateMb = double.NaN,
             MemLoadPct = double.NaN, UptimeMinutes = double.NaN, Incidents = double.NaN;
 
@@ -34,6 +37,7 @@ namespace Vigil.Core
                 Pair("v", Version), Pair("fps", Fps), Pair("dt_avg", FrameAvgMs), Pair("dt_max", FrameMaxMs), Pair("cpu", CpuPct),
                 Pair("mem_mb", PrivateMb), Pair("mem_load", MemLoadPct), Pair("up_min", UptimeMinutes), Pair("rec", Recording),
                 Pair("incidents", Incidents), Pair("last_incident", LastIncident),
+                Pair("join_packages", JoinPackages),
             };
             for (int i = 0; i < Players.Count; i++)
             {
@@ -63,7 +67,7 @@ namespace Vigil.Core
                 Version = Text(d, "v"), Fps = KeyValues.Number(d, "fps"), FrameAvgMs = KeyValues.Number(d, "dt_avg"), FrameMaxMs = KeyValues.Number(d, "dt_max"),
                 CpuPct = KeyValues.Number(d, "cpu"), PrivateMb = KeyValues.Number(d, "mem_mb"), MemLoadPct = KeyValues.Number(d, "mem_load"),
                 UptimeMinutes = KeyValues.Number(d, "up_min"), Recording = Text(d, "rec"), Incidents = KeyValues.Number(d, "incidents"),
-                LastIncident = Text(d, "last_incident"),
+                LastIncident = Text(d, "last_incident"), JoinPackages = Text(d, "join_packages"),
             };
             for (int i = 0; ; i++)
             {

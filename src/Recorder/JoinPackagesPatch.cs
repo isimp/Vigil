@@ -350,6 +350,11 @@ namespace Vigil.Recorder
         /// <summary>The summary's and the self-test's line per mod: kept and sent, or why the mod builds its own.</summary>
         public static IEnumerable<string> Lines()
         {
+            if (!Enabled)
+            {
+                yield return "switched off (Patches.JoinPackages): Drop That and Spawn That build their own";
+                yield break;
+            }
             yield return DropThatProblem == null ? DropThat.SummaryLine() : "Drop That: " + DropThatProblem;
             yield return SpawnThatProblem == null ? SpawnThat.SummaryLine() : "Spawn That: " + SpawnThatProblem;
         }

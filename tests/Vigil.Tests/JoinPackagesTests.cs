@@ -112,6 +112,37 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_patches_tab_says_on_this_game_which_mods_it_found_and_that_it_works_on_the_server()
+        {
+            Assert.Equal("Drop That 3.1.7 and Spawn That 1.2.20: every part found; it works where players join, on the server",
+                JoinPackages.GameLine(new JoinMod("Drop That", "3.1.7", null), new JoinMod("Spawn That", "1.2.20", null)));
+            Assert.Equal("Drop That 3.1.7: every part found; it works where players join, on the server. Spawn That is not installed",
+                JoinPackages.GameLine(new JoinMod("Drop That", "3.1.7", null), new JoinMod("Spawn That", null, "not installed")));
+            Assert.Equal("Neither Drop That nor Spawn That is installed",
+                JoinPackages.GameLine(new JoinMod("Drop That", null, "not installed"), new JoinMod("Spawn That", null, "not installed")));
+        }
+
+        [Fact]
+        public void A_mod_left_to_itself_is_named_with_the_reason_on_this_game()
+        {
+            var spawnThat = new JoinMod("Spawn That", "1.3.0", "Spawn That builds its own join packages: not found in this version: DataTransferService.AddToQueue");
+            Assert.Equal("Drop That 3.1.7: every part found; it works where players join, on the server. Spawn That builds its own join packages: not found in this version: DataTransferService.AddToQueue",
+                JoinPackages.GameLine(new JoinMod("Drop That", "3.1.7", null), spawnThat));
+            Assert.True(spawnThat.LeftAlone);
+            Assert.False(new JoinMod("Drop That", null, "not installed").LeftAlone);
+        }
+
+        [Fact]
+        public void The_server_row_reads_the_servers_lines_or_says_the_server_does_not_tell()
+        {
+            Assert.Equal("Drop That: built once in 819 ms · Spawn That: built once in 766 ms",
+                JoinPackages.ServerLine(new[] { "Drop That: built once in 819 ms", "Spawn That: built once in 766 ms" }));
+            Assert.Equal("Drop That: built once in 819 ms", JoinPackages.ServerRow("Drop That: built once in 819 ms", asked: true));
+            Assert.Equal("the server's Vigil does not tell this (older than 0.37.0)", JoinPackages.ServerRow(null, asked: true));
+            Assert.Equal("asking the server", JoinPackages.ServerRow(null, asked: false));
+        }
+
+        [Fact]
         public void The_summary_line_gives_the_builds_the_reuses_and_the_time_saved()
         {
             var cache = new JoinPackages("Spawn That");

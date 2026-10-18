@@ -19,6 +19,22 @@ namespace Vigil.Core
         public override int GetHashCode() => (World * 397 ^ Locations) * 397 ^ Reloads;
     }
 
+    /// <summary>One of the mods whose join packages are kept, as this game has it: its name, its version (null when not installed) and why it builds its own packages (null when every part was found).</summary>
+    internal sealed class JoinMod
+    {
+        public const string NotInstalled = "not installed";
+
+        public JoinMod(string name, string version, string problem) { Name = name; Version = version; Problem = problem; }
+
+        public string Name { get; }
+        public string Version { get; }
+        public string Problem { get; }
+        public bool Installed => Problem != NotInstalled;
+
+        /// <summary>Installed, but a part the cache uses is missing or a build failed: the mod builds its own packages.</summary>
+        public bool LeftAlone => Problem != null && Installed;
+    }
+
     /// <summary>One package as the mod sends it to a joining player: the message it goes to and its bytes.</summary>
     internal sealed class JoinPackage
     {
@@ -89,6 +105,27 @@ namespace Vigil.Core
             int n = _kept?.Count ?? 0;
             return Mod + ": " + n.ToString(Ci) + (n == 1 ? " join package" : " join packages") + " kept from the first build (" + Math.Round(LastBuildMs).ToString("0", Ci) + " ms) sent";
         }
+
+        /// <summary>The Patches tab's "On this game": the mods found with every part, those left to build their own and why, those not installed.</summary>
+        public static string GameLine(JoinMod dropThat, JoinMod spawnThat)
+        {
+            var mods = new[] { dropThat, spawnThat };
+            var found = mods.Where(m => m.Problem == null).Select(m => m.Name + " " + m.Version).ToList();
+            var parts = new List<string>();
+            if (found.Count > 0) parts.Add(string.Join(" and ", found.ToArray()) + ": every part found; it works where players join, on the server");
+            parts.AddRange(mods.Where(m => m.LeftAlone).Select(m => m.Problem));
+            var missing = mods.Where(m => !m.Installed).ToList();
+            if (missing.Count == mods.Length) return "Neither " + dropThat.Name + " nor " + spawnThat.Name + " is installed";
+            parts.AddRange(missing.Select(m => m.Name + " is not installed"));
+            return string.Join(". ", parts.ToArray());
+        }
+
+        /// <summary>The server's lines for its status, as one line.</summary>
+        public static string ServerLine(IEnumerable<string> lines) => string.Join(" · ", lines.ToArray());
+
+        /// <summary>The Patches tab's "On the server": what the server told, or that it has not answered yet, or that its Vigil does not tell this.</summary>
+        public static string ServerRow(string fromServer, bool asked) =>
+            fromServer ?? (asked ? "the server's Vigil does not tell this (older than 0.37.0)" : "asking the server");
 
         public string SummaryLine()
         {

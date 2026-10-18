@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.37.0
+
+*Join packages built once* is now one of the patches in the *Patches* tab, switched by the server like the others (`Patches.JoinPackages`, off until the server sets it; it replaces `Server fixes.JoinPackages`). The tab names the Drop That and Spawn That versions found on your game and, for admins, what the server built and how many joins got the packages from the cache.
+
 ## 0.36.0
 
 Every join stood the server still for about 1.5 s while Drop That and Spawn That built the config packages for the joining player from scratch. The server now builds them once and sends every later join the same bytes (`Server fixes.JoinPackages`, on by default); a dedicated server builds them a minute after its world is up, while nobody is connected. They are built again after `dropthat:reload` or when the world's location count changes, and either mod builds its own again when a part Vigil uses is missing from its version. The events file and the summary say what was built and sent, and the self-test checks that two builds come out the same.
