@@ -172,6 +172,8 @@ namespace Vigil.Recorder
             _ownHooks = new OwnHooks(_journal);
             _timer.HookGame();
             EventLog.Start(dir, harmony);
+            Patching.Apply(harmony, AccessTools.Method(typeof(ZNet), "OnNewConnection"), "joins timed from the connection",
+                postfix: Patching.M(typeof(RecorderModule), nameof(NewConnectionPostfix)));
             DropWatch.Start(harmony);
             _recorder = new Recorder(dir, settings, _journal, _timer, _net, _log, _sys, _engine, _world, _rpc, UploadText, _server, deepWasRunning, s => Logger.LogWarning(s));
             DropWatch.Dropped = (who, drop, samples) => _recorder?.Drop(who, drop, samples);
@@ -314,16 +316,36 @@ namespace Vigil.Recorder
 
         private int _players;
         private float _playersCheckedAt = -10f, _lastPlayerSeen = float.NegativeInfinity;
+        private static bool s_peerArrived;
+
+        // A connection on a server: the message-handler timer starts at once (the join's costliest
+        // messages often come in this very frame), and the players are counted again next frame.
+        private static void NewConnectionPostfix()
+        {
+            s_peerArrived = true;
+            if (s_recordingMode != RecordingMode.Off && ZNet.instance != null && ZNet.instance.IsServer()) ProbeState.Joining = true;
+        }
+
+        private static RecordingMode s_recordingMode = RecordingMode.Auto;
 
         private void UpdateRecording()
         {
             float now = Time.realtimeSinceStartup;
-            if (now - _playersCheckedAt >= 1f)
+            s_recordingMode = _recording.Value;
+            if (now - _playersCheckedAt >= 1f || s_peerArrived)
             {
                 _playersCheckedAt = now;
-                _players = 0;
-                try { if (_server && ZNet.instance != null) _players = ZNet.instance.GetPeers().Count(p => p != null && p.IsReady() && !Bots.IsBot(p)); }
+                s_peerArrived = false;
+                var kinds = new List<PeerKind>();
+                try
+                {
+                    if (_server && ZNet.instance != null)
+                        foreach (var p in ZNet.instance.GetPeers())
+                            if (p != null) kinds.Add(Bots.IsBot(p) ? PeerKind.Bot : p.IsReady() ? PeerKind.Playing : PeerKind.Joining);
+                }
                 catch (Exception) { }
+                _players = RecordingPolicy.Players(kinds);
+                ProbeState.Joining = _recording.Value != RecordingMode.Off && kinds.Contains(PeerKind.Joining);
                 if (_players > 0) _lastPlayerSeen = now;
             }
             bool busy = _recorder.DeepActive || _load.Running;
@@ -340,6 +362,8 @@ namespace Vigil.Recorder
             }
             else
             {
+                // The window in progress is written as its own before the pause, so none of it lands in the first window after.
+                CloseWindow(now);
                 FileChurn.Suspend();
                 try { _engine?.Pause(); } catch (Exception) { }
                 WriteSummary();
@@ -390,8 +414,13 @@ namespace Vigil.Recorder
             return RecordingStatus();
         }
 
+        private float _lastUpdateAt, _frameMs;
+
         public override void Update()
         {
+            float frameAt = Time.realtimeSinceStartup;
+            _frameMs = (frameAt - _lastUpdateAt) * 1000f;
+            _lastUpdateAt = frameAt;
             if (!_started)
             {
                 // Every plugin has finished loading by the first frame.
@@ -459,8 +488,14 @@ namespace Vigil.Recorder
             if (!ProbeState.Active) return;
             float now = Time.realtimeSinceStartup;
             if (now - _lastSummary >= SummaryEverySeconds) { _lastSummary = now; WriteSummary(); }
+            // Due in a long frame, the window waits one frame, until the hitch report has read it.
+            if (ReportWindow.CloseNow(now - s_windowStart, WindowSeconds, _frameMs, _settings.HitchMs)) CloseWindow(now);
+        }
+
+        // Ends the 10 s window: writes its lines, folds its tallies into the session and starts the next.
+        private void CloseWindow(float now)
+        {
             float span = now - s_windowStart;
-            if (span < WindowSeconds) return;
             if (s_sends > 0) { try { File.AppendAllText(s_path, Report(span)); } catch (Exception) { } }
             _rpc.Report(span);
             _log.SpamWindow(span);

@@ -60,6 +60,22 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void On_a_server_a_player_still_joining_counts_so_auto_records_their_whole_join()
+        {
+            // The game holds a player as joined only after the join's costliest steps have run.
+            var peers = new[] { PeerKind.Joining };
+            Assert.Equal(1, RecordingPolicy.Players(peers));
+            Assert.True(Server(RecordingMode.Auto, RecordingPolicy.Players(peers)));
+        }
+
+        [Fact]
+        public void Joining_and_playing_players_count_and_the_player_simulation_does_not()
+        {
+            Assert.Equal(2, RecordingPolicy.Players(new[] { PeerKind.Playing, PeerKind.Bot, PeerKind.Joining, PeerKind.Bot }));
+            Assert.Equal(0, RecordingPolicy.Players(new PeerKind[0]));
+        }
+
+        [Fact]
         public void Auto_records_a_players_game_in_a_world_and_not_in_the_menu()
         {
             Assert.True(RecordingPolicy.Records(RecordingMode.Auto, false, inWorld: true, 0, double.PositiveInfinity, 3600, false));

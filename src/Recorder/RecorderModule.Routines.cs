@@ -31,6 +31,7 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "the inspector reads what is under the crosshair", 5f, InspectOnce);
             yield return new SelfTestRoutine(Here, "the value names from the game and the mods", 30f, NamesOnce);
             yield return new SelfTestRoutine(Here, "the busiest objects within 16 m, watched 2 s", 5f, BusiestOnce);
+            yield return new SelfTestRoutine(Here, "a join kept in its hitch report", 1f, JoinTimingOnce);
             yield return new SelfTestRoutine(Here, "the weather and why", 3f, WeatherOnce);
             yield return new SelfTestRoutine(Here, "what could spawn at the spot under the crosshair", 3f, SpawnableOnce);
             yield return new SelfTestRoutine(Here, "config fingerprints the same twice", 10f, FingerprintsTwice);
@@ -64,6 +65,23 @@ namespace Vigil.Recorder
                     ? new Check(Here, what, Outcome.Pass, age.ToString("0.0", Ic) + " s ago")
                     : new Check(Here, what, Outcome.Fail, _recorder.Last == null ? "no second recorded yet" : "the last one is " + age.ToString("0", Ic) + " s old"));
             }
+            yield break;
+        }
+
+        // What keeps a join's messages in its hitch report: the timer starting at the connection, a
+        // summary leaving the window in progress whole, and a window due in a long frame waiting it out.
+        private IEnumerator JoinTimingOnce(List<Check> checks)
+        {
+            const string what = "a join kept in its hitch report";
+            string hook = Patching.Problems.FirstOrDefault(p => p.StartsWith("joins timed from the connection", StringComparison.Ordinal));
+            string before = HandlerTime.Peek(10f);
+            HandlerTime.Summary(60f);
+            bool whole = HandlerTime.Peek(10f) == before;
+            bool waits = !ReportWindow.CloseNow(WindowSeconds, WindowSeconds, _settings.HitchMs, _settings.HitchMs);
+            if (hook != null) checks.Add(new Check(Here, what, Outcome.Fail, hook));
+            else if (!whole) checks.Add(new Check(Here, what, Outcome.Fail, "a summary emptied the window in progress"));
+            else if (!waits) checks.Add(new Check(Here, what, Outcome.Fail, "a window due in a long frame closed before the report"));
+            else checks.Add(new Check(Here, what, Outcome.Pass, "timed from the connection; the window stays whole through a summary and waits out a long frame"));
             yield break;
         }
 

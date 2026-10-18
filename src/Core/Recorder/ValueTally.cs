@@ -52,10 +52,13 @@ namespace Vigil.Core
 
         public string Peek(float seconds, int top) => Format(_window, seconds, top);
 
+        /// <summary>The whole session so far, the window in progress included; that window goes on whole, since a lag report reads it.</summary>
         public string Summary(float seconds, int top)
         {
-            Fold();
-            return Format(_run, seconds, top);
+            var all = new Dictionary<string, Agg>(_run.Count + _window.Count);
+            foreach (var kv in _run) Bump(all, kv.Key, kv.Value.Count, kv.Value.Total, kv.Value.Max);
+            foreach (var kv in _window) Bump(all, kv.Key, kv.Value.Count, kv.Value.Total, kv.Value.Max);
+            return Format(all, seconds, top);
         }
 
         private void Fold()

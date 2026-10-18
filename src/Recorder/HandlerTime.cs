@@ -10,7 +10,8 @@ namespace Vigil.Recorder
     /// Time spent handling each kind of incoming network message, labelled with the mod it
     /// belongs to: direct packages through ZRpc.HandlePackage (world updates, config sync at a
     /// join) and routed messages through ZRoutedRpc.HandleRoutedRPC. The handlers are mod code,
-    /// but only the game's two dispatch methods are hooked.
+    /// but only the game's two dispatch methods are hooked. It runs while recording and while a
+    /// player joins (<see cref="ProbeState.Joining"/>).
     /// </summary>
     internal static class HandlerTime
     {
@@ -34,7 +35,7 @@ namespace Vigil.Recorder
 
         private static void PackagePre(ZRpc __instance, ZPackage package)
         {
-            if (!ProbeState.Active) return;
+            if (!ProbeState.Active && !ProbeState.Joining) return;
             t_packageLabel = null;
             if (Thread.CurrentThread.ManagedThreadId != s_mainThread) return;
             // Routed messages travel inside one package kind and are timed one by one below.
@@ -44,7 +45,7 @@ namespace Vigil.Recorder
 
         private static void PackageFin()
         {
-            if (!ProbeState.Active) return;
+            if (!ProbeState.Active && !ProbeState.Joining) return;
             if (t_packageLabel == null) return;
             s_tally.Add(t_packageLabel, PhaseTimer.TicksToMs(Stopwatch.GetTimestamp() - t_packageStart));
             t_packageLabel = null;
@@ -52,7 +53,7 @@ namespace Vigil.Recorder
 
         private static void RoutedPre(ZRoutedRpc.RoutedRPCData data)
         {
-            if (!ProbeState.Active) return;
+            if (!ProbeState.Active && !ProbeState.Joining) return;
             t_routedLabel = null;
             if (Thread.CurrentThread.ManagedThreadId != s_mainThread || data == null) return;
             t_routedLabel = RpcProbe.HandlerLabel(data);
@@ -61,7 +62,7 @@ namespace Vigil.Recorder
 
         private static void RoutedFin()
         {
-            if (!ProbeState.Active) return;
+            if (!ProbeState.Active && !ProbeState.Joining) return;
             if (t_routedLabel == null) return;
             s_tally.Add(t_routedLabel, PhaseTimer.TicksToMs(Stopwatch.GetTimestamp() - t_routedStart));
             t_routedLabel = null;

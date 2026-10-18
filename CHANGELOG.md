@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.1
+
+A player's join is now timed from their connection on, so the first join on an empty server shows which mods' messages took the time, and the server records while a player is still joining. A long frame no longer ends the 10 s window before its hitch report reads it, and the minute's summary no longer empties that window, so a report shows the messages that made the frame long instead of "0 calls".
+
 ## 0.35.0
 
 *Vigil's own cost* shows its steady work as the headline and its one-off tools apart: the self-test and deep captures per frame while they ran, and the reports taken per report. A session line gives the cost with the tools spread over the whole session. The summary's block follows the card.

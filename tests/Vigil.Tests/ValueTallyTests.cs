@@ -37,6 +37,19 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_session_summary_leaves_the_window_in_progress_for_a_lag_report_and_counts_it_once()
+        {
+            var t = new ValueTally("ms");
+            t.Add("Drop That!: RPC_RequestConfigsDropThat", 800);
+            t.Summary(60f, 5);
+            Assert.Contains("RPC_RequestConfigsDropThat", t.Peek(10f, 5));
+            t.EndWindow(10f, 5);
+            string run = t.Summary(70f, 5);
+            Assert.StartsWith("1 calls", run);
+            Assert.Contains("worst 800.0 ms", run);
+        }
+
+        [Fact]
         public void A_window_ends_into_the_session_and_peek_leaves_it_running()
         {
             var t = new ValueTally("ms");

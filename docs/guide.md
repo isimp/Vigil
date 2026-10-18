@@ -4,7 +4,7 @@ Vigil runs on the players' games and on the dedicated server. It records what th
 
 ## Recorder
 
-While in a world (on a server: while players are on), Vigil writes one row a second to `Vigil-timeline.tsv`: frame times, what each mod's callbacks cost, network numbers, memory and more. When something goes wrong (a long frame, a slow stretch, high ping, data piling up, a log flood, memory pressure, a dropped connection) it writes a report, `Vigil-incident-<time>-<kind>.txt`, saying what took the time. F9 writes one on demand. Recordings go to `LocalLow/IronGate/Valheim/Vigil` on a player's machine and `BepInEx/Vigil` on a server; earlier sessions are kept in `Vigil-runs`. `Recording.Mode` switches recording on, off or auto.
+While in a world (on a server: while players are on or joining), Vigil writes one row a second to `Vigil-timeline.tsv`: frame times, what each mod's callbacks cost, network numbers, memory and more. When something goes wrong (a long frame, a slow stretch, high ping, data piling up, a log flood, memory pressure, a dropped connection) it writes a report, `Vigil-incident-<time>-<kind>.txt`, saying what took the time. F9 writes one on demand. Recordings go to `LocalLow/IronGate/Valheim/Vigil` on a player's machine and `BepInEx/Vigil` on a server; earlier sessions are kept in `Vigil-runs`. `Recording.Mode` switches recording on, off or auto.
 
 ## Panel and HUD line
 

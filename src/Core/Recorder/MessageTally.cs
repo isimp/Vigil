@@ -41,21 +41,28 @@ namespace Vigil.Core
         /// <summary>The window in progress, formatted, without ending it.</summary>
         public string Peek(float seconds, int top) => Format(_window, seconds, top);
 
-        /// <summary>The whole session so far, including the window still in progress.</summary>
+        /// <summary>The whole session so far, including the window still in progress, which goes on whole (a lag report reads it).</summary>
         public string Summary(float seconds, int top)
         {
-            Fold();
-            return Format(_run, seconds, top);
+            var all = new Dictionary<string, Agg>(_run.Count + _window.Count);
+            foreach (var kv in _run) all[kv.Key] = new Agg { Count = kv.Value.Count, Bytes = kv.Value.Bytes };
+            Add(all, _window);
+            return Format(all, seconds, top);
         }
 
         private void Fold()
         {
-            foreach (var kv in _window)
+            Add(_run, _window);
+            _window.Clear();
+        }
+
+        private static void Add(Dictionary<string, Agg> into, Dictionary<string, Agg> from)
+        {
+            foreach (var kv in from)
             {
-                if (!_run.TryGetValue(kv.Key, out var a)) _run[kv.Key] = a = new Agg();
+                if (!into.TryGetValue(kv.Key, out var a)) into[kv.Key] = a = new Agg();
                 a.Count += kv.Value.Count; a.Bytes += kv.Value.Bytes;
             }
-            _window.Clear();
         }
 
         private static void Bump(Dictionary<string, Agg> d, string label, int bytes)

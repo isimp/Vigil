@@ -143,6 +143,19 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_session_summary_leaves_the_window_in_progress_for_a_lag_report_and_counts_it_once()
+        {
+            var t = new MessageTally();
+            for (int i = 0; i < 5; i++) t.Add("join", 10);
+
+            t.Summary(60f, 10);
+
+            Assert.Contains("5 messages", Lines(t.Peek(10f, 10)).First());
+            t.EndWindow(10f, 10);
+            Assert.Contains("5 messages", Lines(t.Summary(70f, 10)).First());
+        }
+
+        [Fact]
         public void ALagReportCanShowTheWindowSoFarWithoutDisturbingIt()
         {
             var t = new MessageTally();

@@ -10,5 +10,14 @@ namespace Vigil.Recorder
     internal static class ProbeState
     {
         public static bool Active = true;
+
+        /// <summary>
+        /// A player is joining this server: from their connection until the game takes them in
+        /// (unless recording is switched off). The message-handler timer runs then too, so the
+        /// first join on an empty server is timed, which recording, switched on at the next frame,
+        /// would miss. It is set inside the game's connection call; that timer keeps its start per
+        /// message, so a change between its two halves only skips that one message.
+        /// </summary>
+        public static bool Joining;
     }
 }

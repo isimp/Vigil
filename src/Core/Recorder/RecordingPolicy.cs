@@ -1,13 +1,18 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Vigil.Core
 {
     public enum RecordingMode { On, Off, Auto }
 
+    /// <summary>A connection on a server: a player still joining, a player the game has taken in, or one of the player simulation's.</summary>
+    public enum PeerKind { Joining, Playing, Bot }
+
     /// <summary>
     /// Whether Vigil records right now. On records all the time, Off never, Auto only while there
     /// is something to record: on a player's machine while in a world, on a dedicated server while
-    /// players are connected, for a while after the last one left, and during the server's start.
+    /// players are connected or joining, for a while after the last one left, and during the server's start.
     /// A deep capture, a load test or a player simulation always records.
     /// </summary>
     public static class RecordingPolicy
@@ -26,6 +31,13 @@ namespace Vigil.Core
             if (!server) return inWorld;
             return players > 0 || secondsSinceStart < ServerStartSeconds || secondsSinceLastPlayer < ServerLingerSeconds;
         }
+
+        /// <summary>
+        /// The players a server's auto switch goes by: those the game has taken in and those still
+        /// joining, so recording is on for the join itself (the game takes a player in only after
+        /// its costliest steps); the player simulation's are left out.
+        /// </summary>
+        public static int Players(IEnumerable<PeerKind> peers) => peers.Count(p => p != PeerKind.Bot);
 
         public static bool TryParse(string word, out RecordingMode mode)
         {
