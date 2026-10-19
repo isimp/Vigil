@@ -60,9 +60,10 @@ namespace Vigil.Recorder
         private Recorder _recorder;
         private LoadTest _load;
         private ConfigEntry<KeyboardShortcut> _markKey;
+        private const string PhysicsStepId = "physics step markers";
         private ConfigEntry<bool> _timeModCallbacks;
         private ConfigEntry<bool> _timeCoroutines;
-        private bool _watchExceptions, _watchFiles, _watchPatches, _patchMapWritten;
+        private bool _watchExceptions, _watchFiles, _watchPatches, _patchMapWritten, _timePhysics;
         private string _dir;
         private string _summaryPath;
         private float _lastSummary;
@@ -135,6 +136,7 @@ namespace Vigil.Recorder
             _watchExceptions = Config.Bind("Hooks", "Exceptions", true, "Count every exception thrown, caught or not, by type and by the mod method that threw it.").Value;
             _watchFiles = Config.Bind("Hooks", "FileWrites", true, "Count writes per file in the config, worlds and characters folders.").Value;
             _watchPatches = Config.Bind("Hooks", "PatchChanges", true, "Record the Harmony patch map once in world (Vigil-patches.tsv) and every patch added or removed while the game runs, with the mod that did it.").Value;
+            _timePhysics = Config.Bind("Hooks", "PhysicsStep", true, "Time Unity's own physics step after each FixedUpdate (two markers in Unity's player loop): hitch reports and the timeline's physics_ms then tell physics from the rest of the untimed time.").Value;
             bool handlers = Config.Bind("Hooks", "MessageHandlers", true, "Time the handling of each kind of incoming network message, by mod.").Value;
             bool creation = Config.Bind("Hooks", "ObjectCreation", true, "Time the creation of each world object as it loads in, per object type.").Value;
             _markKey = Config.Bind("Lag report", "Key", new KeyboardShortcut(KeyCode.F9),
@@ -221,12 +223,7 @@ namespace Vigil.Recorder
                 float.TryParse(rest, NumberStyles.Float, CultureInfo.InvariantCulture, out secs);
                 return "Vigil: " + _recorder.StartDeep(secs > 0 ? secs : ConsoleHelp.DeepSeconds, "started from the console");
             }
-            if (word == "census")
-            {
-                float radius = ConsoleHelp.CensusRadius;
-                if (rest.Length > 0) float.TryParse(rest, NumberStyles.Float, CultureInfo.InvariantCulture, out radius);
-                return "Vigil: " + Own(() => SceneCensus.WriteScene(_dir, radius));
-            }
+            if (word == "census") return "Vigil: " + Safe(() => StartCensus(rest, toConsole: true));
             if (word == "memory") return "Vigil: " + Own(() => SceneCensus.WriteMemory(_dir));
             if (word == "patches") return "Vigil: " + Own(() => PatchWatch.WriteMap(_dir));
             if (word == "inspect" && rest.Trim().Equals("names", StringComparison.OrdinalIgnoreCase)) return "Vigil: " + Safe(ReadNamesCommand);
@@ -432,6 +429,14 @@ namespace Vigil.Recorder
                 }
                 else _sessionNotes.Add("Timers on mods' Update/FixedUpdate/LateUpdate/OnGUI are off (Hooks.ModCallbacks).");
                 if (_watchPatches) PatchWatch.Start(new Harmony("isimp.Vigil.patches"), _journal, _sessionNotes);
+                if (!_timePhysics) _sessionNotes.Add("Unity's physics step is not timed (Hooks.PhysicsStep).");
+                else if (_journal.Allowed(PhysicsStepId))
+                {
+                    _journal.Begin(PhysicsStepId);
+                    try { if (!PhysicsStep.Install()) _sessionNotes.Add("Unity's physics step is not timed: " + PhysicsStep.Problem + "."); }
+                    catch (Exception e) { _sessionNotes.Add("Unity's physics step is not timed: " + e.GetType().Name + " " + e.Message); }
+                    finally { _journal.Done(PhysicsStepId); }
+                }
                 if (_watchFiles)
                 {
                     var folders = new[]
@@ -453,6 +458,7 @@ namespace Vigil.Recorder
             try { UpdateRestart(); } catch (Exception) { }
             try { UpdateOwnership(); } catch (Exception) { }
             try { UpdateInspect(); } catch (Exception) { }
+            try { UpdateCensus(); } catch (Exception e) { _censusRun?.Stop(e.GetType().Name + " " + e.Message); _censusRun = null; }
             try { UpdateWeather(); } catch (Exception) { }
             try { UpdateJoinPackages(); } catch (Exception) { }
             try { UpdateArrivals(); } catch (Exception) { }

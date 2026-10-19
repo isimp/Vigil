@@ -26,7 +26,7 @@ namespace Vigil.Core
             ["refresh"] = "refresh", ["again"] = "refresh", ["read"] = "refresh", ["find"] = "search", ["get"] = "download",
             ["send"] = "upload", ["show"] = "eye", ["mark"] = "eye", ["hide"] = "eye-off", ["unmark"] = "eye-off",
             ["clear"] = "close", ["close"] = "close", ["set"] = "check", ["seen"] = "check", ["compare"] = "compare", ["reset"] = "reset",
-            ["remove"] = "trash", ["press"] = "trash", ["running"] = "wait", ["watching"] = "wait", ["getting"] = "wait", ["comparing"] = "wait",
+            ["remove"] = "trash", ["press"] = "trash", ["running"] = "wait", ["watching"] = "wait", ["getting"] = "wait", ["comparing"] = "wait", ["counting"] = "wait",
             ["how"] = "wait", ["pin"] = "pin", ["unpin"] = "pin-off", ["scan"] = "search", ["confirm"] = "trash",
             ["copy"] = "copy", ["copied"] = "check", ["freeze"] = "pause", ["back"] = "reset", ["measure"] = "wait",
         };

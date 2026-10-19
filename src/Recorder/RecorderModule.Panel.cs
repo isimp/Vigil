@@ -391,9 +391,7 @@ namespace Vigil.Recorder
 
         private void DrawInspect()
         {
-            if (Ui.Tool("Count objects", "Loaded objects within the radius by type and mod; 0 counts all", "Run", ref _censusRadius, 50, "m"))
-                _host.RunForResult("census " + _censusRadius, ResultStore.Census);
-            ShowResult(ResultStore.Census);
+            DrawCensus();
             if (Ui.Tool("What fills memory", "Textures, meshes and sounds by size and mod; can stall a moment", "Run")) _host.RunForResult("memory", ResultStore.Memory);
             ShowResult(ResultStore.Memory);
             if (Ui.Tool("Harmony patch map", "Every patch on a game method, and its mod", "Run")) _host.RunForResult("patches", ResultStore.Patches);

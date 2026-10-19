@@ -63,7 +63,7 @@ namespace Vigil.Recorder
         private readonly float _startedAt = Time.realtimeSinceStartup;
 
         // frame history (structure of arrays, no allocation per frame)
-        private readonly float[] _fTime = new float[FrameCapacity], _fDt = new float[FrameCapacity], _fRender = new float[FrameCapacity];
+        private readonly float[] _fTime = new float[FrameCapacity], _fDt = new float[FrameCapacity], _fRender = new float[FrameCapacity], _fPhysics = new float[FrameCapacity];
         // Time Vigil itself spent in each frame writing reports (main thread, outside every timer).
         private readonly float[] _fOwn = new float[FrameCapacity];
         private float _ownMs;
@@ -95,6 +95,7 @@ namespace Vigil.Recorder
         private float _secStart;
         private int _secFrames, _secOver33, _secOver50, _secOver100, _secOver250, _secGc, _secFixed, _secFixedMax;
         private float _secDtSum, _secDtMax;
+        private double _secPhysicsMs;
 
         /// <summary>Each recorded second's longest frame, for an incident's strip in the panel (the second under way is added to it there).</summary>
         private readonly RingBuffer<double> _secondWorst = new RingBuffer<double>(90);
@@ -184,7 +185,7 @@ namespace Vigil.Recorder
         private IEnumerable<string> Columns()
         {
             var c = new List<string> { "time", "t", "situation", "fps", "frames", "dt_avg_ms", "dt_max_ms", "over_33", "over_50", "over_100", "over_250",
-                "gc", "heap_mb", "fixed_steps", "fixed_max", "render_ms", "cameras", "cpu_main_ms", "cpu_render_ms", "gpu_ms" };
+                "gc", "heap_mb", "fixed_steps", "fixed_max", "physics_ms", "render_ms", "cameras", "cpu_main_ms", "cpu_render_ms", "gpu_ms" };
             if (_engine != null) c.AddRange(_engine.Counters.Select(x => x.Column));
             else c.AddRange(new[] { "alloc_kb_s", "allocs_s", "gc_used_mb", "gc_reserved_mb", "unity_used_mb", "gfx_used_mb", "draw_calls", "batches", "setpass", "tris_k", "shadow_casters", "main_thread_ms" });
             c.AddRange(PhaseTimer.GamePhases.Select(p => p[2]));
@@ -211,6 +212,8 @@ namespace Vigil.Recorder
         public void OnUpdate()
         {
             float nowWall = Time.realtimeSinceStartup;
+            // The engine's physics time of this frame's steps; taken every frame so a pause leaves nothing behind.
+            float physicsMs = PhysicsStep.TakeFrame(out _);
             // Not recording: nothing per frame, nothing per second. On resuming, whatever was half
             // measured when it stopped is dropped and the next second starts clean.
             if (!ProbeState.Active)
@@ -246,6 +249,8 @@ namespace Vigil.Recorder
             _timer.EndFrame(Sink);
             _fTime[idx] = now; _fDt[idx] = dtMs; _fGc[idx] = gc; _fFixed[idx] = fixedSteps; _fSit[idx] = sit;
             _fRender[idx] = _engine != null ? _engine.LastRenderMs : 0f;
+            _fPhysics[idx] = physicsMs;
+            _secPhysicsMs += physicsMs;
             // A tool run earlier in this frame stalls the next one, so its time waits for that frame.
             if (_toolFrame < Time.frameCount) { _ownMs += _toolMs; _toolMs = 0; }
             float ownMs = _ownMs;
@@ -361,6 +366,7 @@ namespace Vigil.Recorder
             Set("gc", _secGc);
             Set("heap_mb", GC.GetTotalMemory(false) / 1048576.0);
             Set("fixed_steps", _secFixed); Set("fixed_max", _secFixedMax);
+            if (PhysicsStep.Installed) Set("physics_ms", _secFrames > 0 ? _secPhysicsMs / _secFrames : 0);
 
             if (_engine != null)
             {
@@ -492,6 +498,7 @@ namespace Vigil.Recorder
             try { _net.EndSecond(); } catch (Exception) { }
             _secFrames = _secOver33 = _secOver50 = _secOver100 = _secOver250 = _secGc = _secFixed = _secFixedMax = 0;
             _secDtSum = _secDtMax = 0;
+            _secPhysicsMs = 0;
         }
 
         private void NetworkColumns(Action<string, object> set, float now)
@@ -828,15 +835,16 @@ namespace Vigil.Recorder
             Done("the worst frame");
 
             sb.AppendLine("== Frames over 50 ms in the last 30 seconds ==");
-            sb.AppendLine("   seconds ago   ms   gc  physics-steps  drawing-ms  situation  biggest timed work");
+            sb.AppendLine("   seconds ago   ms   gc  physics-steps  physics-ms  drawing-ms  situation  biggest timed work");
             float now = Time.realtimeSinceStartup;
             foreach (int i in RecentFrames(30f))
             {
                 if (_fDt[i] < 50) continue;
                 int id = _fTopId[i * TopPerFrame];
-                sb.AppendFormat(ci, "   {0,8:0.0} {1,7:0} {2,3} {3,6} {4,10:0.0}  {5,-11} {6}{7}\r\n", now - _fTime[i], _fDt[i], _fGc[i], _fFixed[i], _fRender[i],
+                sb.AppendFormat(ci, "   {0,8:0.0} {1,7:0} {2,3} {3,6} {8,11} {4,10:0.0}  {5,-11} {6}{7}\r\n", now - _fTime[i], _fDt[i], _fGc[i], _fFixed[i], _fRender[i],
                     SituationName(_fSit[i]), id >= 0 ? _timer.Slots[id].Label + " " + _fTopMs[i * TopPerFrame].ToString("0.0", ci) + " ms" : "",
-                    _fOwn[i] >= 1 ? "   (Vigil's own report or tool: " + _fOwn[i].ToString("0", ci) + " ms)" : "");
+                    _fOwn[i] >= 1 ? "   (Vigil's own report or tool: " + _fOwn[i].ToString("0", ci) + " ms)" : "",
+                    PhysicsStep.Installed ? _fPhysics[i].ToString("0.0", ci) : "-");
             }
             sb.AppendLine();
             Done("frames over 50 ms");
@@ -921,6 +929,7 @@ namespace Vigil.Recorder
             var f = new FrameBreakdown
             {
                 DtMs = _fDt[i], GcCollections = _fGc[i], FixedSteps = _fFixed[i], RenderMs = _fRender[i], OwnMs = _fOwn[i],
+                PhysicsTimed = PhysicsStep.Installed, PhysicsMs = _fPhysics[i],
                 PageFaultsPerSec = double.IsNaN(_sys.PageFaultsPerSec) ? 0 : (float)_sys.PageFaultsPerSec,
                 Situation = _fSit[i] == 0 || _fSit[i] == 4 ? null : SituationName(_fSit[i]),
             };

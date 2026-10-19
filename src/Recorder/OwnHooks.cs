@@ -243,6 +243,9 @@ namespace Vigil.Recorder
         public static double ReportMs;
         public static double JoinAheadMs;
         public static int JoinAheadRuns;
+        public static double CensusMs, CensusSeconds;
+        public static long CensusFrames;
+        public static int CensusRuns;
     }
 
     /// <summary>Vigil's work on threads of its own (reports and the summary put together and written, names and config hashes read), in elapsed time.</summary>

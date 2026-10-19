@@ -91,7 +91,7 @@ namespace Vigil.Core
                 "  vigil load players [max]     simulated players on the server, " + Minutes(LoadPlan.ForPlayers(PlayersDefault).TotalSeconds),
                 "  vigil load stop | status     end or check a running test",
                 "Inspect",
-                string.Format(Ci, "  vigil census [radius]        objects around you, what they cost to draw, by mod ({0} m)", CensusRadius),
+                string.Format(Ci, "  vigil census [radius]        what is loaded around you: characters, drawing, lights, by mod ({0} m)", CensusRadius),
                 "  vigil memory                 what fills memory: textures, meshes, sounds, per mod",
                 "  vigil patches                every Harmony patch on a game method, by mod",
                 "  vigil trace materials        which code gives objects material copies (start in main menu)",
@@ -282,10 +282,12 @@ namespace Vigil.Core
                     return new List<string>
                     {
                         string.Format(Ci, "vigil census [radius]   (default {0} m; 0 counts everything loaded)", CensusRadius),
-                        "  Counts the world objects loaded around you by type, with what they ask of the renderer",
-                        "  (renderers, shadow casters, lights, particle systems, material copies of their own) and",
-                        "  the mod each type comes from, into Vigil-census-<time>.tsv; the same per mod in",
-                        "  -mods.tsv, and in -materials.txt what sets the objects with material copies apart.",
+                        "  Reads what is loaded around you over a second or two, then times every character it found",
+                        "  for 5 s, and writes Vigil-census-<time>.txt: characters by kind and whose game runs them with",
+                        "  their time in the physics steps; shadow casters by layer and distance, and how many per-layer",
+                        "  sun shadow distances would drop; renderers by mod with instancing; particle systems that keep",
+                        "  simulating off screen; lights and the shadows they draw; material copies. Tables per type and",
+                        "  per mod go to Vigil-census-<time>.tsv and -mods.tsv. The panel's Tools tab runs it too.",
                     };
                 case "memory":
                     return new List<string>

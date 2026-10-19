@@ -205,6 +205,46 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void TheEnginesPhysicsStepIsNamedWithItsStepsAndNoLongerCountsAsOutsideTheTimedCode()
+        {
+            var f = Frame(500);
+            f.FixedSteps = 10;
+            f.PhysicsTimed = true;
+            f.PhysicsMs = 400;
+
+            var a = HitchAnalysis.Explain(f);
+
+            Assert.Contains("the physics engine: 400 ms in 10 steps (80% of the frame)", a.Causes.First());
+            Assert.Equal(100, a.UnexplainedMs, 1);
+            Assert.StartsWith("500 ms frame: the physics engine", a.Headline);
+        }
+
+        [Fact]
+        public void WithThePhysicsStepTimedTheOutsideShareNoLongerGuessesPhysics()
+        {
+            var f = Frame(500);
+            f.PhysicsTimed = true;
+            f.PhysicsMs = 5;
+
+            var outside = HitchAnalysis.Explain(f).Causes.Single(c => c.Contains("outside the timed code"));
+
+            Assert.DoesNotContain("physics", outside);
+            Assert.Contains("495 ms", outside);
+        }
+
+        [Fact]
+        public void WithoutThePhysicsTimerPhysicsStaysAmongTheOutsideGuesses()
+        {
+            var f = Frame(500);
+            f.PhysicsMs = 400; // read by nothing: the timer is not in place
+
+            var a = HitchAnalysis.Explain(f);
+
+            Assert.Contains(a.Causes, c => c.Contains("outside the timed code") && c.Contains("physics"));
+            Assert.Equal(500, a.UnexplainedMs, 1);
+        }
+
+        [Fact]
         public void TimedWorkKnowsHowOftenItRanAndDefaultsToOnce()
         {
             Assert.Equal(1, new Timed("A", 1).Calls);

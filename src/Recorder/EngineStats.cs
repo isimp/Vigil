@@ -112,6 +112,17 @@ namespace Vigil.Recorder
         }
 
         /// <summary>Per-second value of a counter (sum or average over the second's frames), NaN if unavailable.</summary>
+        /// <summary>Each working counter's value in the last frame, by its timeline column.</summary>
+        public Dictionary<string, double> LastValues()
+        {
+            var d = new Dictionary<string, double>(StringComparer.Ordinal);
+            foreach (var c in _counters)
+            {
+                try { if (c.Recorder.Valid) d[c.Column] = c.Recorder.LastValue * c.Scale; } catch (Exception) { }
+            }
+            return d;
+        }
+
         public double SecondValue(Counter c)
         {
             if (!c.Recorder.Valid || c.Frames == 0) return double.NaN;

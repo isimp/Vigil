@@ -41,6 +41,7 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "Vigil's own cost", 1f, OwnCostOnce);
             yield return new SelfTestRoutine(Here, "a mod's patch timed by itself", 5f, PatchTimedOnce);
             yield return new SelfTestRoutine(Here, "world-object data by mod, captured 3 s", 8f, ObjectDataOnce);
+            yield return new SelfTestRoutine(Here, "the census within 16 m, characters timed 2 s", 25f, CensusOnce);
             if (!full) yield break;
             yield return new SelfTestRoutine(Here, "the server's status", 12f, StatusAnswered);
             yield return new SelfTestRoutine(Here, "your last minute as the server keeps it", 12f, OwnLinkOnServer);

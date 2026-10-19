@@ -33,6 +33,8 @@ namespace Vigil.Core
         public string Situation;
         /// <summary>Time Vigil itself spent in this frame (writing a report, or one of its tools such as the census), outside every timer.</summary>
         public float OwnMs;
+        public bool PhysicsTimed;
+        public float PhysicsMs;
         public readonly List<Timed> Phases = new List<Timed>();
         public readonly List<Timed> Mods = new List<Timed>();
     }
@@ -77,14 +79,20 @@ namespace Vigil.Core
             foreach (var m in f.Mods) Consider(m, " (mod code)");
             if (f.RenderMs > 0) Consider(new Timed("rendering", f.RenderMs), " (CPU side of drawing the frame)");
             if (f.OwnMs > 0) Consider(new Timed("Vigil itself", f.OwnMs), " (a report or one of its tools, not the game)");
+            float physics = f.PhysicsTimed ? Math.Max(0, f.PhysicsMs) : 0;
+            if (physics >= NamedMs || physics >= dt * NamedShare)
+                items.Add(new KeyValuePair<float, string>(physics, string.Format(ci, "the physics engine: {0:0} ms in {1} steps ({2:0}% of the frame), Unity's own step after the scripts' FixedUpdate",
+                    physics, f.FixedSteps, physics / dt * 100)));
 
             float timed = f.Phases.Where(p => p.Parent == null).Sum(p => p.Ms)
                         + f.Mods.Where(m => m.Parent == null).Sum(m => m.Ms)
-                        + f.RenderMs + f.OwnMs;
+                        + f.RenderMs + f.OwnMs + physics;
             float untimed = Math.Max(0, f.DtMs - timed);
             if (untimed >= dt * UntimedShare)
                 items.Add(new KeyValuePair<float, string>(untimed, string.Format(ci,
-                    "{0:0} ms ({1:0}% of the frame) went outside the timed code: the Unity engine itself, physics, waiting for the graphics card, untimed scripts, or the operating system",
+                    f.PhysicsTimed
+                        ? "{0:0} ms ({1:0}% of the frame) went outside the timed code: the Unity engine itself, waiting for the graphics card, untimed scripts, or the operating system"
+                        : "{0:0} ms ({1:0}% of the frame) went outside the timed code: the Unity engine itself, physics, waiting for the graphics card, untimed scripts, or the operating system",
                     untimed, untimed / dt * 100)));
 
             var result = new HitchExplanation { UnexplainedMs = untimed };
