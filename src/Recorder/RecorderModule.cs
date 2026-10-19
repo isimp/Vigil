@@ -176,6 +176,8 @@ namespace Vigil.Recorder
             EventLog.Start(dir, harmony);
             Patching.Apply(harmony, AccessTools.Method(typeof(ZNet), "OnNewConnection"), "joins timed from the connection",
                 postfix: Patching.M(typeof(RecorderModule), nameof(NewConnectionPostfix)));
+            Patching.Apply(harmony, AccessTools.Method(typeof(ZNet), "StopAll"), "a deep capture ended on leaving the world",
+                prefix: Patching.M(typeof(RecorderModule), nameof(LeavingPrefix)));
             DropWatch.Start(harmony);
             _recorder = new Recorder(dir, settings, _journal, _timer, _net, _log, _sys, _engine, _world, _rpc, UploadText, _server, deepWasRunning, s => Logger.LogWarning(s));
             DropWatch.Dropped = (who, drop, samples) => _recorder?.Drop(who, drop, samples);
@@ -313,7 +315,27 @@ namespace Vigil.Recorder
 
         private int _players;
         private float _playersCheckedAt = -10f, _lastPlayerSeen = float.NegativeInfinity;
-        private static bool s_peerArrived;
+        private static bool s_peerArrived, s_leftWorld;
+
+        // A player's game (a world host's too) ending its session, on logout or a lost connection; a
+        // dedicated server has no world to leave. Acted on at the next frame, so quitting the game,
+        // which has no next frame, takes no timers out.
+        private static void LeavingPrefix(ZNet __instance)
+        {
+            try { if (!__instance.IsDedicated()) s_leftWorld = true; } catch (Exception) { }
+        }
+
+        /// <summary>The frame after leaving the world: a deep capture under way ends at once, all its timers out.</summary>
+        private void EndDeepOnLeaving()
+        {
+            if (!s_leftWorld) return;
+            s_leftWorld = false;
+            var (phase, timers, ms) = _recorder?.EndDeepAtOnce("you left the world") ?? (DeepPhase.Idle, 0, 0);
+            if (phase == DeepPhase.Idle) return;
+            string line = DeepPlan.LeftLine(phase, timers, ms);
+            EventLog.Write("deep", "you", line);
+            Logger.LogInfo("Vigil: " + line);
+        }
 
         // A connection on a server: the message-handler timer starts at once (the join's costliest
         // messages often come in this very frame), and the players are counted again next frame.
@@ -457,6 +479,7 @@ namespace Vigil.Recorder
             try { UpdateLeftovers(); } catch (Exception e) { _leftNote = "the reading stopped: " + e.GetType().Name + " " + e.Message; _leftState = LeftoverReport.None; }
             try { UpdateRestart(); } catch (Exception) { }
             try { UpdateOwnership(); } catch (Exception) { }
+            try { EndDeepOnLeaving(); } catch (Exception e) { Logger.LogWarning("Vigil: ending the deep capture on leaving the world failed: " + e.GetType().Name + " " + e.Message); }
             try { UpdateInspect(); } catch (Exception) { }
             try { UpdateCensus(); } catch (Exception e) { _censusRun?.Stop(e.GetType().Name + " " + e.Message); _censusRun = null; }
             try { UpdateWeather(); } catch (Exception) { }

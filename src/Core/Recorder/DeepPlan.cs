@@ -3,9 +3,35 @@ using System.Collections.Generic;
 
 namespace Vigil.Core
 {
+    /// <summary>Where a deep capture stands: no capture, putting its timers in, measuring, or taking its timers out.</summary>
+    public enum DeepPhase { Idle, Installing, Running, Removing }
+
     /// <summary>What a deep capture times, and what it drops again because timing it costs more than it tells.</summary>
     public static class DeepPlan
     {
+        /// <summary>
+        /// Leaving the world ends a deep capture at once: a capture that is measuring writes its report
+        /// with what it has, and every timer still in a game method comes out in that frame. Taken out a
+        /// few per frame, they would keep the capture, and the recording with it, going for minutes in the
+        /// main menu, where frames are long.
+        /// </summary>
+        public static (bool WriteReport, bool TakeAllOut) OnLeaving(DeepPhase phase) =>
+            (phase == DeepPhase.Running, phase != DeepPhase.Idle);
+
+        /// <summary>The events line for a capture ended by leaving the world, with the timers taken out and what that took.</summary>
+        public static string LeftLine(DeepPhase phase, int timers, double ms)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            string count = timers.ToString(ci) + (timers == 1 ? " timer" : " timers");
+            string took = ms < 1000 ? Math.Round(ms).ToString("0", ci) + " ms" : (ms / 1000).ToString("0.0", ci) + " s";
+            switch (phase)
+            {
+                case DeepPhase.Running: return "deep capture ended as you left the world: report written, " + count + " taken out in " + took;
+                case DeepPhase.Installing: return "deep capture dropped as you left the world before it measured: " + count + " taken out in " + took;
+                default: return "deep capture's last " + count + " taken out at once as you left the world, in " + took;
+            }
+        }
+
         private const double HotCallsPerFrame = 300;
         private const double CheapMicros = 2;
 
@@ -47,6 +73,19 @@ namespace Vigil.Core
         public void Add(IEnumerable<T> items)
         {
             foreach (var i in items) _items.Enqueue(i);
+        }
+
+        /// <summary>Does all the work still queued now, whatever the budget, and starts the next work with a clean budget.</summary>
+        public int Drain(Action<T> work)
+        {
+            int done = 0;
+            while (_items.Count > 0)
+            {
+                work(_items.Dequeue());
+                done++;
+            }
+            _credit = 0;
+            return done;
         }
 
         /// <summary>Drops the work not done yet.</summary>

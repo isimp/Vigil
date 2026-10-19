@@ -154,6 +154,39 @@ namespace Vigil.Recorder
         public bool DeepRunning => _timer.DeepRunning;
         /// <summary>Ends a running deep capture now and writes its report.</summary>
         public void FinishDeepNow() { if (_timer.DeepRunning) FinishDeep(); }
+
+        /// <summary>
+        /// Ends a deep capture at once (<see cref="DeepPlan.OnLeaving"/>): its report when it was
+        /// measuring, with <paramref name="why"/> in it, and every timer out in this frame, counted as
+        /// Vigil's own time and as the deep capture's. Gives where the capture stood, the timers taken
+        /// out and what that took; Idle when no capture was under way.
+        /// </summary>
+        public (DeepPhase Phase, int Timers, double Ms) EndDeepAtOnce(string why)
+        {
+            var phase = _timer.Phase;
+            var (report, takeOut) = DeepPlan.OnLeaving(phase);
+            if (!takeOut) return (DeepPhase.Idle, 0, 0);
+            long started = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (report)
+            {
+                _deepEnded = why;
+                FinishDeep();
+            }
+            int timers = _timer.RemoveDeepNow();
+            long ticks = System.Diagnostics.Stopwatch.GetTimestamp() - started;
+            OwnTools.DeepTicks += ticks;
+            double ms = PhaseTimer.TicksToMs(ticks);
+            AddOwnTime(ms);
+            float now = Time.realtimeSinceStartup;
+            _deepRunStarted = 0;
+            _deepUntil = -1;
+            _deepQuietUntil = now + 10f;
+            _lastAutoDeep = now;
+            Try(() => File.Delete(Path.Combine(_dir, "Vigil-state", "deep.active")));
+            return (phase, timers, ms);
+        }
+
+        private string _deepEnded;
         private bool Busy(float now) => DeepBusy(now) || LoadBusy;
 
         public Recorder(string dir, Settings settings, InstrumentJournal journal, PhaseTimer timer, NetMonitor net, LogTap log,
@@ -1051,6 +1084,9 @@ namespace Vigil.Recorder
             var patched = _timer.Slots.Where(s => s.PatchedBy != null && s.DeepCalls > 0 && !s.Dropped).ToList();
             var sb = new StringBuilder();
             sb.AppendFormat("Vigil deep capture   {0}   {1} frames, {2}\r\n", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), frames, _deepReason);
+            if (_deepEnded != null)
+                sb.AppendFormat(ci, "Ended early, {0}, after {1:0} s of the {2:0} s it was to measure.\r\n", _deepEnded, Time.realtimeSinceStartup - _deepRunStarted, _deepSeconds);
+            _deepEnded = null;
             sb.AppendLine("Every game method that mods patch was timed whole: the game's own code plus every mod patch on it. Times are per frame, averaged over the capture.");
             sb.AppendLine("A method that is slow here and cheap in vanilla points at the mods listed on it. The timing adds a little to methods called very often.");
             sb.AppendFormat(ci, "Second line, for the {0} methods that took the most time in the first 2 s and the {1} that took {2:0} ms or more in a single frame later:\r\n",

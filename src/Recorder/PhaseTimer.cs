@@ -356,6 +356,14 @@ namespace Vigil.Recorder
         public bool DeepActive => _deep != DeepState.Idle;
         public bool DeepRunning => _deep == DeepState.Running;
         public int DeepPending => _toHook.Count + _toUnhook.Count + _toSplit.Count;
+
+        public DeepPhase Phase => _deep switch
+        {
+            DeepState.Installing => DeepPhase.Installing,
+            DeepState.Running => DeepPhase.Running,
+            DeepState.Removing => DeepPhase.Removing,
+            _ => DeepPhase.Idle,
+        };
         public IReadOnlyList<string> DeepDropped => _deepDropped;
 
         /// <summary>
@@ -477,6 +485,23 @@ namespace Vigil.Recorder
             _toUnhook.Add(_deepMethods);
             _deepMethods.Clear();
             _deep = _toUnhook.Count > 0 ? DeepState.Removing : DeepState.Idle;
+        }
+
+        /// <summary>
+        /// Takes every deep timer out now and drops the capture's queued work: for leaving the world,
+        /// where taking them out a few per frame would run on for minutes. Gives how many came out.
+        /// </summary>
+        public int RemoveDeepNow()
+        {
+            s_deepRunning = false;
+            _toHook.Clear();
+            _toSplit.Clear();
+            _toTimePatches.Clear();
+            _toUnhook.Add(_deepMethods);
+            _deepMethods.Clear();
+            int n = _toUnhook.Drain(Unhook);
+            _deep = DeepState.Idle;
+            return n;
         }
 
         private void Unhook(MethodBase m)

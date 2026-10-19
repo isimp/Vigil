@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.37.4
+
+Leaving the world ends a deep capture at once: one that is measuring writes its report with what it has, and all its timers come out in that frame instead of a few per frame. Before, a capture under way at a logout went on taking its timers out in the main menu for many minutes, with the recording kept on meanwhile. The logout takes a few seconds longer when a capture was under way; the events file says how many timers came out and how long it took. The self-test checks it on a short capture.
+
 ## 0.37.3
 
 The census counts shadow casters out to the shadow distance whatever its radius, so the per-layer shadow estimate no longer stops at 60 m while shadows reach 120 m or more; everything else stays within the radius. Its lights table says how many lights the game's light distance rule switches, which is what the game's point-light cap counts. One character, moving object or particle system reads in the singular, and the cost of a character another game runs is left out when no other game runs any.

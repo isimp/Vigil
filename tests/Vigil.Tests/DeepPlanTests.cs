@@ -175,5 +175,73 @@ namespace Vigil.Tests
             Assert.Equal(0, q.Step(i => done.Add(i), () => 0, 6));
             Assert.Empty(done);
         }
+
+        // ------------------------------------------------------------------ leaving the world
+
+        [Fact]
+        public void LeavingTheWorldWritesTheReportOfACaptureThatIsMeasuringAndTakesEveryTimerOut()
+        {
+            Assert.Equal((true, true), DeepPlan.OnLeaving(DeepPhase.Running));
+        }
+
+        [Fact]
+        public void ACaptureStillPuttingItsTimersInIsDroppedWithoutAReportWhenTheWorldIsLeft()
+        {
+            Assert.Equal((false, true), DeepPlan.OnLeaving(DeepPhase.Installing));
+        }
+
+        [Fact]
+        public void TimersStillComingOutAllComeOutAtOnceWhenTheWorldIsLeft()
+        {
+            Assert.Equal((false, true), DeepPlan.OnLeaving(DeepPhase.Removing));
+        }
+
+        [Fact]
+        public void LeavingTheWorldWithoutACaptureChangesNothing()
+        {
+            Assert.Equal((false, false), DeepPlan.OnLeaving(DeepPhase.Idle));
+        }
+
+        [Fact]
+        public void TakingEveryTimerOutAtOnceDoesAllTheWorkWhateverTheBudget()
+        {
+            var q = new BudgetedQueue<int>();
+            q.Add(new[] { 1, 2, 3, 4, 5 });
+            double clock = 0;
+            var done = new List<int>();
+            q.Step(i => { done.Add(i); clock += 50; }, () => clock, budgetMs: 6);
+
+            int n = q.Drain(i => { done.Add(i); clock += 50; });
+
+            Assert.Equal(4, n);
+            Assert.Equal(new[] { 1, 2, 3, 4, 5 }, done);
+            Assert.Equal(0, q.Count);
+        }
+
+        [Fact]
+        public void WorkQueuedAfterTakingEverythingOutAtOnceGetsItsNormalBudgetAgain()
+        {
+            var q = new BudgetedQueue<int>();
+            q.Add(new[] { 1, 2 });
+            double clock = 0;
+            q.Step(i => clock += 50, () => clock, budgetMs: 6); // one item paid for with the next frames' budget
+            q.Drain(i => clock += 50);
+            q.Add(new[] { 3, 4, 5 });
+
+            int n = q.Step(i => clock += 3, () => clock, budgetMs: 6);
+
+            Assert.Equal(2, n);
+        }
+
+        [Fact]
+        public void TheEventSaysWhatLeavingTheWorldDidToTheCaptureAndWhatItCost()
+        {
+            Assert.Equal("deep capture ended as you left the world: report written, 1312 timers taken out in 5.8 s",
+                DeepPlan.LeftLine(DeepPhase.Running, 1312, 5812));
+            Assert.Equal("deep capture dropped as you left the world before it measured: 640 timers taken out in 850 ms",
+                DeepPlan.LeftLine(DeepPhase.Installing, 640, 850.4));
+            Assert.Equal("deep capture's last 1 timer taken out at once as you left the world, in 4 ms",
+                DeepPlan.LeftLine(DeepPhase.Removing, 1, 4.2));
+        }
     }
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using HarmonyLib;
 using Vigil.Core;
 using Check = Vigil.Core.SelfTestReport.Check;
 using Outcome = Vigil.Core.SelfTestReport.Result;
@@ -40,6 +41,7 @@ namespace Vigil.Recorder
             foreach (var trial in TrialRoutines()) yield return trial;
             yield return new SelfTestRoutine(Here, "Vigil's own cost", 1f, OwnCostOnce);
             yield return new SelfTestRoutine(Here, "a mod's patch timed by itself", 5f, PatchTimedOnce);
+            yield return new SelfTestRoutine(Here, "a deep capture ended at once, as on leaving the world", 10f, DeepEndsAtOnce);
             yield return new SelfTestRoutine(Here, "world-object data by mod, captured 3 s", 8f, ObjectDataOnce);
             yield return new SelfTestRoutine(Here, "the census within 16 m, characters timed 2 s", 25f, CensusOnce);
             if (!full) yield break;
@@ -134,6 +136,37 @@ namespace Vigil.Recorder
             checks.Add(facts == null
                 ? new Check(Here, what, Outcome.Warn, "it was gone before it could be read")
                 : new Check(Here, what, Outcome.Pass, facts.Name + ": " + facts.Values.Count + " stored values, " + facts.SizeBytes + " bytes, scripts " + ScriptsByMod.Summary(facts.Scripts)));
+        }
+
+        /// <summary>
+        /// A deep capture ended the way leaving the world ends it: started, given a moment to put some
+        /// timers in, then ended at once; every one of its timers must be out in that frame.
+        /// </summary>
+        private IEnumerator DeepEndsAtOnce(List<Check> checks)
+        {
+            const string what = "a deep capture ended at once, as on leaving the world";
+            if (_recorder == null || _recorder.DeepActive)
+            {
+                checks.Add(new Check(Here, what, Outcome.Info, _recorder == null ? "the recorder is off" : "a deep capture is under way already"));
+                yield break;
+            }
+            string started = _recorder.StartDeep(20f, "started by the self-test");
+            if (!_recorder.DeepActive)
+            {
+                checks.Add(new Check(Here, what, Outcome.Info, started));
+                yield break;
+            }
+            double until = Now + 1.5;
+            while (Now < until) yield return null;
+            var (phase, timers, ms) = _recorder.EndDeepAtOnce("the self-test ended it");
+            int left = Harmony.GetAllPatchedMethods().Count(m => Harmony.GetPatchInfo(m)?.Owners.Contains("isimp.Vigil.deep") == true);
+            if (_recorder.DeepActive || left > 0)
+            {
+                checks.Add(new Check(Here, what, Outcome.Fail, string.Format(Ic, "{0} timers still in after ending it ({1})", left, _recorder.DeepActive ? "the capture still busy" : "the capture done")));
+                yield break;
+            }
+            checks.Add(new Check(Here, what, Outcome.Pass, string.Format(Ic, "{0} timers in after 1.5 s ({1}), all out in one frame: {2:0} ms, {3:0.0} ms each",
+                timers, phase == DeepPhase.Installing ? "still putting them in" : phase.ToString().ToLowerInvariant(), ms, timers > 0 ? ms / timers : 0)));
         }
 
         private IEnumerator BusiestOnce(List<Check> checks)
