@@ -232,6 +232,55 @@ namespace Vigil.Tests
             Assert.DoesNotContain(Section(report, "Renderers and shadow casters").Split('\n'), l => l.Trim().StartsWith("terrain", StringComparison.Ordinal));
         }
 
+        private static RendererFacts Beyond(string layer, float distance, bool shadows = true) =>
+            new RendererFacts { Prefab = "piece_wall", Mod = "OdinArchitect", Layer = layer, Shadows = shadows, Distance = distance, Drawn = true, Instancing = Instancing.Off, Batch = "wall", ShadowOnly = true };
+
+        [Fact]
+        public void ShadowCastersPastTheRadiusButWithinTheShadowDistanceCountForTheLayerDistances()
+        {
+            var c = new BaseCensus();
+            c.AddRenderer(Caster("piece", 50));
+            c.AddRenderer(Beyond("piece", 90));
+            c.AddRenderer(Beyond("piece", 110));
+
+            var (dropped, casters) = c.ShadowsDropped(150, BaseCensus.LayerDistances);
+
+            Assert.Equal(2, dropped);
+            Assert.Equal(3, casters);
+            var row = Row(Section(c.Format(Scene(), null), "Renderers and shadow casters"), "piece");
+            Assert.Equal("3", row[3]); // shadow casters
+            Assert.Equal("2", row[8]); // 60-150 m
+        }
+
+        [Fact]
+        public void RenderersPastTheRadiusCountOnlyAsShadowCasters()
+        {
+            var c = new BaseCensus();
+            c.AddRenderer(Caster("piece", 10, mod: "OdinArchitect"));
+            c.AddRenderer(Beyond("piece", 90));
+            c.AddRenderer(Beyond("piece", 90));
+            c.AddRenderer(Beyond("piece", 95, shadows: false));
+
+            string report = c.Format(Scene(), null);
+
+            var layer = Row(Section(report, "Renderers and shadow casters"), "piece");
+            Assert.Equal("1", layer[1]); // renderers within the radius
+            Assert.Equal("1", layer[2]); // drawn within the radius
+            Assert.Equal("3", layer[3]); // shadow casters: one within the radius, two past it; the one casting none counts nowhere
+            Assert.Equal("1", Row(Section(report, "By mod"), "OdinArchitect")[1]);
+            Assert.Equal(0, c.CouldGroup);
+        }
+
+        [Fact]
+        public void TheReportSaysShadowCastersAreCountedOutToTheShadowDistanceWhenTheRadiusIsShorter()
+        {
+            Assert.Contains("Shadow casters are counted out to the 150 m shadow distance from the camera, everything else within 60 m of you.", new BaseCensus().Format(Scene(), null));
+
+            var wide = Scene(radius: 200);
+            Assert.DoesNotContain("counted out to the", new BaseCensus().Format(wide, null));
+            Assert.DoesNotContain("counted out to the", new BaseCensus().Format(Scene(radius: 0), null));
+        }
+
         // ------------------------------------------------------------------ instancing
 
         [Fact]
@@ -325,6 +374,23 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void LightsUnderTheGamesLightRuleAreTheOnesItsCapCounts()
+        {
+            var c = new BaseCensus();
+            c.AddLight(new LightFacts { Prefab = "piece_walltorch", Type = "Point", On = true, Range = 12, UnderLightRule = true });
+            c.AddLight(new LightFacts { Prefab = "Pickable_Thistle", Type = "Point", On = true, Range = 2 });
+            c.AddLight(new LightFacts { Prefab = "Pickable_Thistle", Type = "Point", On = true, Range = 2 });
+            // the cap counts point lights that are on: neither of these
+            c.AddLight(new LightFacts { Prefab = "piece_walltorch", Type = "Point", On = false, Range = 12, UnderLightRule = true });
+            c.AddLight(new LightFacts { Prefab = "lamp_spot", Type = "Spot", On = true, Range = 12, UnderLightRule = true });
+
+            Assert.Contains("3 point lights, 1 of them under the game's light rule (the game's cap: 40)", c.LightsLead(Scene()));
+            var lights = Section(c.Format(Scene(), null), "Lights");
+            Assert.Equal("2", Row(lights, "piece_walltorch").Last());
+            Assert.Equal("0", Row(lights, "Pickable_Thistle").Last());
+        }
+
+        [Fact]
         public void TheCapsReadUnlimitedWhenTheSettingHasNone()
         {
             var c = new BaseCensus();
@@ -415,6 +481,40 @@ namespace Vigil.Tests
             var order = new[] { "== Characters ==", "== Renderers and shadow casters ==", "== Particle systems ==", "== Lights ==", "== Material copies ==" }
                 .Select(h => report.IndexOf(h, StringComparison.Ordinal)).ToArray();
             Assert.Equal(order.OrderBy(i => i), order);
+        }
+
+        [Fact]
+        public void OneOfAKindIsNamedInTheSingular()
+        {
+            var c = new BaseCensus();
+            c.AddCharacter(Wolf(yours: true));
+            c.AddMover(new MoverFacts { Prefab = "Cart", Yours = true, Body = Body.Awake, Ms = 1 });
+            c.AddParticles(Fire());
+
+            string report = c.Format(Scene(), null);
+
+            Assert.StartsWith("1 character within 60 m: 1 run by your game, 0 by other players' games", c.CharactersLead(Scene()));
+            Assert.Contains("1 moving object that is not a character", report);
+            Assert.StartsWith("1 particle system on building pieces keeps simulating off screen", c.ParticlesLead());
+        }
+
+        [Fact]
+        public void TheAverageCostNamesOnlyTheGamesThatRunCharactersHere()
+        {
+            var c = new BaseCensus();
+            c.AddCharacter(Wolf(yours: true, ms: 25));
+
+            string lead = c.CharactersLead(Scene());
+
+            Assert.Contains("On average one your game runs takes 0.100 ms a step.", lead);
+            Assert.DoesNotContain("another game runs", lead);
+            Assert.DoesNotContain("none timed", lead);
+
+            var theirs = new BaseCensus();
+            theirs.AddCharacter(Wolf(yours: false, ms: 25));
+            lead = theirs.CharactersLead(Scene());
+            Assert.Contains("On average one another game runs 0.100 ms.", lead);
+            Assert.DoesNotContain("your game runs", lead);
         }
 
         [Fact]

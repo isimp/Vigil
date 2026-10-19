@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.37.3
+
+The census counts shadow casters out to the shadow distance whatever its radius, so the per-layer shadow estimate no longer stops at 60 m while shadows reach 120 m or more; everything else stays within the radius. Its lights table says how many lights the game's light distance rule switches, which is what the game's point-light cap counts. One character, moving object or particle system reads in the singular, and the cost of a character another game runs is left out when no other game runs any.
+
 ## 0.37.2
 
 *Tools > Count objects* now shows the census's four findings above its counts: characters and their time a physics step, the shadow casters per-layer distances would drop, building particle systems simulating off screen, and lights with shadows. The shadow and particle lines are marked when they found something to change.

@@ -33,6 +33,7 @@ namespace Vigil.Recorder
     {
         public const float TimingSeconds = 5f;
         private const double BudgetMs = 4.0;
+        private const float ShadowMargin = 20f;
 
         private enum Stage { Walking, Apart, Hooking, Timing, Unhooking, Done }
 
@@ -258,7 +259,15 @@ namespace Vigil.Recorder
         {
             if (view == null) return;
             var go = view.gameObject;
-            if (_center.HasValue && _radius > 0 && (go.transform.position - _center.Value).sqrMagnitude > _radius * _radius) return;
+            var at = go.transform.position;
+            if (!InRadius(at))
+            {
+                // Past the radius only its shadow casters count, out to the shadow distance from the camera;
+                // a large object's parts can lie nearer than its root, hence the margin.
+                float reach = _scene.ShadowDistance + ShadowMargin;
+                if ((at - _camera).sqrMagnitude <= reach * reach) ReadShadows(go);
+                return;
+            }
             string prefab = Utils.GetPrefabName(go);
             string mod = _index.OwnerOf(prefab);
             bool onPiece = go.GetComponent<Piece>() != null;
@@ -286,9 +295,11 @@ namespace Vigil.Recorder
             {
                 if (l == null) continue;
                 if (l.enabled) lights++;
+                var lod = l.GetComponent<LightLod>();
                 _lights.Add((new LightFacts
                 {
                     Prefab = prefab, Mod = mod, Type = l.type.ToString(), On = l.enabled, Range = l.range,
+                    UnderLightRule = lod != null && lod.enabled && lod.m_lightLod,
                     Shadows = l.shadows == LightShadows.Soft ? LightShadow.Soft : l.shadows == LightShadows.Hard ? LightShadow.Hard : LightShadow.None,
                 }, l.transform.position));
             }
@@ -337,16 +348,44 @@ namespace Vigil.Recorder
             }
         }
 
+        private bool InRadius(Vector3 at) => !_center.HasValue || _radius <= 0 || (at - _center.Value).sqrMagnitude <= _radius * _radius;
+
+        /// <summary>A world object past the radius: its shadow casters within the shadow distance, and nothing else of it.</summary>
+        private void ReadShadows(GameObject go)
+        {
+            go.GetComponentsInChildren(false, _rs);
+            foreach (var r in _rs)
+            {
+                if (r == null || !r.enabled || r.shadowCastingMode == ShadowCastingMode.Off) continue;
+                var centre = r.bounds.center;
+                float distance = Vector3.Distance(_camera, centre);
+                if (distance > _scene.ShadowDistance) continue;
+                _counted.Add(r.GetInstanceID());
+                _rf.Prefab = null;
+                _rf.Mod = null;
+                _rf.Layer = LayerOf(r.gameObject);
+                _rf.Shadows = true;
+                _rf.Distance = distance;
+                _rf.WorldObject = true;
+                _rf.ShadowOnly = true;
+                _rf.Batch = null;
+                _census.AddRenderer(_rf);
+                _casters.Add(centre);
+            }
+        }
+
         private void ReadApart(Renderer r)
         {
             if (r == null || !r.enabled || _counted.Contains(r.GetInstanceID())) return;
             var b = r.bounds;
-            if (_center.HasValue && _radius > 0 && b.SqrDistance(_center.Value) > _radius * _radius) return;
-            // A world object's renderer outside the radius: its object was left out, so it is too.
-            if (r.GetComponentInParent<ZNetView>() != null) return;
             bool shadow = r.shadowCastingMode != ShadowCastingMode.Off;
+            bool inRadius = !_center.HasValue || _radius <= 0 || b.SqrDistance(_center.Value) <= _radius * _radius;
+            if (!inRadius && !(shadow && Vector3.Distance(_camera, b.center) <= _scene.ShadowDistance)) return;
+            // A world object's renderer: the walk took it or left it out with its object.
+            if (r.GetComponentInParent<ZNetView>() != null) return;
             r.GetSharedMaterials(_mats);
             Fill(r, null, null, shadow, false, worldObject: false);
+            _rf.ShadowOnly = !inRadius;
             _census.AddRenderer(_rf);
             if (shadow) _casters.Add(b.center);
         }
@@ -361,6 +400,7 @@ namespace Vigil.Recorder
             _rf.Drawn = r.isVisible;
             _rf.Copy = copy;
             _rf.WorldObject = worldObject;
+            _rf.ShadowOnly = false;
             _rf.Batch = null;
             if (r is SkinnedMeshRenderer) { _rf.Instancing = Instancing.Skinned; return; }
             int n = 0, on = 0;

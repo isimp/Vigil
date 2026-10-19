@@ -44,6 +44,8 @@ namespace Vigil.Core
     {
         public string Prefab, Mod, Layer, Batch;
         public bool Shadows, Drawn, Copy, WorldObject = true;
+        /// <summary>Past the census's radius but within the shadow distance: counted only as a shadow caster.</summary>
+        public bool ShadowOnly;
         public float Distance;
         public Instancing Instancing;
     }
@@ -62,6 +64,8 @@ namespace Vigil.Core
     {
         public string Prefab, Mod, Type;
         public bool On;
+        /// <summary>Switched on and off by the game's light distance rule (<c>LightLod</c>), which is what the game's light cap counts.</summary>
+        public bool UnderLightRule;
         public LightShadow Shadows;
         public float Range;
         public int CastersInRange;
@@ -171,7 +175,7 @@ namespace Vigil.Core
         private sealed class LightRow
         {
             public string Mod, Type;
-            public int Lights, On, Shadows, Casters;
+            public int Lights, On, Shadows, Casters, UnderRule, PointsUnderRule;
             public float Range;
         }
 
@@ -228,9 +232,15 @@ namespace Vigil.Core
         public void AddRenderer(RendererFacts r)
         {
             if (r == null) return;
+            if (r.ShadowOnly && !r.Shadows) return;
             var rows = r.WorldObject ? _layers : _apart;
             string layer = Name(r.Layer);
             if (!rows.TryGetValue(layer, out var row)) rows[layer] = row = new LayerRow();
+            if (r.ShadowOnly)
+            {
+                row.Casters.Add(r.Distance);
+                return;
+            }
             row.Renderers++;
             if (r.Drawn) row.Drawn++;
             if (r.Shadows) row.Casters.Add(r.Distance);
@@ -280,8 +290,10 @@ namespace Vigil.Core
             if (!_lights.TryGetValue(key, out var row)) _lights[key] = row = new LightRow { Mod = l.Mod, Type = Name(l.Type) };
             row.Lights++;
             row.Range = Math.Max(row.Range, l.Range);
+            if (l.UnderLightRule) row.UnderRule++;
             if (!l.On) return;
             row.On++;
+            if (l.UnderLightRule && row.Type == "Point") row.PointsUnderRule++;
             if (l.Shadows == LightShadow.None) return;
             row.Shadows++;
             row.Casters += Math.Max(0, l.CastersInRange);
@@ -327,13 +339,15 @@ namespace Vigil.Core
 
         private static bool Timed(CensusScene s) => s.Steps > 0 && s.TimingProblem == null;
 
+        private static string Plural(int n, string one, string many) => n.ToString(Ci) + " " + (n == 1 ? one : many);
+
         public string CharactersLead(CensusScene s)
         {
             int yours = _characters.Values.Sum(k => k.Yours), others = _characters.Values.Sum(k => k.Others);
             if (yours + others == 0) return "No characters " + Within(s) + ".";
             var sb = new StringBuilder();
-            sb.AppendFormat(Ci, "{0} characters {1}: {2} run by your game, {3} by other players' games; {4} tamed.",
-                yours + others, Within(s), yours, others, _characters.Values.Sum(k => k.Tamed));
+            sb.AppendFormat(Ci, "{0} {1}: {2} run by your game, {3} by other players' games; {4} tamed.",
+                Plural(yours + others, "character", "characters"), Within(s), yours, others, _characters.Values.Sum(k => k.Tamed));
             if (!Timed(s))
             {
                 sb.Append(" Their physics-step time was not timed: ").Append(s.TimingProblem ?? "no physics step ran").Append('.');
@@ -344,15 +358,12 @@ namespace Vigil.Core
             sb.AppendFormat(Ci, " In {0} physics steps over {1:0.0} s they took {2} ms a step", s.Steps, s.TimedSeconds, Ms(ms / s.Steps));
             if (!double.IsNaN(s.FixedUpdateMs) && s.FixedUpdateMs > 0) sb.AppendFormat(Ci, ", {0} of the game's FixedUpdate work", Pct(ms, s.FixedUpdateMs));
             sb.Append('.');
+            // Each game that runs characters here, the average of one of them; a game with characters none of which ran says so.
             int ty = _characters.Values.Sum(k => k.TimedYours), to = _characters.Values.Sum(k => k.TimedOthers);
-            if (ty > 0 || to > 0)
-            {
-                sb.Append(" On average one your game runs takes ")
-                  .Append(ty > 0 ? Ms(_characters.Values.Sum(k => k.MsYours) / ty / s.Steps) + " ms a step" : "nothing (none timed)")
-                  .Append(", one another game runs ")
-                  .Append(to > 0 ? Ms(_characters.Values.Sum(k => k.MsOthers) / to / s.Steps) + " ms" : "nothing (none timed)")
-                  .Append('.');
-            }
+            var averages = new List<string>();
+            if (yours > 0) averages.Add("one your game runs " + (ty > 0 ? "takes " + Ms(_characters.Values.Sum(k => k.MsYours) / ty / s.Steps) + " ms a step" : "took nothing: none of them ran"));
+            if (others > 0) averages.Add("one another game runs " + (to > 0 ? Ms(_characters.Values.Sum(k => k.MsOthers) / to / s.Steps) + " ms" : "nothing: none of them ran"));
+            if (averages.Count > 0) sb.Append(" On average ").Append(string.Join(", ", averages)).Append('.');
             var top = _characters.Where(kv => kv.Value.Timed > 0).OrderByDescending(kv => kv.Value.Ms).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(3).ToList();
             if (top.Count > 0)
             {
@@ -401,7 +412,8 @@ namespace Vigil.Core
             if (systems == 0) sb.Append("No particle systems on building pieces keep simulating off screen.");
             else
             {
-                sb.AppendFormat(Ci, "{0} particle systems on building pieces keep simulating off screen (always simulate), {1} particles; pausing them off screen would stop that.", systems, particles);
+                sb.AppendFormat(Ci, "{0} on building pieces {1} simulating off screen (always simulate), {2} particles; pausing them off screen would stop that.",
+                    Plural(systems, "particle system", "particle systems"), systems == 1 ? "keeps" : "keep", particles);
                 int other = _particles.Values.Sum(p => p.OtherCamera);
                 if (other > 0) sb.AppendFormat(Ci, " {0} of them Unity counts as seen by another camera (the game's depth or reflection camera), which would wake them now and then.", other);
             }
@@ -418,8 +430,11 @@ namespace Vigil.Core
             int points = _lights.Values.Where(l => l.Type == "Point").Sum(l => l.On);
             int shadows = _lights.Values.Sum(l => l.Shadows), casters = _lights.Values.Sum(l => l.Casters);
             var sb = new StringBuilder();
-            sb.AppendFormat(Ci, "{0} of {1} lights on: {2} point lights (the game's cap: {3}), {4} casting shadows (the game's cap: {5})",
-                on, lights, points, Cap(s.PointLightCap), shadows, Cap(s.PointShadowCap));
+            int underRule = _lights.Values.Sum(l => l.PointsUnderRule);
+            sb.AppendFormat(Ci, "{0} of {1} lights on: {2}, {3}, {4} casting shadows (the game's cap: {5})",
+                on, lights, Plural(points, "point light", "point lights"),
+                underRule == 0 ? "none under the game's light rule" : string.Format(Ci, "{0} of them under the game's light rule (the game's cap: {1})", underRule, Cap(s.PointLightCap)),
+                shadows, Cap(s.PointShadowCap));
             if (shadows > 0) sb.AppendFormat(Ci, ", with {0} shadow casters in their range (Unity draws a point light's shadow in six views)", casters);
             sb.Append('.');
             return sb.ToString();
@@ -536,6 +551,8 @@ namespace Vigil.Core
             var sb = new StringBuilder();
             sb.Append("Vigil census   ").Append(s.At.ToString("yyyy-MM-dd HH:mm:ss", Ci)).Append("\r\n");
             sb.Append("What is loaded ").Append(Within(s)).Append(s.Radius > 0 ? " of you" : "").Append(string.IsNullOrEmpty(s.Place) ? "" : ", " + s.Place).Append(".\r\n");
+            if (s.Radius > 0 && s.Radius < s.ShadowDistance)
+                sb.AppendFormat(Ci, "Shadow casters are counted out to the {0:0} m shadow distance from the camera, everything else within {1:0} m of you.\r\n", s.ShadowDistance, s.Radius);
             sb.AppendFormat(Ci, "Settings: sun shadows to {0:0} m in {1} cascades; the sun's per-layer shadow distances: {2}; pixel lights {3}; point lights cap {4}, point-light shadows cap {5}.\r\n",
                 s.ShadowDistance, s.Cascades, s.SunLayerDistances ?? "none set", s.PixelLights >= 0 ? N(s.PixelLights) : "unknown", Cap(s.PointLightCap), Cap(s.PointShadowCap));
             if (s.DrawCalls >= 0 || s.ShadowCasters >= 0)
@@ -559,8 +576,9 @@ namespace Vigil.Core
             if (_movers.Count == 0) sb.Append("No other moving objects ").Append(Within(s)).Append(".\r\n");
             else
             {
-                sb.AppendFormat(Ci, "{0} moving objects that are not characters (carts, ships, dropped items, ...), {1} with an awake body.\r\n",
-                    _movers.Values.Sum(k => k.Yours + k.Others), _movers.Values.Sum(k => k.Awake));
+                int movers = _movers.Values.Sum(k => k.Yours + k.Others);
+                sb.AppendFormat(Ci, "{0} (carts, ships, dropped items, ...), {1} with an awake body.\r\n",
+                    movers == 1 ? "1 moving object that is not a character" : movers.ToString(Ci) + " moving objects that are not characters", _movers.Values.Sum(k => k.Awake));
                 Table(sb, new[] { "kind", "mod", "yours", "others", "awake bodies", "ms a step", "share" },
                     ByTime(_movers).Take(40).Select(kv => KindCells(kv.Key, kv.Value, s, character: false)), 2);
             }
@@ -611,11 +629,11 @@ namespace Vigil.Core
 
             sb.Append("\r\n== Lights ==\r\n").Append(LightsLead(s)).Append("\r\n");
             if (_lights.Count > 0)
-                Table(sb, new[] { "kind", "mod", "type", "lights", "on", "with shadows", "range", "shadow casters in range" },
+                Table(sb, new[] { "kind", "mod", "type", "lights", "on", "with shadows", "range", "shadow casters in range", "under the light rule" },
                     _lights.OrderByDescending(kv => kv.Value.Shadows).ThenByDescending(kv => kv.Value.On).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => new[]
                     {
                         kv.Key.Split('\u0001')[0], ModName(kv.Value.Mod), kv.Value.Type, N(kv.Value.Lights), N(kv.Value.On), N(kv.Value.Shadows),
-                        kv.Value.Range.ToString("0", Ci) + " m", N(kv.Value.Casters),
+                        kv.Value.Range.ToString("0", Ci) + " m", N(kv.Value.Casters), N(kv.Value.UnderRule),
                     }), 3);
 
             sb.Append("\r\n== Material copies ==\r\n");
