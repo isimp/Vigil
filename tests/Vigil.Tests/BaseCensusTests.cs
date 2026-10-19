@@ -336,6 +336,63 @@ namespace Vigil.Tests
             Assert.Contains("(the game's cap: none)", c.LightsLead(scene));
         }
 
+        // ------------------------------------------------------------------ the panel's lines
+
+        private static BaseCensus AtTheBase()
+        {
+            var c = new BaseCensus();
+            c.AddCharacter(Wolf(yours: true, ms: 100));
+            c.AddCharacter(Wolf(yours: false, tamed: false, ms: 56));
+            for (int i = 0; i < 1500; i++) c.AddRenderer(Caster("piece", 50));
+            for (int i = 0; i < 604; i++) c.AddRenderer(Caster("piece", 70));
+            c.AddParticles(Fire(particles: 2300));
+            c.AddLight(new LightFacts { Prefab = "fire_pit", Type = "Point", On = true, Shadows = LightShadow.Soft, Range = 12, CastersInRange = 410 });
+            c.AddLight(new LightFacts { Prefab = "torch", Type = "Point", On = false, Range = 8 });
+            return c;
+        }
+
+        [Fact]
+        public void ThePanelGetsOneShortLineForCharactersShadowsParticlesAndLightsInThatOrder()
+        {
+            var lines = AtTheBase().Findings(Scene());
+
+            Assert.Equal(4, lines.Count);
+            Assert.Equal("2 characters: 1 run by your game, 1 by others; 1 tamed. 0.62 ms a physics step, 78 % of the game's FixedUpdate; Unity's physics step itself 1.20 ms.", lines[0].Text);
+            Assert.Equal("Per-layer sun shadow distances would stop 604 of the 2,104 shadow casters (29 %).", lines[1].Text);
+            Assert.Equal("1 particle system on building pieces keeps simulating off screen, 2,300 particles.", lines[2].Text);
+            Assert.Equal("1 of 2 lights on, 1 casting shadows (cap 3) with 410 shadow casters in range.", lines[3].Text);
+        }
+
+        [Fact]
+        public void OnlyShadowsTheDistancesWouldDropAndParticlesThatCouldPauseAskForAction()
+        {
+            var lines = AtTheBase().Findings(Scene());
+            Assert.Equal(new[] { false, true, true, false }, lines.Select(l => l.ActOn).ToArray());
+
+            var quiet = new BaseCensus();
+            quiet.AddRenderer(Caster("piece", 10));
+            quiet.AddParticles(Fire(inView: true));
+            Assert.All(quiet.Findings(Scene()), l => Assert.False(l.ActOn, l.Text));
+        }
+
+        [Fact]
+        public void ThePanelLinesSayWhenThereIsNothingOrNothingWasTimed()
+        {
+            var lines = new BaseCensus().Findings(Scene());
+            Assert.Equal(new[] { "No characters within 60 m.", "No shadow casters within 60 m.", "No particle systems.", "No lights." }, lines.Select(l => l.Text).ToArray());
+
+            var c = new BaseCensus();
+            c.AddCharacter(Wolf(yours: true, ms: double.NaN));
+            c.AddParticles(Fire(inView: true));
+            c.AddLight(new LightFacts { Prefab = "torch", Type = "Point", On = true, Range = 8 });
+            var scene = Scene();
+            scene.TimingProblem = "nothing moving was loaded";
+            lines = c.Findings(scene);
+            Assert.Equal("1 character: 1 run by your game, 0 by others; 1 tamed. Not timed: nothing moving was loaded.", lines[0].Text);
+            Assert.Equal("No particle systems on building pieces keep simulating off screen.", lines[2].Text);
+            Assert.Equal("1 of 1 lights on, none casting shadows.", lines[3].Text);
+        }
+
         // ------------------------------------------------------------------ the report
 
         [Fact]

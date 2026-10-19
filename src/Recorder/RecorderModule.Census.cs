@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 using Vigil.Core;
 using Check = Vigil.Core.SelfTestReport.Check;
@@ -119,6 +120,12 @@ namespace Vigil.Recorder
             if (s.TimingProblem == null && run.Characters > 0 && run.CharactersTimed == 0)
             {
                 checks.Add(new Check(Here, what, Outcome.Fail, string.Format(Ic, "{0} characters found, none of them ran while timed", run.Characters)));
+                yield break;
+            }
+            int findings = run.Result.Blocks.Count(b => b is VerdictBlock);
+            if (findings != 4)
+            {
+                checks.Add(new Check(Here, what, Outcome.Fail, string.Format(Ic, "the panel's result holds {0} finding lines instead of 4", findings)));
                 yield break;
             }
             if (PhysicsStep.Installed && s.Steps > 0 && double.IsNaN(s.PhysicsEngineMs))

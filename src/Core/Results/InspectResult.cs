@@ -50,7 +50,7 @@ namespace Vigil.Core
             return r;
         }
 
-        public static Result Census(DateTime at, Census census, float radius)
+        public static Result Census(DateTime at, Census census, float radius, IEnumerable<CensusFinding> findings = null)
         {
             var rows = census.Rows();
             var r = new Result("Count objects", at)
@@ -58,6 +58,12 @@ namespace Vigil.Core
                 Badge = radius > 0 ? "within " + radius.ToString("0", Ci) + " m" : "everything loaded",
                 BadgeTone = ResultTone.Quiet,
             };
+            // The findings lead; the ones pointing at a change worth making are marked.
+            foreach (var f in findings ?? Enumerable.Empty<CensusFinding>())
+            {
+                r.Add(new VerdictBlock(f.ActOn ? ResultTone.Caution : ResultTone.Quiet, f.Text));
+            }
+
             r.Add(new TilesBlock())
                 .Add("Objects", rows.Sum(x => x.Objects).ToString(Ci))
                 .Add("Renderers", rows.Sum(x => x.Renderers).ToString(Ci))

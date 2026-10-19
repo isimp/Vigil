@@ -67,6 +67,19 @@ namespace Vigil.Core
         public int CastersInRange;
     }
 
+    /// <summary>One of the census's findings in a short line for the panel; <see cref="ActOn"/> when it points at a change worth making.</summary>
+    public readonly struct CensusFinding
+    {
+        public CensusFinding(bool actOn, string text)
+        {
+            ActOn = actOn;
+            Text = text;
+        }
+
+        public bool ActOn { get; }
+        public string Text { get; }
+    }
+
     /// <summary>Where and when the census read, the game's settings it compares against, and what the census cost.</summary>
     public sealed class CensusScene
     {
@@ -410,6 +423,60 @@ namespace Vigil.Core
             if (shadows > 0) sb.AppendFormat(Ci, ", with {0} shadow casters in their range (Unity draws a point light's shadow in six views)", casters);
             sb.Append('.');
             return sb.ToString();
+        }
+
+        private static string Count(int n) => n.ToString("#,0", Ci);
+
+        /// <summary>
+        /// The four findings in short lines for the panel, in the report's order: characters with their
+        /// time a physics step, shadow casters the layer distances would drop, building particle systems
+        /// simulating off screen, lights with shadows. The shadow and particle lines ask for action when
+        /// they found something; the report has the detail.
+        /// </summary>
+        public IReadOnlyList<CensusFinding> Findings(CensusScene s)
+        {
+            var lines = new List<CensusFinding>(4);
+
+            int yours = _characters.Values.Sum(k => k.Yours), others = _characters.Values.Sum(k => k.Others);
+            if (yours + others == 0) lines.Add(new CensusFinding(false, "No characters " + Within(s) + "."));
+            else
+            {
+                var sb = new StringBuilder();
+                sb.AppendFormat(Ci, "{0} {1}: {2} run by your game, {3} by others; {4} tamed.", Count(yours + others), yours + others == 1 ? "character" : "characters",
+                    yours, others, _characters.Values.Sum(k => k.Tamed));
+                if (!Timed(s)) sb.Append(" Not timed: ").Append(s.TimingProblem ?? "no physics step ran").Append('.');
+                else
+                {
+                    double ms = _characters.Values.Sum(k => k.Ms);
+                    sb.Append(' ').Append((ms / s.Steps).ToString("0.00", Ci)).Append(" ms a physics step");
+                    if (!double.IsNaN(s.FixedUpdateMs) && s.FixedUpdateMs > 0) sb.Append(", ").Append(Pct(ms, s.FixedUpdateMs)).Append(" of the game's FixedUpdate");
+                    if (!double.IsNaN(s.PhysicsEngineMs)) sb.Append("; Unity's physics step itself ").Append((s.PhysicsEngineMs / s.Steps).ToString("0.00", Ci)).Append(" ms");
+                    sb.Append('.');
+                }
+                lines.Add(new CensusFinding(false, sb.ToString()));
+            }
+
+            var (dropped, casters) = ShadowsDropped(s.ShadowDistance, LayerDistances);
+            lines.Add(casters == 0
+                ? new CensusFinding(false, "No shadow casters " + Within(s) + ".")
+                : new CensusFinding(dropped > 0, string.Format(Ci, "Per-layer sun shadow distances would stop {0} of the {1} shadow casters ({2}).", Count(dropped), Count(casters), Pct(dropped, casters))));
+
+            var (systems, particles) = Pausable;
+            lines.Add(_particles.Count == 0 ? new CensusFinding(false, "No particle systems.")
+                : systems == 0 ? new CensusFinding(false, "No particle systems on building pieces keep simulating off screen.")
+                : new CensusFinding(true, string.Format(Ci, "{0} on building pieces {1} simulating off screen, {2} particles.",
+                    systems == 1 ? "1 particle system" : Count(systems) + " particle systems", systems == 1 ? "keeps" : "keep", Count(particles))));
+
+            if (_lights.Count == 0) lines.Add(new CensusFinding(false, "No lights."));
+            else
+            {
+                int shadows = _lights.Values.Sum(l => l.Shadows);
+                string text = string.Format(Ci, "{0} of {1} lights on, ", Count(_lights.Values.Sum(l => l.On)), Count(_lights.Values.Sum(l => l.Lights)))
+                    + (shadows == 0 ? "none casting shadows." : string.Format(Ci, "{0} casting shadows (cap {1}) with {2} shadow casters in range.",
+                        Count(shadows), Cap(s.PointShadowCap), Count(_lights.Values.Sum(l => l.Casters))));
+                lines.Add(new CensusFinding(false, text));
+            }
+            return lines;
         }
 
         // ------------------------------------------------------------------ the report

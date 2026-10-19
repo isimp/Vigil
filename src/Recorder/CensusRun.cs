@@ -544,7 +544,7 @@ namespace Vigil.Recorder
             _scene.MaxFrameMs = Math.Max(_scene.MaxFrameMs, now);
             File.WriteAllText(Path.Combine(_dir, file), _census.Format(_scene, _suspects.Report(25)));
 
-            var result = InspectResult.Census(DateTime.Now, _old, _scene.Radius);
+            var result = InspectResult.Census(DateTime.Now, _old, _scene.Radius, _census.Findings(_scene));
             result.File = file;
             result.Path = Path.Combine(_dir, file);
             Result = result;

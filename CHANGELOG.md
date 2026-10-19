@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.37.2
+
+*Tools > Count objects* now shows the census's four findings above its counts: characters and their time a physics step, the shadow casters per-layer distances would drop, building particle systems simulating off screen, and lights with shadows. The shadow and particle lines are marked when they found something to change.
+
 ## 0.37.1
 
 The census (`vigil census`, *Tools > Count objects*) now reads over a second or two instead of stalling one frame, then times every character it found for 5 s, and writes `Vigil-census-<time>.txt`: characters by kind and whose game runs them, tamed, with their time in the physics steps; shadow casters by layer and distance from the camera, with how many per-layer sun shadow distances would drop; renderers by mod with instancing and the ones that could be drawn together; particle systems on building pieces that keep simulating off screen; lights and the shadows they draw. The material copies moved into that report. Hitch reports and the timeline (`physics_ms`) now time Unity's own physics step, so a frame full of physics catch-up says how much the physics engine took (`Hooks.PhysicsStep`). The self-test runs a small census.

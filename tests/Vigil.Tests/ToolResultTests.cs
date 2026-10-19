@@ -16,6 +16,38 @@ namespace Vigil.Tests
         private const long Mb = 1048576;
 
         [Fact]
+        public void The_census_leads_with_its_findings_above_the_counts_and_marks_the_ones_to_act_on()
+        {
+            var c = new Census();
+            c.Add("piece_wall", 4, 4, 0, 0, 0);
+            var findings = new[]
+            {
+                new CensusFinding(false, "2 characters: 2 run by your game, 0 by others; 0 tamed."),
+                new CensusFinding(true, "Per-layer sun shadow distances would stop 1 of the 4 shadow casters (25 %)."),
+            };
+
+            var r = InspectResult.Census(At, c, 60, findings);
+
+            var verdicts = r.Blocks.TakeWhile(b => b is VerdictBlock).Cast<VerdictBlock>().ToList();
+            Assert.Equal(findings.Select(f => f.Text), verdicts.Select(v => v.Text));
+            Assert.Equal(new[] { ResultTone.Quiet, ResultTone.Caution }, verdicts.Select(v => v.Tone));
+            Assert.IsType<TilesBlock>(r.Blocks[verdicts.Count]);
+            Assert.Single(r.Blocks.OfType<TableBlock>());
+        }
+
+        [Fact]
+        public void The_census_without_findings_shows_its_counts_as_before()
+        {
+            var c = new Census();
+            c.Add("piece_wall", 4, 4, 0, 0, 0);
+
+            var r = InspectResult.Census(At, c, 60);
+
+            Assert.IsType<TilesBlock>(r.Blocks[0]);
+            Assert.Empty(r.Blocks.OfType<VerdictBlock>());
+        }
+
+        [Fact]
         public void Memory_shows_the_totals_and_the_mods_that_use_the_most_first()
         {
             var perMod = new ModMemory();
