@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.38.0
+
+*Overview > Fire sounds*, a player's own setting: a slider sets the level of fire loops in percent of each fire's own, live for the loaded fires and saved when let go (`Sound.FireLevel`), reaching either the fires whose loop came without the game's sound rules or every fire (`Sound.FireLevelAppliesTo`). The game's fires play their loop through a sound component that keeps a hearth at 40 to 60 % of its own level, fades it in and lets only the nearest few of a kind be heard; a mod's fire that leaves it out plays its loop at full level, every one of them. The switch *Game's sound rules* (`Sound.ModFiresFollowGameRules`, on) gives such a fire the component with the game's hearth's values as it loads, and puts a loop that plays through no mixer group on the game's SFX group, where the SFX volume applies. The section counts the fire loops within 20 m and names the kinds without the rules; the self-test checks the loaded loops' levels and gives the rules to a muted stand-in.
+
 ## 0.37.4
 
 Leaving the world ends a deep capture at once: one that is measuring writes its report with what it has, and all its timers come out in that frame instead of a few per frame. Before, a capture under way at a logout went on taking its timers out in the main menu for many minutes, with the recording kept on meanwhile. The logout takes a few seconds longer when a capture was under way; the events file says how many timers came out and how long it took. The self-test checks it on a short capture.

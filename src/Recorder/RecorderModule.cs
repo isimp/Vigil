@@ -183,6 +183,8 @@ namespace Vigil.Recorder
             DropWatch.Dropped = (who, drop, samples) => _recorder?.Drop(who, drop, samples);
             _recorder.ReportWritten = ReportWritten;
             BindSharing();
+            BindFireSounds();
+            if (!_server) FireSoundsPatch.Hook(harmony);
             BindOwnership();
             BindWeather();
             BindPatches();

@@ -155,6 +155,7 @@ namespace Vigil.Recorder
             if (!_server) yield return new PanelSection("Overview", "Alerts", DrawAlerts, AlertsBadge);
             yield return new PanelSection("Overview", "Recording", DrawRecording, null, PanelZone.Measure);
             if (!_server) yield return new PanelSection("Overview", "Sharing", DrawSharing, SharingBadge);
+            if (!_server) yield return new PanelSection("Overview", "Fire sounds", DrawFireSounds, FireSoundsBadge);
             if (!_server)
             {
                 yield return new PanelSection("Network", "This connection", DrawConnection, ConnectionBadge);

@@ -342,6 +342,64 @@ internal static partial class Ui
         return row;
     }
 
+    /// <summary>
+    /// A level on a sunken track, the part up to it lit, with a round thumb; dragging anywhere on the
+    /// track moves it. The value follows the mouse on every pass, so what it sets can follow live;
+    /// <paramref name="released"/> is true on the pass the mouse let go, for a setting saved once a move.
+    /// </summary>
+    public static float Slider(float value, float min, float max, float width, out bool released)
+    {
+        released = false;
+        float height = Skin.U(Skin.LineHeight), thumb = Skin.U(14f);
+        var rect = GUILayoutUtility.GetRect(Skin.U(width), height, Skin.ChoiceTrack, GUILayout.ExpandWidth(false));
+        int id = GUIUtility.GetControlID(FocusType.Passive, rect);
+        float x0 = rect.x + thumb / 2f, x1 = rect.xMax - thumb / 2f;
+        var e = Event.current;
+        float v = value;
+        float At(float mouseX) => Mathf.Lerp(min, max, Mathf.InverseLerp(x0, x1, mouseX));
+        switch (e.GetTypeForControl(id))
+        {
+            case EventType.MouseDown:
+                if (e.button == 0 && rect.Contains(e.mousePosition))
+                {
+                    GUIUtility.hotControl = id;
+                    v = At(e.mousePosition.x);
+                    e.Use();
+                }
+
+                break;
+            case EventType.MouseDrag:
+                if (GUIUtility.hotControl == id)
+                {
+                    v = At(e.mousePosition.x);
+                    e.Use();
+                }
+
+                break;
+            case EventType.MouseUp:
+                if (GUIUtility.hotControl == id)
+                {
+                    GUIUtility.hotControl = 0;
+                    released = true;
+                    e.Use();
+                }
+
+                break;
+        }
+
+        float t = Mathf.InverseLerp(min, max, v), trackHeight = Skin.U(6f);
+        var track = new Rect(x0, rect.y + (height - trackHeight) / 2f, x1 - x0, trackHeight);
+        Skin.SmallBox(track, Skin.Sunken, Skin.Light(0.3f));
+        if (t > 0f)
+        {
+            Skin.SmallBox(new Rect(track.x, track.y, Mathf.Max(trackHeight, track.width * t), trackHeight), Skin.Accent);
+        }
+
+        bool hot = GUIUtility.hotControl == id || rect.Contains(e.mousePosition);
+        Skin.SmallBox(new Rect(Mathf.Lerp(x0, x1, t) - thumb / 2f, rect.y + (height - thumb) / 2f, thumb, thumb), hot ? Skin.Shade(Skin.Accent, 1.08f) : Skin.Accent, Skin.Backdrop);
+        return v;
+    }
+
     /// <summary>A check box with its words; a click on either switches it.</summary>
     public static bool Toggle(bool value, string text)
     {

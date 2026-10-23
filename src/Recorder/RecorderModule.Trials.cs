@@ -35,6 +35,7 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "the server's weather, tried on this game", 15f, ServerWeatherTried);
             yield return new SelfTestRoutine(Here, "OdinOnDemand's level against the game's volume", 8f, OdinVolumeTried);
             yield return new SelfTestRoutine(Here, "a map pin and the clipboard, made and taken back", 2f, PinAndClipboard);
+            yield return new SelfTestRoutine(Here, "fire loops at the chosen level, within 20 m", 2f, FireSoundsTried);
         }
 
         private IEnumerator RulesAgree(List<Check> checks)
