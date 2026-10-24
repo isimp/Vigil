@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using BepInEx.Bootstrap;
 using HarmonyLib;
 using Vigil.Core;
@@ -9,7 +8,7 @@ namespace Vigil.Recorder
 {
     /// <summary>
     /// The game patch "Skip winter" (<see cref="SeasonSkip"/>): a postfix on Seasonality's
-    /// <c>SeasonalTimer.GetNextSeason</c> turns winter into spring while the server's switch is on.
+    /// next-season rule (<see cref="SeasonRule"/>) turns winter into spring while the server's switch is on.
     /// Seasonality's season type is not known to Vigil, so the result is taken as an object and
     /// written back by name. Right after hooking, the patch asks Seasonality for the season after fall
     /// and steps aside, with the reason, unless the answer is spring. On the server and players' games.
@@ -39,21 +38,19 @@ namespace Vigil.Recorder
             if (!Found) return;
             try
             {
-                var timer = TypeLookup.Loaded.Find("Seasonality.SeasonalTimer");
-                var next = timer != null ? AccessTools.Method(timer, "GetNextSeason") : null;
-                var seasons = next?.GetParameters().FirstOrDefault()?.ParameterType;
-                if (next == null || seasons == null || !seasons.IsEnum || !Enum.IsDefined(seasons, "Fall") || !Enum.IsDefined(seasons, "Spring"))
+                var rule = SeasonRule.Find(TypeLookup.Loaded.Find);
+                if (rule == null)
                 {
                     Problem = "Seasonality's next-season rule was not found (an update changed it)";
                     return;
                 }
-                new Harmony(HarmonyId).Patch(next, postfix: new HarmonyMethod(typeof(SkipWinterPatch), nameof(AfterNext)) { priority = Priority.Last });
+                new Harmony(HarmonyId).Patch(rule.Next, postfix: new HarmonyMethod(typeof(SkipWinterPatch), nameof(AfterNext)) { priority = Priority.Last });
 
                 // The check: with the switch on for a moment, the season after fall must be spring.
                 bool was = On;
                 On = true;
                 object after;
-                try { after = next.Invoke(null, new[] { Enum.Parse(seasons, "Fall") }); }
+                try { after = rule.AfterFall(); }
                 finally { On = was; }
                 if (after?.ToString() != "Spring") Problem = "the hook did not take: fall still goes to " + after;
                 else log?.Invoke("Vigil: the Skip winter patch is hooked into Seasonality " + Version + " and checked: fall goes to spring while the server's switch is on.");

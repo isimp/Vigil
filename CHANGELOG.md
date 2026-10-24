@@ -2,6 +2,8 @@
 
 ## 0.39.1
 
+*Skip winter* works again with Seasonality 3.8.5, which moved its next-season rule; it stepped aside there. From 3.8.5 every game turns the season itself, so a player without this Vigil sees winter for up to 2 s at the end of fall, until the server's spring reaches them; the server needs this Vigil for the patch to hold.
+
 Vigil starts quicker. It looked up about 80 of the game's types by name with Harmony's lookup, which lists every type of every loaded assembly on each call and, for a name not found, makes a mod with a type that cannot load log an error; each assembly is now asked for the one name and the answer kept. The startup report now splits Vigil's own start into its steps, and names the longest quiet stretches of the start: every log line until the menu shows is kept with its time in `Vigil-startup.tsv`, and each stretch of 2 s or more without one is listed with the plugin or part of the start under way and the lines either side; a stretch spent in a batch of deferred patches says so.
 
 ## 0.39.0
