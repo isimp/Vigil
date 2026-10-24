@@ -100,12 +100,14 @@ namespace Vigil.Startup
 
         /// <summary>
         /// A mod about to open, check or copy a file itself, past BepInEx: as <see cref="BeforeRead"/>,
-        /// and the mod is named once for the file when its held save had to be written for it.
+        /// and the mod is named once for the file when its held save had to be written for it. With
+        /// no mod asking (<paramref name="who"/> null: the runtime's own file watcher looking for the
+        /// file), the file stays held; the watcher sees it change when it is written.
         /// </summary>
         public void ReadPast(string path, string who)
         {
-            if (!WriteBeforeRead(path)) return;
-            string entry = (string.IsNullOrEmpty(who) ? "a mod" : who) + ": " + System.IO.Path.GetFileName(path);
+            if (string.IsNullOrEmpty(who) || !WriteBeforeRead(path)) return;
+            string entry = who + ": " + System.IO.Path.GetFileName(path);
             lock (_gate)
             {
                 if (!_readPast.Contains(entry)) _readPast.Add(entry);

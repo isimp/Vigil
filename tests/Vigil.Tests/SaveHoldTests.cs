@@ -226,6 +226,24 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_check_with_no_mod_on_the_stack_leaves_the_file_held()
+        {
+            // Mono's file watcher looks for each watched file every 750 ms on a thread of its own: no mod is reading it.
+            var t = new Rig();
+            var bags = t.File(@"C:\BepInEx\config\vapok.mods.adventurebackpacks.cfg", "Adventure Backpacks");
+            t.Hold.Begin();
+            t.Save(bags);
+
+            t.ReadPast(bags.Path, null);
+
+            Assert.Equal(0, t.Disk.Writes);
+            Assert.True(t.Hold.IsWaiting(bags.Path));
+            var result = t.Hold.Release("the menu showed");
+            Assert.Empty(result.ReadPast);
+            Assert.Equal(1, result.Written);
+        }
+
+        [Fact]
         public void A_file_with_no_held_save_is_read_as_it_is_and_nobody_is_named()
         {
             var t = new Rig();

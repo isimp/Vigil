@@ -160,6 +160,26 @@ public static class Probe
         copied.Bind("C", "d", 2, "copied again");
         Seen(dir, "seen-copy-by-fileinfo.txt", () => { new FileInfo(Path.Combine(dir, "copied.cfg")).CopyTo(Path.Combine(dir, "copy-by-fileinfo.txt"), true); return "copied"; });
 
+        // A mod watching its own settings file, as many do: the runtime's watcher looks for the file
+        // every 750 ms on a thread of its own, which is no mod reading it, so the file stays held.
+        var watched = File_(dir, "watched.cfg", "Watched");
+        watched.Bind("W", "w", 1, "watched");
+        var fsw = new FileSystemWatcher(dir, "watched.cfg");
+        fsw.EnableRaisingEvents = true;
+        watched.Bind("W", "x", 2, "watched again");
+        System.Threading.Thread.Sleep(2000);
+        fsw.EnableRaisingEvents = false;
+        fsw.Dispose();
+        if (dir.EndsWith("held", StringComparison.Ordinal))
+        {
+            Console.WriteLine("watched.cfg after 2 s of watching: " + (new FileInfo(Path.Combine(dir, "watched.cfg")).Exists ? "written" : "still held"));
+        }
+
+        // After the watcher, this thread is still guarded: a mod's own read here is written first.
+        var after = File_(dir, "afterwatch.cfg", "AfterWatch");
+        after.Bind("A", "a", 1, "after the watcher");
+        Seen(dir, "seen-afterwatch.txt", () => File.ReadAllText(Path.Combine(dir, "afterwatch.cfg")));
+
         // StartupAccelerator's way: saving switched off, values set, one Save asked for.
         var quiet = File_(dir, "quiet.cfg", "Quiet");
         quiet.SaveOnConfigSet = false;

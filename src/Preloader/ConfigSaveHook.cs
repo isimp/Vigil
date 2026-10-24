@@ -184,7 +184,7 @@ namespace Vigil.Startup
         private static void Guard(string path)
         {
             var hold = Hold;
-            if (hold == null || !hold.Holding || path == null || t_writing || t_guarding) return;
+            if (hold == null || !hold.Holding || path == null || t_writing || t_guarding || t_watcher) return;
             t_guarding = true;
             try
             {
@@ -205,22 +205,39 @@ namespace Vigil.Startup
         [ThreadStatic]
         private static bool t_guarding;
 
+        // Mono's file watcher (System.IO.DefaultWatcher) looks for each watched file every 750 ms on a
+        // thread of its own; once a look is seen to come from it, that thread is passed over at once.
+        [ThreadStatic]
+        private static bool t_watcher;
+
+        private const string WatcherType = "System.IO.DefaultWatcher";
+
         private static readonly HashSet<string> Frameworks = new HashSet<string>(StringComparer.Ordinal) { "mscorlib", "System", "BepInEx", "BepInEx.Preloader", "0Harmony", "Vigil.Preloader" };
         private static readonly string[] FrameworkFamilies = { "System.", "MonoMod.", "Mono." };
 
-        // The plugin whose code asked for the file: the first frame outside the runtime, BepInEx, Harmony and this patcher.
+        // The plugin whose code asked for the file: the first frame outside the runtime, BepInEx, Harmony
+        // and this patcher. Null when no mod's code is on the stack, or when Mono's watcher is looking for
+        // the file: on its own thread, or on a mod's while the mod switches the watcher on (its first look).
         private static string Reader()
         {
+            bool watcher = false;
+            Assembly mod = null;
             foreach (var frame in new System.Diagnostics.StackTrace(2, false).GetFrames() ?? Array.Empty<System.Diagnostics.StackFrame>())
             {
-                var assembly = frame.GetMethod()?.DeclaringType?.Assembly;
-                if (assembly == null) continue;
-                string name = assembly.GetName().Name;
-                if (Frameworks.Contains(name) || FrameworkFamilies.Any(f => name.StartsWith(f, StringComparison.Ordinal))) continue;
-                return PluginOf(assembly) ?? name;
+                var type = frame.GetMethod()?.DeclaringType;
+                if (type == null) continue;
+                if (type.FullName == WatcherType) watcher = true;
+                string name = type.Assembly.GetName().Name;
+                if (mod == null && !Frameworks.Contains(name) && !FrameworkFamilies.Any(f => name.StartsWith(f, StringComparison.Ordinal))) mod = type.Assembly;
             }
 
-            return null;
+            if (watcher)
+            {
+                if (mod == null) t_watcher = true;
+                return null;
+            }
+
+            return mod == null ? null : PluginOf(mod) ?? mod.GetName().Name;
         }
 
         private static string PluginOf(Assembly assembly)
