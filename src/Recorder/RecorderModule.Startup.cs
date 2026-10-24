@@ -134,6 +134,7 @@ namespace Vigil.Recorder
         private void WriteStartupReport()
         {
             var events = _startup.Events();
+            events.AddRange(StartSteps.Events());
             _startupReport = StartupTimeline.Build(events);
             try
             {

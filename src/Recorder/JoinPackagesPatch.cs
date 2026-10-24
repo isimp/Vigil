@@ -65,7 +65,7 @@ namespace Vigil.Recorder
 
         private static string HookDropThat(Harmony harmony)
         {
-            var sync = AccessTools.TypeByName("DropThat.Core.SyncManager");
+            var sync = TypeLookup.Loaded.Find("DropThat.Core.SyncManager");
             if (sync == null) return "not installed";
             var asm = sync.Assembly;
             var missing = new List<string>();
@@ -112,7 +112,7 @@ namespace Vigil.Recorder
 
         private static string HookSpawnThat(Harmony harmony)
         {
-            var sync = AccessTools.TypeByName("SpawnThat.Lifecycle.SyncManager");
+            var sync = TypeLookup.Loaded.Find("SpawnThat.Lifecycle.SyncManager");
             if (sync == null) return "not installed";
             var asm = sync.Assembly;
             var missing = new List<string>();

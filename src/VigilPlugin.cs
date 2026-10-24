@@ -61,11 +61,13 @@ public sealed class VigilPlugin : BaseUnityPlugin
 
     private void Awake()
     {
+        StartSteps.Begin();
         IsServer = SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null;
         // A dedicated server has no panel to show tool and incident results in.
         ResultStore.Shared.Shown = !IsServer;
         TakeOverSettings();
         Sync = new ConfigSync(Guid) { DisplayName = Name, CurrentVersion = VigilVersion.Value, ModRequired = false, IsLocked = true };
+        StartSteps.Lap("settings taken over, config sync");
         _recorder = new RecorderModule();
         _spawns = new SpawnsModule();
         _all.AddRange(new Module[] { _recorder, _spawns, new CleanupModule() });
@@ -86,6 +88,7 @@ public sealed class VigilPlugin : BaseUnityPlugin
             {
                 module.Start(this);
                 _running.Add(module);
+                StartSteps.Lap(module.Area.ToLowerInvariant() + (module == _recorder ? ": the rest" : ""));
             }
             catch (Exception e)
             {
@@ -103,7 +106,9 @@ public sealed class VigilPlugin : BaseUnityPlugin
             PanelInput.Patch(Guid + ".panel");
         }
 
+        StartSteps.Lap("link, panel, HUD");
         RegisterConsole();
+        StartSteps.Lap("console");
     }
 
     /// <summary>

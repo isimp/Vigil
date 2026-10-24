@@ -211,6 +211,84 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void Vigils_own_start_names_its_slowest_steps()
+        {
+            var events = Start();
+            events.Add(E(0, StartupLines.VigilStep, "game timers|3200"));
+            events.Add(E(0, StartupLines.VigilStep, "settings|400"));
+            events.Add(E(0, StartupLines.VigilStep, "first frame: mod timers|1200"));
+            var r = StartupTimeline.Build(events);
+            Assert.Equal(4800, r.VigilMs, 1);
+            Assert.Equal("4.8 s (game timers 3.2 s, first frame: mod timers 1.2 s, settings 0.4 s)", StartupTimeline.VigilLine(r));
+            Assert.Contains("Vigil's own start: " + StartupTimeline.VigilLine(r), StartupTimeline.Lines(r, 15));
+        }
+
+        private static List<StartupEvent> WithLog()
+        {
+            var events = new List<StartupEvent>
+            {
+                E(0, StartupLines.Started, "1700"),
+                E(20954, StartupLines.Plugin, "Loading [OdinArchitect 1.9.3] (Raelaziel.OdinArchitect)"),
+                E(21000, StartupLines.Log, "OdinArchitect: Initializing OdinArchitect..."),
+                E(21246, StartupLines.Bundle, "copy|21111495|22.0|k"),
+                E(21300, StartupLines.Log, "OdinArchitect.OdinArchitect: All the embedded resources was loaded"),
+                E(49500, StartupLines.Log, "OdinArchitect.OdinArchitect: Loaded items and conversions"),
+                E(49676, StartupLines.Plugin, "Loading [OdinCampsite 1.6.6] (Raelaziel.OdinCampsite)"),
+                E(52000, StartupLines.PluginsDone, "Chainloader startup complete (2 loaded, 0 skipped, 0 failed)"),
+                E(55000, StartupLines.Log, "Unity Log: Loading first scene!"),
+                E(62000, StartupLines.Log, "Unity Log: Loading: Starting to load scene: start.unity"),
+                E(63000, StartupLines.Log, "Unity Log: one second later"),
+                E(90000, StartupLines.MenuScene),
+                E(95000, StartupLines.MenuShown),
+            };
+            return events;
+        }
+
+        [Fact]
+        public void A_log_line_is_kept_as_its_source_and_first_line_cut_to_length()
+        {
+            Assert.Equal("OdinArchitect: Initializing OdinArchitect...", StartupLines.LogText("OdinArchitect", "Initializing OdinArchitect..."));
+            Assert.Equal("Unity Log: System.TypeLoadException: no", StartupLines.LogText("Unity Log", "System.TypeLoadException: no\n  at Somewhere ()"));
+            string longLine = StartupLines.LogText("Mod", new string('x', 500));
+            Assert.Equal(StartupLines.LogChars, longLine.Length);
+            Assert.EndsWith("...", longLine);
+        }
+
+        [Fact]
+        public void A_quiet_stretch_is_named_by_the_log_lines_around_it_and_the_plugin_loading_then()
+        {
+            var r = StartupTimeline.Build(WithLog());
+            var first = r.Gaps[0];
+            Assert.Equal(28200, first.Ms, 1);
+            Assert.Equal("OdinArchitect 1.9.3", first.During);
+            Assert.Contains("All the embedded resources was loaded", first.Before);
+            Assert.Contains("Loaded items and conversions", first.After);
+        }
+
+        [Fact]
+        public void Quiet_stretches_are_listed_longest_first_and_only_from_two_seconds_on()
+        {
+            var r = StartupTimeline.Build(WithLog());
+            Assert.Equal(new[] { 28200.0, 27000, 20954, 7000, 5000, 3000, 2324 }, r.Gaps.Select(g => g.Ms).ToArray());
+            Assert.All(r.Gaps, g => Assert.True(g.Ms >= StartupTimeline.GapMs));
+            Assert.Equal("after the plugins", r.Gaps.Single(g => g.Ms == 7000).During);
+            Assert.Equal("OdinCampsite 1.6.6", r.Gaps.Single(g => g.Ms == 2324).During);
+            Assert.Equal("BepInEx and patchers", r.Gaps.Single(g => g.Ms == 20954).During);
+            Assert.Equal("the menu", r.Gaps.Single(g => g.Ms == 5000).During);
+        }
+
+        [Fact]
+        public void The_report_lists_the_quiet_stretches_with_their_lines()
+        {
+            var lines = StartupTimeline.Lines(StartupTimeline.Build(WithLog()), 15);
+            int head = lines.FindIndex(l => l.StartsWith("Longest quiet stretches", System.StringComparison.Ordinal));
+            Assert.True(head > 0);
+            Assert.Contains("28 s", lines[head + 1]);
+            Assert.Contains("OdinArchitect 1.9.3", lines[head + 1]);
+            Assert.Contains("Loaded items and conversions", lines[head + 1]);
+        }
+
+        [Fact]
         public void Before_a_join_the_join_line_says_so()
         {
             var r = StartupTimeline.Build(Start());

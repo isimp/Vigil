@@ -25,6 +25,10 @@ namespace Vigil.Startup
         private static readonly Dictionary<string, BundleEntry> Index = new Dictionary<string, BundleEntry>(StringComparer.Ordinal);
         private static StartupListener s_listener;
         private static bool s_indexDirty;
+        private static int s_logLines;
+
+        /// <summary>Plain log lines kept during a start at most, so a start that floods the log stays bounded.</summary>
+        private const int MaxLogLines = 6000;
 
         public static bool TimelineOn { get; private set; }
 
@@ -128,6 +132,13 @@ namespace Vigil.Startup
                 Events.Add(line);
                 if (kind == StartupLines.Plugin) CurrentPlugin = StartupLines.PluginName(text);
             }
+        }
+
+        public static void AddLog(string text)
+        {
+            if (s_logLines >= MaxLogLines) return;
+            s_logLines++;
+            Add(StartupLines.Log, text);
         }
 
         public static string[] EventLines()

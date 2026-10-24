@@ -204,7 +204,7 @@ namespace Vigil.Recorder
                 string label = p[0] + "." + p[1];
                 try
                 {
-                    var type = AccessTools.TypeByName(p[0]);
+                    var type = TypeLookup.Loaded.Find(p[0]);
                     var m = type != null ? AccessTools.DeclaredMethod(type, p[1]) : null;
                     if (m == null) { _missing.Add(label); continue; }
                     Hook(_harmony, m, new Slot { Label = label, Parent = p[3], Column = p[2] });
@@ -222,7 +222,7 @@ namespace Vigil.Recorder
         {
             const string id = "Unity coroutines";
             if (!_journal.Allowed(id)) { _failed.Add(id + " (skipped: it crashed the game once)"); return false; }
-            var m = AccessTools.Method(AccessTools.TypeByName("UnityEngine.SetupCoroutine"), "InvokeMoveNext");
+            var m = AccessTools.Method(TypeLookup.Loaded.Find("UnityEngine.SetupCoroutine"), "InvokeMoveNext");
             if (m == null) { _missing.Add("UnityEngine.SetupCoroutine.InvokeMoveNext"); return false; }
             s_owners = ModAssemblies();
             _journal.Begin(id);

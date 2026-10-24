@@ -78,12 +78,12 @@ namespace Vigil.Recorder
             {
                 try
                 {
-                    var player = AccessTools.TypeByName("OdinOnDemand.MPlayer.BasePlayer");
-                    var settings = AccessTools.TypeByName("OdinOnDemand.MPlayer.PlayerSettings");
-                    var ui = AccessTools.TypeByName("OdinOnDemand.Utils.UI.UIController");
+                    var player = TypeLookup.Loaded.Find("OdinOnDemand.MPlayer.BasePlayer");
+                    var settings = TypeLookup.Loaded.Find("OdinOnDemand.MPlayer.PlayerSettings");
+                    var ui = TypeLookup.Loaded.Find("OdinOnDemand.Utils.UI.UIController");
                     s_playerType = player;
                     s_ui = player != null ? AccessTools.Property(player, "UIController") : null;
-                    var config = AccessTools.TypeByName("OdinOnDemand.Utils.Config.OODConfig");
+                    var config = TypeLookup.Loaded.Find("OdinOnDemand.Utils.Config.OODConfig");
                     var update = player != null ? AccessTools.Method(player, "UpdateChecks") : null;
                     var toggle = ui != null ? AccessTools.Method(ui, "ToggleSettingsPanel") : null;
                     var moved = ui != null ? AccessTools.Method(ui, "OnMasterVolumeChanged") : null;
@@ -114,9 +114,9 @@ namespace Vigil.Recorder
             {
                 try
                 {
-                    var events = AccessTools.TypeByName("UnityEngine.EventSystems.EventSystem");
+                    var events = TypeLookup.Loaded.Find("UnityEngine.EventSystems.EventSystem");
                     var focus = events != null ? AccessTools.Method(events, "OnApplicationFocus") : null;
-                    var azuPlugin = AccessTools.TypeByName("AzuMiscPatches.AzuMiscPatchesPlugin");
+                    var azuPlugin = TypeLookup.Loaded.Find("AzuMiscPatches.AzuMiscPatchesPlugin");
                     s_azuMute = azuPlugin != null ? AccessTools.Field(azuPlugin, "MuteGameInBackground") : null;
                     if (focus == null || s_azuMute == null) Problem = "AzuMiscPatches' mute in background was not found (an update changed it)";
                     else harmony.Patch(focus, postfix: new HarmonyMethod(typeof(OdinVolumePatch), nameof(AfterFocus)) { priority = Priority.Last });

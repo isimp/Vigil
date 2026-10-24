@@ -23,6 +23,21 @@ namespace Vigil.Core
         public double BundleMs { get; set; }
     }
 
+    /// <summary>A stretch of the start with no log line at all: how long, what was starting meanwhile, and the lines either side.</summary>
+    internal sealed class StartupGap
+    {
+        public double StartMs { get; set; }
+
+        public double Ms { get; set; }
+
+        /// <summary>The plugin BepInEx was loading, or "BepInEx and patchers", "after the plugins", "the menu".</summary>
+        public string During { get; set; } = "";
+
+        public string Before { get; set; } = "";
+
+        public string After { get; set; } = "";
+    }
+
     /// <summary>A start read from its steps: how long each part took, from the process starting to the main menu.</summary>
     internal sealed class StartupReport
     {
@@ -66,6 +81,14 @@ namespace Vigil.Core
         public double HandshakeMs { get; set; }
 
         public List<KeyValuePair<string, double>> JoinMessages { get; } = new List<KeyValuePair<string, double>>();
+
+        /// <summary>Vigil's own start steps, slowest first.</summary>
+        public List<KeyValuePair<string, double>> VigilSteps { get; } = new List<KeyValuePair<string, double>>();
+
+        public double VigilMs { get; set; }
+
+        /// <summary>The longest stretches with no log line, longest first.</summary>
+        public List<StartupGap> Gaps { get; } = new List<StartupGap>();
     }
 
     /// <summary>
@@ -75,6 +98,11 @@ namespace Vigil.Core
     internal static class StartupTimeline
     {
         private static readonly CultureInfo Ci = CultureInfo.InvariantCulture;
+
+        /// <summary>A stretch without a log line this long or longer is named in the report.</summary>
+        public const double GapMs = 2000;
+
+        private const int MaxGaps = 10, LineChars = 120;
 
         public static StartupReport Build(IList<StartupEvent> events)
         {
@@ -115,7 +143,72 @@ namespace Vigil.Core
 
             foreach (var e in all.Where(e => e.Kind == StartupLines.Bundle)) CountBundle(r, e, pluginsEnd);
             ReadJoin(r, all);
+            ReadVigil(r, all);
+            FindGaps(r, all, done, scene, end0);
             return r;
+        }
+
+        private static void ReadVigil(StartupReport r, List<StartupEvent> all)
+        {
+            foreach (var e in all.Where(e => e.Kind == StartupLines.VigilStep))
+            {
+                int bar = e.Text.LastIndexOf('|');
+                if (bar <= 0 || !double.TryParse(e.Text.Substring(bar + 1), NumberStyles.Float, Ci, out double ms)) continue;
+                r.VigilSteps.Add(new KeyValuePair<string, double>(e.Text.Substring(0, bar), ms));
+                r.VigilMs += ms;
+            }
+            r.VigilSteps.Sort((a, b) => b.Value.CompareTo(a.Value));
+        }
+
+        // Every step and log line of the start, in time order; each wait of GapMs or more between two neighbours is a quiet stretch.
+        private static void FindGaps(StartupReport r, List<StartupEvent> all, double? done, double? scene, double end)
+        {
+            var points = all.Where(e => e.Kind != StartupLines.VigilStep && e.Ms <= end && !IsJoin(e.Kind)).ToList();
+            for (int i = 1; i < points.Count; i++)
+            {
+                double gap = points[i].Ms - points[i - 1].Ms;
+                if (gap < GapMs) continue;
+                r.Gaps.Add(new StartupGap
+                {
+                    StartMs = points[i - 1].Ms,
+                    Ms = gap,
+                    During = Phase(r, points[i - 1].Ms, done, scene),
+                    Before = Describe(points[i - 1]),
+                    After = Describe(points[i]),
+                });
+            }
+            r.Gaps.Sort((a, b) => b.Ms.CompareTo(a.Ms));
+            if (r.Gaps.Count > MaxGaps) r.Gaps.RemoveRange(MaxGaps, r.Gaps.Count - MaxGaps);
+        }
+
+        private static bool IsJoin(string kind) =>
+            kind == StartupLines.JoinStart || kind == StartupLines.JoinStep || kind == StartupLines.JoinMessage || kind == StartupLines.JoinWorld;
+
+        private static string Phase(StartupReport r, double ms, double? done, double? scene)
+        {
+            if (r.Plugins.Count == 0 || ms < r.Plugins[0].StartMs) return "BepInEx and patchers";
+            if (done.HasValue && ms >= done.Value)
+            {
+                if (scene.HasValue && ms >= scene.Value) return r.Server ? "the world" : "the menu";
+                return "after the plugins";
+            }
+            return r.Plugins.Last(p => p.StartMs <= ms).Name;
+        }
+
+        private static string Describe(StartupEvent e)
+        {
+            string text;
+            switch (e.Kind)
+            {
+                case StartupLines.Started: text = "the patcher's start"; break;
+                case StartupLines.Bundle: text = "a bundle load"; break;
+                case StartupLines.MenuScene: text = "the menu scene starting"; break;
+                case StartupLines.MenuStart: text = "the menu starting"; break;
+                case StartupLines.MenuShown: text = "the menu shown"; break;
+                case StartupLines.WorldUp: text = "the world up"; break;
+                default: text = e.Text; break;
+            }
+            return text.Length > LineChars ? text.Substring(0, LineChars) + "..." : text;
         }
 
         private static double? First(List<StartupEvent> all, string kind)
@@ -208,6 +301,13 @@ namespace Vigil.Core
             return Duration(r.JoinMs) + (parts.Count > 0 ? " (" + string.Join(", ", parts) + ")" : "");
         }
 
+        /// <summary>Vigil's own start and its three slowest steps.</summary>
+        public static string VigilLine(StartupReport r)
+        {
+            if (r == null || r.VigilSteps.Count == 0) return "not timed";
+            return Duration(r.VigilMs) + " (" + string.Join(", ", r.VigilSteps.Take(3).Select(s => s.Key + " " + Duration(s.Value))) + ")";
+        }
+
         public static string BundleLine(StartupReport r)
         {
             if (r == null) return "";
@@ -227,12 +327,26 @@ namespace Vigil.Core
             if (r == null) return lines;
             lines.Add("Bundles: " + BundleLine(r) + string.Format(Ci, ", {0} in all", Duration(r.BundleMs)));
             lines.Add("Join: " + JoinLine(r));
+            if (r.VigilSteps.Count > 0) lines.Add("Vigil's own start: " + VigilLine(r));
             lines.Add("");
             lines.Add(string.Format(Ci, "Slowest plugins, of {0} (from its Loading line to the next plugin's: its assembly, Awake and bundles):", r.Plugins.Count));
             foreach (var p in SlowestFirst(r).Take(top))
             {
                 string bundles = p.Bundles == 0 ? "" : string.Format(Ci, "   {0} bundle{1}, {2:0.0} MB, {3}", p.Bundles, p.Bundles == 1 ? "" : "s", p.BundleBytes / 1e6, Duration(p.BundleMs));
                 lines.Add(string.Format(Ci, "  {0,10}  {1}{2}", Duration(p.Ms), p.Name, bundles));
+            }
+            if (r.Gaps.Count > 0)
+            {
+                lines.Add("");
+                lines.Add(string.Format(Ci, "Longest quiet stretches (no log line for {0} or more), with what was starting and the lines either side:", Duration(GapMs)));
+                foreach (var g in r.Gaps)
+                    lines.Add(string.Format(Ci, "  {0,10}  during {1}: after \"{2}\" until \"{3}\"", Duration(g.Ms), g.During, g.Before, g.After));
+            }
+            if (r.VigilSteps.Count > 0)
+            {
+                lines.Add("");
+                lines.Add("Vigil's own start, step by step:");
+                foreach (var s in r.VigilSteps) lines.Add(string.Format(Ci, "  {0,10}  {1}", Duration(s.Value), s.Key));
             }
             return lines;
         }

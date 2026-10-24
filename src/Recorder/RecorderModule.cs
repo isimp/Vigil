@@ -118,7 +118,9 @@ namespace Vigil.Recorder
             if (migrated > 0) _sessionNotes.Add(migrated + " files NetProbe recorded were taken over into " + dir + ".");
             _sessionNotes.Add("Recordings: " + dir);
             // Before anything writes: the previous session's reports move to Vigil-runs/.
+            StartSteps.Lap("recorder: folders and NetProbe's files");
             string previous = RunArchive.KeepPreviousRun(dir, KeepRuns, keepBytes);
+            StartSteps.Lap("recorder: earlier sessions to Vigil-runs");
             if (previous != null) _sessionNotes.Add("The previous session's reports are in " + Path.Combine(RunArchive.FolderName, Path.GetFileName(previous)) + ".");
 
             string state = Path.Combine(dir, "Vigil-state");
@@ -129,6 +131,7 @@ namespace Vigil.Recorder
             foreach (var id in _journal.NewlySkipped) _sessionNotes.Add("The previous session died while installing the timer on " + id + "; that timer is skipped from now on (list: Vigil-state/hooks.skip).");
             if (deepWasRunning) { try { File.Delete(Path.Combine(state, "deep.active")); } catch (Exception) { } }
 
+            StartSteps.Lap("recorder: the journal");
             var settings = _settings = BindSettings();
             _timeModCallbacks = Config.Bind("Hooks", "ModCallbacks", true, "Time every mod's Update, FixedUpdate, LateUpdate and OnGUI. A hook that crashes the game is skipped from the next launch on; turn this off to avoid even that one crash.");
             _timeCoroutines = Config.Bind("Hooks", "Coroutines", true, "Time every coroutine step (Unity runs them all through one engine method), named by the mod and method that wrote it.");
@@ -147,6 +150,7 @@ namespace Vigil.Recorder
                 " - what this game uploads to the server, per " + WindowSeconds + " s window\r\n");
             _summaryPath = Path.Combine(dir, "Vigil-summary.txt");
 
+            StartSteps.Lap("recorder: settings");
             var harmony = new Harmony("isimp.Vigil");
             Patching.Apply(harmony, AccessTools.Method(typeof(ZDOMan), "SendZDOs"), "world-object uploads",
                 prefix: Patching.M(typeof(RecorderModule), nameof(SendPrefix)), finalizer: Patching.M(typeof(RecorderModule), nameof(SendFinalizer)));
@@ -163,6 +167,7 @@ namespace Vigil.Recorder
             _sys = new SystemStats();
             if (!_server) { try { _engine = new EngineStats(); } catch (Exception e) { _sessionNotes.Add("Unity counters unavailable: " + e.GetType().Name); } }
 
+            StartSteps.Lap("recorder: network, world and log probes");
             if (handlers) HandlerTime.Patch(harmony);
             if (creation) CreationCost.Patch(harmony);
             if (_watchExceptions)
@@ -170,9 +175,11 @@ namespace Vigil.Recorder
                 try { ExceptionWatch.Start(); } catch (Exception e) { _sessionNotes.Add("Exceptions are not counted: " + e.GetType().Name); }
             }
 
+            StartSteps.Lap("recorder: message, object and exception timers");
             _timer = new PhaseTimer(_journal, allocations);
             _ownHooks = new OwnHooks(_journal);
             _timer.HookGame();
+            StartSteps.Lap("recorder: game timers");
             EventLog.Start(dir, harmony);
             Patching.Apply(harmony, AccessTools.Method(typeof(ZNet), "OnNewConnection"), "joins timed from the connection",
                 postfix: Patching.M(typeof(RecorderModule), nameof(NewConnectionPostfix)));
@@ -182,14 +189,19 @@ namespace Vigil.Recorder
             _recorder = new Recorder(dir, settings, _journal, _timer, _net, _log, _sys, _engine, _world, _rpc, UploadText, _server, deepWasRunning, s => Logger.LogWarning(s));
             DropWatch.Dropped = (who, drop, samples) => _recorder?.Drop(who, drop, samples);
             _recorder.ReportWritten = ReportWritten;
+            StartSteps.Lap("recorder: events, drops, the recorder");
             BindSharing();
             BindStartup(harmony);
+            StartSteps.Lap("recorder: sharing, startup timeline");
             BindFireSounds();
             if (!_server) FireSoundsPatch.Hook(harmony);
+            StartSteps.Lap("recorder: fire sounds");
             BindOwnership();
             BindWeather();
             BindPatches();
+            StartSteps.Lap("recorder: ownership, weather, patches");
             StartSpawnWatch();
+            StartSteps.Lap("recorder: spawn watch");
             _load = new LoadTest(_server, dir, VigilVersion.Value, _recorder, _timer, s => Logger.LogInfo(s));
             BindAlerts();
 
@@ -450,13 +462,16 @@ namespace Vigil.Recorder
             {
                 // Every plugin has finished loading by the first frame.
                 _started = true;
+                StartSteps.Begin();
                 if (_timeCoroutines.Value && !_timer.HookCoroutines()) _sessionNotes.Add("Coroutines are not timed this session (see Hooks not installed).");
                 if (_timeModCallbacks.Value)
                 {
                     try { _timer.HookModCallbacks(); } catch (Exception e) { _sessionNotes.Add("Mod timers not installed: " + e.GetType().Name); }
                 }
                 else _sessionNotes.Add("Timers on mods' Update/FixedUpdate/LateUpdate/OnGUI are off (Hooks.ModCallbacks).");
+                StartSteps.Lap("first frame: coroutine and mod timers");
                 if (_watchPatches) PatchWatch.Start(new Harmony("isimp.Vigil.patches"), _journal, _sessionNotes);
+                StartSteps.Lap("first frame: patch watch");
                 if (!_timePhysics) _sessionNotes.Add("Unity's physics step is not timed (Hooks.PhysicsStep).");
                 else if (_journal.Allowed(PhysicsStepId))
                 {
@@ -465,6 +480,7 @@ namespace Vigil.Recorder
                     catch (Exception e) { _sessionNotes.Add("Unity's physics step is not timed: " + e.GetType().Name + " " + e.Message); }
                     finally { _journal.Done(PhysicsStepId); }
                 }
+                StartSteps.Lap("first frame: physics step timer");
                 if (_watchFiles)
                 {
                     var folders = new[]
@@ -478,7 +494,10 @@ namespace Vigil.Recorder
                     if (FileChurn.Start(folders, _dir) == 0) _sessionNotes.Add("File writes are not counted: no folder could be watched.");
                 }
                 if (_watchExceptions && !ExceptionWatch.Works) _sessionNotes.Add("Exceptions are not counted: this runtime does not report them as they are thrown.");
+                StartSteps.Lap("first frame: file watch");
                 try { SessionInfo.Write(_dir); } catch (Exception) { }
+                StartSteps.Lap("first frame: mods and configs listed");
+                StartSteps.End();
             }
             try { UpdateSharing(); } catch (Exception e) { _shareError = e.GetType().Name + " " + e.Message; _shareAsking = false; }
             try { UpdateSpawnLogSharing(); } catch (Exception e) { _spawnLogError = e.GetType().Name + " " + e.Message; _spawnLogAsking = false; }

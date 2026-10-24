@@ -39,7 +39,7 @@ namespace Vigil.Recorder
             if (!Found) return;
             try
             {
-                var timer = AccessTools.TypeByName("Seasonality.SeasonalTimer");
+                var timer = TypeLookup.Loaded.Find("Seasonality.SeasonalTimer");
                 var next = timer != null ? AccessTools.Method(timer, "GetNextSeason") : null;
                 var seasons = next?.GetParameters().FirstOrDefault()?.ParameterType;
                 if (next == null || seasons == null || !seasons.IsEnum || !Enum.IsDefined(seasons, "Fall") || !Enum.IsDefined(seasons, "Spring"))
