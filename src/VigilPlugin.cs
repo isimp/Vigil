@@ -663,6 +663,8 @@ public sealed class VigilPlugin : BaseUnityPlugin
             Timed(m.Area, "Update", t, a, m.TakeTicksTimedElsewhere());
         }
 
+        EndHeldSaves();
+
         long linkAt = Ticks, linkAlloc = PhaseTimer.AllocNow();
         try
         {
@@ -765,6 +767,50 @@ public sealed class VigilPlugin : BaseUnityPlugin
         foreach (var m in _running)
         {
             Guarded(m, m.Quit);
+        }
+
+        try
+        {
+            Vigil.Recorder.StartupBridge.Find().ReleaseSaves("the game quit");
+        }
+        catch (Exception)
+        {
+            // the patcher's own timer writes the held files at its cap
+        }
+    }
+
+    private bool _savesEnded;
+
+    /// <summary>
+    /// With the Recorder switched off, nothing else ends the patcher's hold of config saves: it ends
+    /// here once the menu or a world is there. With the Recorder on, the Recorder ends it.
+    /// </summary>
+    private void EndHeldSaves()
+    {
+        if (_savesEnded)
+        {
+            return;
+        }
+
+        if (_running.Any(m => m.Area == ConsoleHelp.Recorder))
+        {
+            _savesEnded = true;
+            return;
+        }
+
+        if (FejdStartup.instance == null && ZNet.instance == null)
+        {
+            return;
+        }
+
+        _savesEnded = true;
+        try
+        {
+            Vigil.Recorder.StartupBridge.Find().ReleaseSaves(FejdStartup.instance != null ? "the menu showed" : "the world was up");
+        }
+        catch (Exception)
+        {
+            // the patcher's own timer writes the held files at its cap
         }
     }
 

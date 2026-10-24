@@ -86,5 +86,16 @@ namespace Vigil.Recorder
         public bool ResetRequested => Call("ResetRequested") as bool? ?? false;
 
         public bool ResetDone => Call("ResetDone") as bool? ?? false;
+
+        /// <summary>Whether this game's settings ask for config saves to be held during the start.</summary>
+        public bool HoldAsked => Call("HoldAsked") as bool? ?? false;
+
+        public string HoldStatus => Call("HoldStatus") as string ?? "config saves not held: Vigil's patcher is not installed";
+
+        /// <summary>Ends the patcher's hold of config saves, which writes each held file once; null when there was no hold.</summary>
+        public SaveHoldResult ReleaseSaves(string why) => SaveHoldResult.Parse(Call("ReleaseSaves", why) as string);
+
+        /// <summary>Files read back after the hold ended, settings compared, then the first settings whose file value differs.</summary>
+        public string[] SaveCheck => Call("SaveCheck") as string[] ?? Array.Empty<string>();
     }
 }

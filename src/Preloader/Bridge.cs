@@ -52,5 +52,16 @@ namespace Vigil.Startup
 
         /// <summary>Whether this start emptied the cache because a reset was asked for.</summary>
         public static bool ResetDone() => StartupState.ResetDone;
+
+        /// <summary>Whether this game's settings ask for config saves to be held during the start.</summary>
+        public static bool HoldAsked() => StartupState.HoldAsked;
+
+        public static string HoldStatus() => StartupState.HoldStatus();
+
+        /// <summary>Ends the hold of config saves, writing each held file once: its <see cref="SaveHoldResult.EventText"/>, "" when there was no hold.</summary>
+        public static string ReleaseSaves(string why) => StartupState.ReleaseSaves(why);
+
+        /// <summary>Files read back after the hold, settings compared, then the first settings whose file value differs.</summary>
+        public static string[] SaveCheck() => ConfigSaveHook.Check;
     }
 }

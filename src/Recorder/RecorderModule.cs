@@ -579,6 +579,8 @@ namespace Vigil.Recorder
 
         public override void Quit()
         {
+            // A game closed before its menu showed: the held config saves are written now.
+            try { _startup?.ReleaseSaves("the game quit"); } catch (Exception) { }
             try { _load?.Shutdown(); } catch (Exception) { }
             WriteSummary();
             FileChurn.Stop();

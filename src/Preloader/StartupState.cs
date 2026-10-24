@@ -24,7 +24,7 @@ namespace Vigil.Startup
         private static readonly Stopwatch Clock = new Stopwatch();
         private static readonly Dictionary<string, BundleEntry> Index = new Dictionary<string, BundleEntry>(StringComparer.Ordinal);
         private static StartupListener s_listener;
-        private static bool s_indexDirty;
+        private static bool s_indexDirty, s_savesNoted;
         private static int s_logLines;
 
         /// <summary>Plain log lines kept during a start at most, so a start that floods the log stays bounded.</summary>
@@ -33,6 +33,9 @@ namespace Vigil.Startup
         public static bool TimelineOn { get; private set; }
 
         public static bool CacheOn { get; private set; }
+
+        /// <summary>Whether this game's settings ask for config saves to be held during the start.</summary>
+        public static bool HoldAsked { get; private set; }
 
         public static bool Server { get; private set; }
 
@@ -83,6 +86,10 @@ namespace Vigil.Startup
             KeepDays = Math.Max(1, config.Bind(StartupSettings.Section, StartupSettings.KeepDays, BundleCache.DefaultKeepDays, StartupSettings.KeepDaysText).Value);
             CacheOn = BundleCache.On(Server, player, server);
             if (!CacheOn) EditResult = Off;
+            bool hold = config.Bind(StartupSettings.Section, StartupSettings.Hold, true, StartupSettings.HoldText).Value;
+            bool holdServer = config.Bind(StartupSettings.Section, StartupSettings.HoldOnServer, false, StartupSettings.HoldOnServerText).Value;
+            HoldAsked = Server ? holdServer : hold;
+            if (HoldAsked) ConfigSaveHook.Install();
 
             Add(StartupLines.Started, engine.ToString("0", Ci));
             if (TimelineOn)
@@ -215,6 +222,36 @@ namespace Vigil.Startup
 
         public static string Status() =>
             "Vigil's patcher: timeline " + (TimelineOn ? "on" : "off") + "; bundle cache " + (CacheOn ? "on" : Server ? "off on a dedicated server" : "off")
-            + (CacheOn ? " (" + HousekeepingResult + ")" : "");
+            + (CacheOn ? " (" + HousekeepingResult + ")" : "") + "; " + HoldStatus();
+
+        /// <summary>"config saves held until the menu", "... off", or why the hold could not be put in.</summary>
+        public static string HoldStatus()
+        {
+            if (!HoldAsked) return "config saves not held" + (Server ? " on a dedicated server" : "");
+            if (ConfigSaveHook.Hold == null) return "config saves not held: " + ConfigSaveHook.Problem;
+            var r = ConfigSaveHook.Hold.Result;
+            return r == null ? "config saves held until " + (Server ? "the world is up" : "the menu shows") : "config saves held until " + r.Why;
+        }
+
+        /// <summary>Ends the hold of config saves (the menu shown, the world up, the game quitting) and adds its step; "" when there was no hold.</summary>
+        public static string ReleaseSaves(string why)
+        {
+            var result = ConfigSaveHook.End(why);
+            if (result == null) return "";
+            bool note;
+            lock (Gate)
+            {
+                note = !s_savesNoted;
+                s_savesNoted = true;
+            }
+
+            if (note)
+            {
+                Add(StartupLines.ConfigSaves, result.EventText());
+                foreach (var line in result.Lines()) Preloader.Log?.LogInfo(line);
+            }
+
+            return result.EventText();
+        }
     }
 }

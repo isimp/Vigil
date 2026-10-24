@@ -39,6 +39,8 @@ namespace Vigil.Recorder
             Config.Bind(StartupSettings.Section, StartupSettings.CacheOnServer, false, StartupSettings.CacheOnServerText);
             Config.Bind(StartupSettings.Section, StartupSettings.KeepDays, BundleCache.DefaultKeepDays,
                 new ConfigDescription(StartupSettings.KeepDaysText, new AcceptableValueRange<int>(1, 365)));
+            Config.Bind(StartupSettings.Section, StartupSettings.Hold, true, StartupSettings.HoldText);
+            Config.Bind(StartupSettings.Section, StartupSettings.HoldOnServer, false, StartupSettings.HoldOnServerText);
             _startup = StartupBridge.Find();
             s_startupOwner = this;
             try { _processStart = Process.GetCurrentProcess().StartTime; }
@@ -113,6 +115,7 @@ namespace Vigil.Recorder
                 if (shown || worldUp)
                 {
                     _startup.Mark(shown ? StartupLines.MenuShown : StartupLines.WorldUp);
+                    EndHeldSaves(shown ? "the menu showed" : "the world was up");
                     _startFinished = true;
                     _startup.StopTimeline();
                     _startup.SaveIndex();
@@ -129,6 +132,18 @@ namespace Vigil.Recorder
                 WriteStartupReport();
                 _sessionNotes.Add("Join: " + StartupTimeline.JoinLine(_startupReport));
             }
+        }
+
+        /// <summary>
+        /// Ends the patcher's hold of config saves, which writes each held file once. The config files
+        /// were listed (Vigil-configs.tsv) before they were written, so they are listed again.
+        /// </summary>
+        private void EndHeldSaves(string why)
+        {
+            var saves = _startup.ReleaseSaves(why);
+            if (saves == null || saves.Written + saves.Flushed == 0) return;
+            try { SessionInfo.Write(_dir); }
+            catch (Exception) { }
         }
 
         private void WriteStartupReport()
@@ -182,10 +197,23 @@ namespace Vigil.Recorder
                 _host.RunShown("startup reset");
             }
             if (_startup.Installed && _startup.CacheDir.Length > 0 && Ui.Quiet(PathClipboard.Label(_startup.CacheDir, "Copy the bundle cache's path"))) PathClipboard.Copy(_startup.CacheDir);
+            Ui.Row("Config saves", StartupSavesLine());
             Ui.Note("A plugin's time runs from BepInEx's line that it is loading to the next plugin's: its assembly, its Awake and the bundles it loads. " +
                 "An LZMA bundle has to be unpacked whole on every start; the cache keeps an LZ4 copy that loads by reading only what is used. " +
+                "BepInEx rewrites a mod's whole settings file for each setting the mod binds; while the game starts, those saves are held and each file is written once when the menu shows. " +
                 "Each start writes Vigil-startup.txt into the recordings folder. Switches: Startup in Vigil's config, read at the next start.");
         }
+
+        private string StartupSavesLine()
+        {
+            if (!_startup.Installed) return "not held: Vigil's patcher is not installed";
+            if (!_startup.HoldAsked) return _server ? "not held on this dedicated server (Startup.HoldConfigSavesOnServer)" : "not held (Startup.HoldConfigSaves)";
+            var saves = _startupReport?.Saves;
+            if (saves == null) return _startup.HoldStatus;
+            return string.Join("; ", saves.Lines().Select(l => l.StartsWith(SavesPrefix, StringComparison.Ordinal) ? l.Substring(SavesPrefix.Length) : l).ToArray());
+        }
+
+        private const string SavesPrefix = "Config saves: ";
 
         private static IEnumerable<string[]> StartupPluginRows(StartupReport r) =>
             r.Plugins.OrderByDescending(p => p.Ms).Select(p => new[]
@@ -220,6 +248,7 @@ namespace Vigil.Recorder
             if (_startup.Installed && r.Plugins.Count > 0) lines.Add("slowest plugins: " + StartupTimeline.Slowest(r, 5));
             lines.Add("join: " + StartupTimeline.JoinLine(r));
             lines.Add("bundle cache: " + StartupCacheLine());
+            lines.Add("config saves: " + StartupSavesLine());
             lines.Add("report: " + Path.Combine(_dir, StartupReportName));
             return string.Join("\n", lines.ToArray());
         }
@@ -269,6 +298,29 @@ namespace Vigil.Recorder
             checks.Add(_startup.ResetRequested ? new Check(Here, reset, Outcome.Info, "asked for; done at the next start")
                 : _startup.ResetDone ? new Check(Here, reset, Outcome.Pass, "this start emptied the cache as asked (" + _startup.HousekeepingResult + ")")
                 : new Check(Here, reset, Outcome.Info, "no reset asked for"));
+
+            checks.Add(SavesCheck(r.Saves));
+        }
+
+        // The held config saves of this start: each file written once, and right after, every written file read back
+        // the way BepInEx reads it held the value of each of its mod's settings.
+        private Check SavesCheck(SaveHoldResult saves)
+        {
+            const string what = "config saves held this start were written, each file holding its settings";
+            if (!_startup.HoldAsked) return new Check(Here, what, Outcome.Info, StartupSavesLine());
+            if (saves == null)
+            {
+                // Asked for but never put in (the hook failed), or still on: the start is not over.
+                bool holding = _startup.HoldStatus.StartsWith("config saves held", StringComparison.Ordinal);
+                return new Check(Here, what, holding ? Outcome.Info : Outcome.Fail, _startup.HoldStatus);
+            }
+
+            var check = _startup.SaveCheck;
+            if (saves.Failed.Count > 0) return new Check(Here, what, Outcome.Fail, saves.Failed.Count.ToString(Ic) + " not written: " + string.Join(", ", saves.Failed));
+            if (check.Length > 2) return new Check(Here, what, Outcome.Fail, "read back, not as set: " + string.Join(", ", check.Skip(2)));
+            string read = check.Length == 2 ? string.Format(Ic, "; read back: {0} files, {1} settings, each as set", check[0], check[1]) : "";
+            string kept = saves.Kept.Count > 0 ? "; kept as another mod wrote them: " + string.Join(", ", saves.Kept) : "";
+            return new Check(Here, what, Outcome.Pass, string.Format(Ic, "{0:N0} held for {1:N0} files, written when {2}", saves.Held, saves.Files, saves.Why) + read + kept);
         }
     }
 }

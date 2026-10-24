@@ -22,6 +22,14 @@ namespace Vigil.Core
 
         public const string KeepDaysText = "Days a fast copy may go unused before it is deleted at a start.";
 
+        public const string Hold = "HoldConfigSaves", HoldOnServer = "HoldConfigSavesOnServer";
+
+        public const string HoldText =
+            "On a player's game: while the game starts, a BepInEx config save only marks its file, and each file is written once when the menu shows " +
+            "(BepInEx rewrites a mod's whole settings file each time the mod binds a setting). A file another mod writes itself stays as it wrote it. Read at the next start.";
+
+        public const string HoldOnServerText = "The same on a dedicated server, until its world is up. Read at the next start.";
+
         public const string FolderName = "Vigil", BundlesFolder = "bundles";
     }
 }

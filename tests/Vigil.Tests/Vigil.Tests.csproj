@@ -19,6 +19,7 @@
     <Compile Include="../../src/Core/**/*.cs" />
     <!-- The patcher's edit of Unity's bundle loading needs only Mono.Cecil, so it is tested here too. -->
     <Compile Include="../../src/Preloader/BundleHookEdit.cs" />
+    <Compile Include="../../src/Preloader/SaveHold.cs" />
   </ItemGroup>
 
   <ItemGroup>

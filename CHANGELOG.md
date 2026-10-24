@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.40.0
+
+The game starts quicker: Vigil's patcher holds mods' config saves while it starts. BepInEx rewrites a mod's whole settings file each time the mod binds a setting, so a mod with a thousand settings rewrites its file thousands of times while it loads; StartupAccelerator's delayed config save misses a mod that sets BepInEx's save switch itself, and settings bound while the main menu sets up. Now a save only marks its file until the menu shows, and then each file is written once. The files end up as they would have without the hold: a file about to be read back or opened by another mod is written first, and a file a mod writes itself stays as it wrote it. On for a player's game (`Startup.HoldConfigSaves`), off on a dedicated server unless `Startup.HoldConfigSavesOnServer` is set. *Health > Startup*, the startup report and the self-test say how many saves were held for which files, and check each written file against its settings. If the game crashes before its menu, the files stay as they were before that start.
+
 ## 0.39.1
 
 *Skip winter* works again with Seasonality 3.8.5, which moved its next-season rule; it stepped aside there. From 3.8.5 every game turns the season itself, so a player without this Vigil sees winter for up to 2 s at the end of fall, until the server's spring reaches them; the server needs this Vigil for the patch to hold.

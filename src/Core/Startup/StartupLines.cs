@@ -21,6 +21,9 @@ namespace Vigil.Core
         /// <summary>One of Vigil's own start steps, "name|ms", timed by Vigil itself rather than on the patcher's clock.</summary>
         public const string VigilStep = "vigil-step";
 
+        /// <summary>The end of the hold of config saves, its <see cref="SaveHoldResult.EventText"/>.</summary>
+        public const string ConfigSaves = "config-saves";
+
         private const string LoadingPrefix = "Loading [", DonePrefix = "Chainloader startup complete", BatchPrefix = "Batch-patched ";
 
         /// <summary>The step kind a log line marks; null for a line that marks none.</summary>

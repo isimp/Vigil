@@ -304,6 +304,26 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_report_says_what_the_hold_of_config_saves_did_right_after_the_bundles()
+        {
+            var held = new SaveHoldResult("the menu showed", 2431, 141, 141, 0, 600);
+            held.Most.Add(new KeyValuePair<string, int>("OdinArchitect", 1325));
+            held.Kept.Add("Vigil");
+            var events = WithLog();
+            events.Add(E(95100, StartupLines.ConfigSaves, held.EventText()));
+
+            var r = StartupTimeline.Build(events);
+            var lines = StartupTimeline.Lines(r, 15);
+
+            Assert.Equal(2431, r.Saves.Held);
+            int bundles = lines.FindIndex(l => l.StartsWith("Bundles:", System.StringComparison.Ordinal));
+            Assert.StartsWith("Config saves: 2,431 held for 141 files, each written once when the menu showed", lines[bundles + 1]);
+            Assert.Equal("Config saves: 1 file kept as another mod wrote it (Vigil)", lines[bundles + 2]);
+            Assert.Null(StartupTimeline.Build(WithLog()).Saves);
+            Assert.DoesNotContain(StartupTimeline.Lines(StartupTimeline.Build(WithLog()), 15), l => l.StartsWith("Config saves", System.StringComparison.Ordinal));
+        }
+
+        [Fact]
         public void The_report_lists_the_quiet_stretches_with_their_lines()
         {
             var lines = StartupTimeline.Lines(StartupTimeline.Build(WithLog()), 15);

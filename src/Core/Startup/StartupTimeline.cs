@@ -89,6 +89,9 @@ namespace Vigil.Core
 
         /// <summary>The longest stretches with no log line, longest first.</summary>
         public List<StartupGap> Gaps { get; } = new List<StartupGap>();
+
+        /// <summary>What the hold of config saves did; null when there was none (switched off, or the patcher not installed).</summary>
+        public SaveHoldResult Saves { get; set; }
     }
 
     /// <summary>
@@ -148,6 +151,7 @@ namespace Vigil.Core
             }
 
             foreach (var e in all.Where(e => e.Kind == StartupLines.Bundle)) CountBundle(r, e, pluginsEnd);
+            r.Saves = SaveHoldResult.Parse(all.LastOrDefault(e => e.Kind == StartupLines.ConfigSaves)?.Text);
             ReadJoin(r, all);
             ReadVigil(r, all);
             FindGaps(r, all, done, scene, end0, batches);
@@ -340,6 +344,7 @@ namespace Vigil.Core
             var lines = new List<string> { Summary(r), "" };
             if (r == null) return lines;
             lines.Add("Bundles: " + BundleLine(r) + string.Format(Ci, ", {0} in all", Duration(r.BundleMs)));
+            if (r.Saves != null) lines.AddRange(r.Saves.Lines());
             lines.Add("Join: " + JoinLine(r));
             if (r.VigilSteps.Count > 0) lines.Add("Vigil's own start: " + VigilLine(r));
             lines.Add("");

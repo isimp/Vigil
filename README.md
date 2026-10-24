@@ -2,7 +2,7 @@
 
 Vigil is a private tool for my group's Valheim server. It is on Hexium only so that our mod manager can install it for the group's players. It is not meant for anyone else's use, it is not maintained for others, no support or requests are taken, and it may change or disappear without notice.
 
-What it does, briefly: it records frame times, network numbers and what each mod costs, so that lag and dropped connections can be explained afterwards; it gives the server's admins a panel (Shift+F9) to look at the server, its players' connections and the world; it marks where creatures can still spawn around a base; and it times the game's start and keeps fast-loading copies of the asset bundles mods pack with LZMA. Most of it needs a copy on the dedicated server as well.
+What it does, briefly: it records frame times, network numbers and what each mod costs, so that lag and dropped connections can be explained afterwards; it gives the server's admins a panel (Shift+F9) to look at the server, its players' connections and the world; it marks where creatures can still spawn around a base; and it times the game's start, keeps fast-loading copies of the asset bundles mods pack with LZMA, and holds mods' config saves until the menu shows, so each settings file is written once. Most of it needs a copy on the dedicated server as well.
 
 ## AI notice
 
