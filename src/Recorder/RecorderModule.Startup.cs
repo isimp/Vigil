@@ -41,6 +41,8 @@ namespace Vigil.Recorder
                 new ConfigDescription(StartupSettings.KeepDaysText, new AcceptableValueRange<int>(1, 365)));
             Config.Bind(StartupSettings.Section, StartupSettings.Hold, true, StartupSettings.HoldText);
             Config.Bind(StartupSettings.Section, StartupSettings.HoldOnServer, false, StartupSettings.HoldOnServerText);
+            Config.Bind(StartupSettings.Section, StartupSettings.Lookups, true, StartupSettings.LookupsText);
+            Config.Bind(StartupSettings.Section, StartupSettings.LookupsOnServer, false, StartupSettings.LookupsOnServerText);
             _startup = StartupBridge.Find();
             s_startupOwner = this;
             try { _processStart = Process.GetCurrentProcess().StartTime; }
@@ -197,6 +199,7 @@ namespace Vigil.Recorder
             }
             if (_startup.Installed && _startup.CacheDir.Length > 0 && Ui.Quiet(PathClipboard.Label(_startup.CacheDir, "Copy the bundle cache's path"))) PathClipboard.Copy(_startup.CacheDir);
             Ui.Row("Config saves", StartupSavesLine());
+            Ui.Row("Assembly lookups", StartupLookupsLine());
             Ui.Note("A plugin's time runs from BepInEx's line that it is loading to the next plugin's: its assembly, its Awake and the bundles it loads. " +
                 "An LZMA bundle has to be unpacked whole on every start; the cache keeps an LZ4 copy that loads by reading only what is used. " +
                 "BepInEx rewrites a mod's whole settings file for each setting the mod binds; while the game starts, those saves are held and each file is written once when the menu shows. " +
@@ -213,6 +216,18 @@ namespace Vigil.Recorder
         }
 
         private const string SavesPrefix = "Config saves: ";
+
+        private const string LookupsPrefix = "Assembly lookups: ";
+
+        private string StartupLookupsLine()
+        {
+            if (!_startup.Installed) return "not remembered: Vigil's patcher is not installed";
+            if (!_startup.LookupsAsked) return _server ? "not remembered on this dedicated server (Startup.RememberFailedLookupsOnServer)" : "not remembered (Startup.RememberFailedLookups)";
+            var lookups = _startupReport?.Lookups;
+            if (lookups == null) return _startup.LookupStatus;
+            string line = lookups.Line();
+            return line == null ? "no search for a missing assembly was asked twice until " + lookups.Why : line.Substring(LookupsPrefix.Length);
+        }
 
         private static IEnumerable<string[]> StartupPluginRows(StartupReport r) =>
             r.Plugins.OrderByDescending(p => p.Ms).Select(p => new[]
@@ -248,6 +263,7 @@ namespace Vigil.Recorder
             lines.Add("join: " + StartupTimeline.JoinLine(r));
             lines.Add("bundle cache: " + StartupCacheLine());
             lines.Add("config saves: " + StartupSavesLine());
+            lines.Add("assembly lookups: " + StartupLookupsLine());
             lines.Add("report: " + Path.Combine(_dir, StartupReportName));
             return string.Join("\n", lines.ToArray());
         }
@@ -299,6 +315,21 @@ namespace Vigil.Recorder
                 : new Check(Here, reset, Outcome.Info, "no reset asked for"));
 
             checks.Add(SavesCheck(r.Saves));
+            checks.Add(LookupsCheck(r.Lookups));
+        }
+
+        // The memory of failed assembly searches of this start: in, and ended with the start.
+        private Check LookupsCheck(LookupResult lookups)
+        {
+            const string what = "failed assembly searches of this start were remembered";
+            if (!_startup.LookupsAsked) return new Check(Here, what, Outcome.Info, StartupLookupsLine());
+            if (lookups == null)
+            {
+                bool on = _startup.LookupStatus.StartsWith("failed assembly lookups remembered", StringComparison.Ordinal);
+                return new Check(Here, what, on ? Outcome.Info : Outcome.Fail, _startup.LookupStatus);
+            }
+
+            return new Check(Here, what, Outcome.Pass, StartupLookupsLine());
         }
 
         // The held config saves of this start: each file written once, and right after, every written file read back

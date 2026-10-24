@@ -324,6 +324,23 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_report_says_how_many_failed_assembly_searches_memory_answered()
+        {
+            var answered = new LookupResult("the menu showed", 38, 1);
+            answered.Most.Add(new KeyValuePair<string, int>("EpicLoot", 38));
+            var events = WithLog();
+            events.Add(E(95100, StartupLines.Lookups, answered.EventText()));
+
+            var r = StartupTimeline.Build(events);
+            var lines = StartupTimeline.Lines(r, 15);
+
+            Assert.Equal(38, r.Lookups.Answered);
+            int bundles = lines.FindIndex(l => l.StartsWith("Bundles:", System.StringComparison.Ordinal));
+            Assert.Equal("Assembly lookups: 38 failed searches answered from memory until the menu showed, for 1 assembly not installed: EpicLoot 38", lines[bundles + 1]);
+            Assert.Null(StartupTimeline.Build(WithLog()).Lookups);
+        }
+
+        [Fact]
         public void The_report_lists_the_quiet_stretches_with_their_lines()
         {
             var lines = StartupTimeline.Lines(StartupTimeline.Build(WithLog()), 15);

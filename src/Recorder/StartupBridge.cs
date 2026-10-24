@@ -103,5 +103,9 @@ namespace Vigil.Recorder
 
         /// <summary>Whether config saves are being held right now: the start is not over.</summary>
         public bool HoldingNow => Call("HoldingNow") as bool? ?? false;
+
+        public bool LookupsAsked => Call("LookupsAsked") as bool? ?? false;
+
+        public string LookupStatus => Call("LookupStatus") as string ?? "failed assembly lookups not remembered: Vigil's patcher is not installed";
     }
 }

@@ -24,7 +24,7 @@ namespace Vigil.Startup
         private static readonly Stopwatch Clock = new Stopwatch();
         private static readonly Dictionary<string, BundleEntry> Index = new Dictionary<string, BundleEntry>(StringComparer.Ordinal);
         private static StartupListener s_listener;
-        private static bool s_indexDirty, s_savesNoted;
+        private static bool s_indexDirty, s_savesNoted, s_lookupsNoted;
         private static int s_logLines;
 
         /// <summary>Plain log lines kept during a start at most, so a start that floods the log stays bounded.</summary>
@@ -36,6 +36,9 @@ namespace Vigil.Startup
 
         /// <summary>Whether this game's settings ask for config saves to be held during the start.</summary>
         public static bool HoldAsked { get; private set; }
+
+        /// <summary>Whether this game's settings ask for failed assembly searches to be remembered during the start.</summary>
+        public static bool LookupsAsked { get; private set; }
 
         public static bool Server { get; private set; }
 
@@ -90,6 +93,10 @@ namespace Vigil.Startup
             bool holdServer = config.Bind(StartupSettings.Section, StartupSettings.HoldOnServer, false, StartupSettings.HoldOnServerText).Value;
             HoldAsked = Server ? holdServer : hold;
             if (HoldAsked) ConfigSaveHook.Install();
+            bool lookups = config.Bind(StartupSettings.Section, StartupSettings.Lookups, true, StartupSettings.LookupsText).Value;
+            bool lookupsServer = config.Bind(StartupSettings.Section, StartupSettings.LookupsOnServer, false, StartupSettings.LookupsOnServerText).Value;
+            LookupsAsked = Server ? lookupsServer : lookups;
+            if (LookupsAsked) LookupHook.Install();
 
             Add(StartupLines.Started, engine.ToString("0", Ci));
             if (TimelineOn)
@@ -222,7 +229,7 @@ namespace Vigil.Startup
 
         public static string Status() =>
             "Vigil's patcher: timeline " + (TimelineOn ? "on" : "off") + "; bundle cache " + (CacheOn ? "on" : Server ? "off on a dedicated server" : "off")
-            + (CacheOn ? " (" + HousekeepingResult + ")" : "") + "; " + HoldStatus();
+            + (CacheOn ? " (" + HousekeepingResult + ")" : "") + "; " + HoldStatus() + "; " + LookupStatus();
 
         /// <summary>"config saves held until the menu", "... off", or why the hold could not be put in.</summary>
         public static string HoldStatus()
@@ -234,9 +241,40 @@ namespace Vigil.Startup
             return (r == null ? "config saves held until " + (Server ? "the world is up" : "the menu shows") : "config saves held until " + r.Why) + guard;
         }
 
-        /// <summary>Ends the hold of config saves (the menu shown, the world up, the game quitting) and adds its step; "" when there was no hold.</summary>
+        public static string LookupStatus()
+        {
+            if (!LookupsAsked) return "failed assembly lookups not remembered" + (Server ? " on a dedicated server" : "");
+            if (LookupHook.Memory == null) return "failed assembly lookups not remembered: " + LookupHook.Problem;
+            var r = LookupHook.Memory.Result;
+            return "failed assembly lookups remembered until " + (r != null ? r.Why : Server ? "the world is up" : "the menu shows");
+        }
+
+        // The memory of failed assembly searches ends with the start too, and adds its step once.
+        private static void EndLookups(string why)
+        {
+            var result = LookupHook.End(why);
+            if (result == null) return;
+            bool note;
+            lock (Gate)
+            {
+                note = !s_lookupsNoted;
+                s_lookupsNoted = true;
+            }
+
+            if (!note) return;
+            Add(StartupLines.Lookups, result.EventText());
+            var line = result.Line();
+            if (line != null) Preloader.Log?.LogInfo(line);
+        }
+
+        /// <summary>
+        /// Ends the start's holds (the menu shown, the world up, the game quitting): the memory of failed
+        /// assembly searches, and the hold of config saves, adding a step for each; the saves' result's
+        /// text, "" when there was no hold of saves.
+        /// </summary>
         public static string ReleaseSaves(string why)
         {
+            EndLookups(why);
             var result = ConfigSaveHook.End(why);
             if (result == null) return "";
             bool note;

@@ -24,6 +24,9 @@ namespace Vigil.Core
         /// <summary>The end of the hold of config saves, its <see cref="SaveHoldResult.EventText"/>.</summary>
         public const string ConfigSaves = "config-saves";
 
+        /// <summary>The end of the memory of failed assembly searches, its <see cref="LookupResult.EventText"/>.</summary>
+        public const string Lookups = "lookups";
+
         private const string LoadingPrefix = "Loading [", DonePrefix = "Chainloader startup complete", BatchPrefix = "Batch-patched ";
 
         /// <summary>The step kind a log line marks; null for a line that marks none.</summary>

@@ -4,7 +4,7 @@ param(
   [string]$ProcessName = "valheim",
   [int]$IntervalMs = 500, [int]$Frames = 60, [int]$StackKb = 128,
   [int]$WaitMinutes = 60, [int]$AfterMenuSeconds = 3,
-  [int]$TestSamples = 0, [int]$ProcessId = 0, [switch]$TestNames)
+  [int]$TestSamples = 0, [int]$ProcessId = 0, [switch]$TestNames, [switch]$ThroughJoin)
 # Samples what the game's main thread runs through a whole start, for a start that is slow
 # without a log line to say why. Armed before the game starts, it waits for a new game process
 # and from then on, every IntervalMs, pauses the main thread for a moment (as a debugger does),
@@ -15,7 +15,8 @@ param(
 # Out gets samples.tsv (time since the process started, where the thread was, its stack's
 # compiled-code addresses), names.tsv and modules.tsv.
 # -TestSamples N takes N samples of the running game (or of -ProcessId) and names nothing,
-# unless -TestNames is given too.
+# unless -TestNames is given too. -ThroughJoin goes on sampling past the menu until a join has
+# the player in the world (Vigil writes the report again then), and names in the world.
 # Run: powershell -File StartSamples.ps1 -Out <folder>
 Add-Type -TypeDefinition @'
 using System;
@@ -203,9 +204,14 @@ try {
     elseif ($sw.ElapsedMilliseconds - $lastCheck -ge 1000) {
       $lastCheck = $sw.ElapsedMilliseconds
       if ($p.HasExited) { "The game process ended before the menu showed, after $taken samples."; break }
-      if (-not $menuAt -and (Report-Written $p)) { $menuAt = $sw.ElapsedMilliseconds; "Menu at {0:0.0} s, {1} samples so far" -f ($ms / 1000), $taken }
-      if ($menuAt -and $sw.ElapsedMilliseconds - $menuAt -ge $AfterMenuSeconds * 1000) { break }
-      if ($sw.Elapsed.TotalMinutes -gt 10) { "No menu within 10 min of the start."; break }
+      if (-not $menuAt -and (Report-Written $p)) { $menuAt = $sw.ElapsedMilliseconds; $menuWrite = (Get-Item -LiteralPath $Report).LastWriteTime; "Menu at {0:0.0} s, {1} samples so far" -f ($ms / 1000), $taken }
+      if ($menuAt -and -not $ThroughJoin -and $sw.ElapsedMilliseconds - $menuAt -ge $AfterMenuSeconds * 1000) { break }
+      # Vigil writes the report again once a join has the player in the world.
+      if ($menuAt -and $ThroughJoin -and -not $joinAt) {
+        try { if ((Get-Item -LiteralPath $Report).LastWriteTime -gt $menuWrite) { $joinAt = $sw.ElapsedMilliseconds; "In the world at {0:0.0} s, {1} samples so far" -f ($ms / 1000), $taken } } catch { }
+      }
+      if ($joinAt -and $sw.ElapsedMilliseconds - $joinAt -ge $AfterMenuSeconds * 1000) { break }
+      if ($sw.Elapsed.TotalMinutes -gt $(if ($ThroughJoin) { 25 } else { 10 })) { "Stopped: no menu, or no join, in time."; break }
     }
     Start-Sleep -Milliseconds $IntervalMs
   }

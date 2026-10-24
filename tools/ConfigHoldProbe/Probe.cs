@@ -71,7 +71,49 @@ public static class Probe
         }
 
         Console.WriteLine(string.Format("files: {0} the same, {1} different", same, differ));
-        return differ == 0 ? 0 : 2;
+        bool lookups = Lookups(pre);
+        return differ == 0 && lookups ? 0 : 2;
+    }
+
+    // BepInEx's own search for an assembly's DLL over a folder of 200 folders: a missing one asked
+    // 40 times, without Vigil's memory of failed searches and with it, and one that is there.
+    static bool Lookups(Assembly pre)
+    {
+        string dir = Path.Combine(root, "lookups");
+        if (!Directory.Exists(dir))
+        {
+            for (int i = 0; i < 200; i++) Directory.CreateDirectory(Path.Combine(dir, "mod" + i.ToString("000")));
+            File.Copy(Path.Combine(root, "Probe.exe"), Path.Combine(dir, "mod150", "Present.dll"), true);
+        }
+
+        var missing = new AssemblyName("EpicLoot");
+        var present = new AssemblyName("Present");
+        Assembly found;
+        var sw = Stopwatch.StartNew();
+        int hits = 0;
+        for (int i = 0; i < 40; i++) if (Utility.TryResolveDllAssembly(missing, dir, out found)) hits++;
+        double without = sw.Elapsed.TotalMilliseconds;
+        bool presentBefore = Utility.TryResolveDllAssembly(present, dir, out found) && found != null;
+
+        var hook = pre.GetType("Vigil.Startup.LookupHook", true);
+        hook.GetMethod("Install", BindingFlags.Public | BindingFlags.Static).Invoke(null, null);
+        object problem = hook.GetProperty("Problem", BindingFlags.Public | BindingFlags.Static).GetValue(null, null);
+        Console.WriteLine("lookup memory: " + (problem == null ? "in" : "NOT IN: " + problem));
+        sw = Stopwatch.StartNew();
+        for (int i = 0; i < 40; i++) if (Utility.TryResolveDllAssembly(missing, dir, out found)) hits++;
+        double with = sw.Elapsed.TotalMilliseconds;
+        bool presentWith = Utility.TryResolveDllAssembly(present, dir, out found) && found != null;
+        bool presentAgain = Utility.TryResolveDllAssembly(present, dir, out found) && found != null;
+
+        object result = hook.GetMethod("End", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { "the probe ended it" });
+        Console.WriteLine((string)result.GetType().GetMethod("Line").Invoke(result, null));
+        sw = Stopwatch.StartNew();
+        bool after = Utility.TryResolveDllAssembly(missing, dir, out found);
+        double afterMs = sw.Elapsed.TotalMilliseconds;
+
+        Console.WriteLine(string.Format("lookups: 40 searches for a missing assembly {0:0} ms without the memory, {1:0} ms with it; found {2} times; after the end one search {3:0.0} ms", without, with, hits, afterMs));
+        Console.WriteLine(string.Format("lookups: an assembly that is there found before {0}, with the memory {1} and {2}", presentBefore, presentWith, presentAgain));
+        return hits == 0 && !after && presentBefore && presentWith && presentAgain && with < without;
     }
 
     static ConfigFile File_(string dir, string name, string owner)

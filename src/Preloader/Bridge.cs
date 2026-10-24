@@ -69,5 +69,11 @@ namespace Vigil.Startup
 
         /// <summary>Whether config saves are being held right now.</summary>
         public static bool HoldingNow() => ConfigSaveHook.Hold?.Holding ?? false;
+
+        /// <summary>Whether this game's settings ask for failed assembly searches to be remembered during the start.</summary>
+        public static bool LookupsAsked() => StartupState.LookupsAsked;
+
+        /// <summary>"failed assembly lookups remembered until ...", "... not remembered", or why the memory could not be put in.</summary>
+        public static string LookupStatus() => StartupState.LookupStatus();
     }
 }

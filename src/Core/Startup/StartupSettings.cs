@@ -30,6 +30,14 @@ namespace Vigil.Core
 
         public const string HoldOnServerText = "The same on a dedicated server, until its world is up. Read at the next start.";
 
+        public const string Lookups = "RememberFailedLookups", LookupsOnServer = "RememberFailedLookupsOnServer";
+
+        public const string LookupsText =
+            "On a player's game: while the game starts, a search for an assembly that is not installed (a mod checking for an optional mod) is not run again " +
+            "once it found nothing: BepInEx searches every folder under the plugins folder for it on every ask. From the menu on, every search runs. Read at the next start.";
+
+        public const string LookupsOnServerText = "The same on a dedicated server, until its world is up. Read at the next start.";
+
         public const string FolderName = "Vigil", BundlesFolder = "bundles";
     }
 }
