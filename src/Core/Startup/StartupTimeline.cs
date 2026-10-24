@@ -30,7 +30,7 @@ namespace Vigil.Core
 
         public double Ms { get; set; }
 
-        /// <summary>The plugin BepInEx was loading, or "BepInEx and patchers", "after the plugins", "the menu".</summary>
+        /// <summary>The plugin BepInEx was loading, or "BepInEx and patchers", "patching", "after the plugins", "the menu".</summary>
         public string During { get; set; } = "";
 
         public string Before { get; set; } = "";
@@ -141,10 +141,16 @@ namespace Vigil.Core
             r.TotalMs = r.EngineMs + end0;
             r.MenuMs = Math.Max(0, r.TotalMs - r.EngineMs - r.BepInExMs - r.PluginsMs - r.PatchingMs);
 
+            var batches = new List<KeyValuePair<double, double>>();
+            foreach (var e in all.Where(e => e.Kind == StartupLines.Batch))
+            {
+                if (StartupLines.ParseBatch(e.Text, out _, out double took)) batches.Add(new KeyValuePair<double, double>(e.Ms - took, e.Ms));
+            }
+
             foreach (var e in all.Where(e => e.Kind == StartupLines.Bundle)) CountBundle(r, e, pluginsEnd);
             ReadJoin(r, all);
             ReadVigil(r, all);
-            FindGaps(r, all, done, scene, end0);
+            FindGaps(r, all, done, scene, end0, batches);
             return r;
         }
 
@@ -161,7 +167,7 @@ namespace Vigil.Core
         }
 
         // Every step and log line of the start, in time order; each wait of GapMs or more between two neighbours is a quiet stretch.
-        private static void FindGaps(StartupReport r, List<StartupEvent> all, double? done, double? scene, double end)
+        private static void FindGaps(StartupReport r, List<StartupEvent> all, double? done, double? scene, double end, List<KeyValuePair<double, double>> batches)
         {
             var points = all.Where(e => e.Kind != StartupLines.VigilStep && e.Ms <= end && !IsJoin(e.Kind)).ToList();
             for (int i = 1; i < points.Count; i++)
@@ -172,13 +178,21 @@ namespace Vigil.Core
                 {
                     StartMs = points[i - 1].Ms,
                     Ms = gap,
-                    During = Phase(r, points[i - 1].Ms, done, scene),
+                    During = InBatch(batches, points[i - 1].Ms, points[i].Ms) ? "patching" : Phase(r, points[i - 1].Ms, done, scene),
                     Before = Describe(points[i - 1]),
                     After = Describe(points[i]),
                 });
             }
             r.Gaps.Sort((a, b) => b.Ms.CompareTo(a.Ms));
             if (r.Gaps.Count > MaxGaps) r.Gaps.RemoveRange(MaxGaps, r.Gaps.Count - MaxGaps);
+        }
+
+        // A patch batch logs only when it ends, with how long it took: a stretch at least half inside that time was the batch's.
+        private static bool InBatch(List<KeyValuePair<double, double>> batches, double from, double to)
+        {
+            double inside = 0;
+            foreach (var b in batches) inside += Math.Max(0, Math.Min(to, b.Value) - Math.Max(from, b.Key));
+            return inside * 2 >= to - from;
         }
 
         private static bool IsJoin(string kind) =>

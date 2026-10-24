@@ -278,6 +278,32 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_quiet_stretch_mostly_inside_a_patch_batch_is_named_patching()
+        {
+            var r = StartupTimeline.Build(new List<StartupEvent>
+            {
+                E(0, StartupLines.Started, "1700"),
+                E(20000, StartupLines.Plugin, "Loading [A 1.0] (a)"),
+                E(52000, StartupLines.PluginsDone, "Chainloader startup complete (1 loaded, 0 skipped, 0 failed)"),
+                E(57000, StartupLines.Log, "ScrollToArms: ScrollToArms: camera zoom hands over the wheel at 2 reads."),
+                E(61000, StartupLines.Batch, "Batch-patched 1257 methods after Chainloader end in 8900 ms"),
+                E(67000, StartupLines.Log, "Unity Log: Using environment steamid 892970"),
+                E(90000, StartupLines.MenuScene),
+                E(92500, StartupLines.Log, "Hoard: Scanned 152 assemblies"),
+                E(95000, StartupLines.Batch, "Batch-patched 137 methods after FejdStartup.Awake in 2600 ms"),
+                E(99000, StartupLines.MenuShown),
+            });
+            string During(double startMs) => r.Gaps.Single(g => g.StartMs == startMs).During;
+
+            Assert.Equal("patching", During(52000));
+            Assert.Equal("patching", During(57000));
+            Assert.Equal("after the plugins", During(61000));
+            Assert.Equal("the menu", During(90000));
+            Assert.Equal("patching", During(92500));
+            Assert.Equal("the menu", During(95000));
+        }
+
+        [Fact]
         public void The_report_lists_the_quiet_stretches_with_their_lines()
         {
             var lines = StartupTimeline.Lines(StartupTimeline.Build(WithLog()), 15);
