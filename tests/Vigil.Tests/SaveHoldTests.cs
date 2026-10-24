@@ -16,9 +16,13 @@ namespace Vigil.Tests
     /// </summary>
     public sealed class SaveHoldTests
     {
-        private const string OdinPath = @"C:\BepInEx\config\Raelaziel.OdinArchitect.cfg";
-        private const string VigilPath = @"C:\BepInEx\config\isimp.Vigil.cfg";
-        private const string SpawnPath = @"C:\BepInEx\config\spawn_that.simple.cfg";
+        // Paths of the machine the tests run on: CI runs them on Linux, where a backslash is no separator.
+        private static readonly string ConfigDir = Path.Combine(Path.GetTempPath(), "BepInEx", "config");
+        private static readonly string OdinPath = Cfg("Raelaziel.OdinArchitect.cfg");
+        private static readonly string VigilPath = Cfg("isimp.Vigil.cfg");
+        private static readonly string SpawnPath = Cfg("spawn_that.simple.cfg");
+
+        private static string Cfg(string name) => Path.Combine(ConfigDir, name);
 
         [Fact]
         public void A_file_saved_many_times_during_the_start_is_written_once_when_it_ends()
@@ -161,7 +165,7 @@ namespace Vigil.Tests
         public void A_file_that_cannot_be_written_is_named_and_the_others_are_still_written()
         {
             var t = new Rig();
-            var broken = t.File(@"C:\BepInEx\config\locked.cfg", "Locked");
+            var broken = t.File(Cfg("locked.cfg"), "Locked");
             broken.Fails = new IOException("the file is in use");
             var odin = t.File(OdinPath, "OdinArchitect");
             t.Hold.Begin();
@@ -230,7 +234,7 @@ namespace Vigil.Tests
         {
             // Mono's file watcher looks for each watched file every 750 ms on a thread of its own: no mod is reading it.
             var t = new Rig();
-            var bags = t.File(@"C:\BepInEx\config\vapok.mods.adventurebackpacks.cfg", "Adventure Backpacks");
+            var bags = t.File(Cfg("vapok.mods.adventurebackpacks.cfg"), "Adventure Backpacks");
             t.Hold.Begin();
             t.Save(bags);
 
@@ -321,7 +325,7 @@ namespace Vigil.Tests
         {
             var t = new Rig();
             var odin = t.File(OdinPath, "OdinArchitect");
-            var bags = t.File(@"C:\BepInEx\config\vapok.mods.adventurebackpacks.cfg", "Adventure Backpacks");
+            var bags = t.File(Cfg("vapok.mods.adventurebackpacks.cfg"), "Adventure Backpacks");
             t.Hold.Begin();
             for (int i = 0; i < 1325; i++) t.Save(odin);
             for (int i = 0; i < 212; i++) t.Save(bags);
