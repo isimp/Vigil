@@ -24,7 +24,7 @@ namespace Vigil.Core
         /// <summary>The first words "vigil" understands, in the order the overview lists them (tab completion offers them).</summary>
         public static readonly string[] Commands =
         {
-            "status", "selftest", "on", "off", "auto", "mark", "deep", "server", "load", "census", "memory", "patches", "trace", "inspect", "busiest", "weather",
+            "status", "selftest", "on", "off", "auto", "mark", "deep", "server", "load", "census", "memory", "patches", "startup", "trace", "inspect", "busiest", "weather",
             "spawned", "spawnable", "leftovers", "spawns", "missing", "help",
         };
 
@@ -94,6 +94,7 @@ namespace Vigil.Core
                 string.Format(Ci, "  vigil census [radius]        what is loaded around you: characters, drawing, lights, by mod ({0} m)", CensusRadius),
                 "  vigil memory                 what fills memory: textures, meshes, sounds, per mod",
                 "  vigil patches                every Harmony patch on a game method, by mod",
+                "  vigil startup [reset]        how long this start and the join took; reset empties the bundle cache",
                 "  vigil trace materials        which code gives objects material copies (start in main menu)",
                 "  vigil inspect [names]        the object under your crosshair: owner, values, record, scripts",
                 string.Format(Ci, "  vigil busiest [radius]       objects around you whose changes take the most to send ({0} m, {1} s)", BusiestRadius, BusiestSeconds),
@@ -288,6 +289,16 @@ namespace Vigil.Core
                         "  sun shadow distances would drop; renderers by mod with instancing; particle systems that keep",
                         "  simulating off screen; lights and the shadows they draw; material copies. Tables per type and",
                         "  per mod go to Vigil-census-<time>.tsv and -mods.tsv. The panel's Tools tab runs it too.",
+                    };
+                case "startup":
+                    return new List<string>
+                    {
+                        "vigil startup [reset]",
+                        "  How long the game took from starting to its menu (a dedicated server: to its running",
+                        "  world), split into Unity, BepInEx, each plugin, StartupAccelerator's patching and the menu;",
+                        "  the slowest plugins, the join to a world, and the bundle cache. Vigil-startup.txt holds every",
+                        "  plugin. Needs Vigil's patcher in BepInEx/patchers. reset empties the bundle cache at the",
+                        "  next start, before any bundle loads. The panel's Health tab shows the same.",
                     };
                 case "memory":
                     return new List<string>

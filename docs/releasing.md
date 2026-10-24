@@ -26,7 +26,7 @@ The workflow then runs these steps in order:
 | Token check | `HEXIUM_TOKEN` is set, when publishing. |
 | Build | Against `lib/`, so no game install is needed. |
 | Tests | Everything in `tests/Vigil.Tests`. |
-| Package | One zip with the manifest (its version set from the csproj), icon, README, CHANGELOG, LICENSE and the DLL, all at the root. |
+| Package | One zip with the manifest (its version set from the csproj), icon, README, CHANGELOG and LICENSE at the root, `plugins/Vigil.dll` and `patchers/Vigil.Preloader.dll`. |
 | Package check | The zip against the store's rules: required files at the root, icon exactly 256x256, name of letters, digits and underscores, description of at most 256 characters. |
 | GitHub release | Tags `vX.Y.Z` and attaches the zip and the DLL. |
 | Hexium | Uploads and submits the version, when publishing. |

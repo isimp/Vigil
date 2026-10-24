@@ -22,6 +22,9 @@ namespace Vigil.Recorder
         [ThreadStatic] private static long t_routedStart;
         [ThreadStatic] private static string t_routedLabel;
 
+        /// <summary>Each message's label and milliseconds as it is handled; set only while a join is timed.</summary>
+        public static Action<string, double> Timed;
+
         public static void Patch(Harmony harmony)
         {
             s_mainThread = Thread.CurrentThread.ManagedThreadId;
@@ -47,7 +50,9 @@ namespace Vigil.Recorder
         {
             if (!ProbeState.Active && !ProbeState.Joining) return;
             if (t_packageLabel == null) return;
-            s_tally.Add(t_packageLabel, PhaseTimer.TicksToMs(Stopwatch.GetTimestamp() - t_packageStart));
+            double ms = PhaseTimer.TicksToMs(Stopwatch.GetTimestamp() - t_packageStart);
+            s_tally.Add(t_packageLabel, ms);
+            Timed?.Invoke(t_packageLabel, ms);
             t_packageLabel = null;
         }
 
@@ -64,7 +69,9 @@ namespace Vigil.Recorder
         {
             if (!ProbeState.Active && !ProbeState.Joining) return;
             if (t_routedLabel == null) return;
-            s_tally.Add(t_routedLabel, PhaseTimer.TicksToMs(Stopwatch.GetTimestamp() - t_routedStart));
+            double ms = PhaseTimer.TicksToMs(Stopwatch.GetTimestamp() - t_routedStart);
+            s_tally.Add(t_routedLabel, ms);
+            Timed?.Invoke(t_routedLabel, ms);
             t_routedLabel = null;
         }
 

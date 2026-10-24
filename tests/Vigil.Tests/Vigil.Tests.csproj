@@ -17,12 +17,18 @@
 
   <ItemGroup>
     <Compile Include="../../src/Core/**/*.cs" />
+    <!-- The patcher's edit of Unity's bundle loading needs only Mono.Cecil, so it is tested here too. -->
+    <Compile Include="../../src/Preloader/BundleHookEdit.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- The version BepInEx 5.4.23 ships, which the patcher runs on. -->
+    <PackageReference Include="Mono.Cecil" Version="0.10.4" />
+    <!-- Compiles the stand-in for Unity's assembly that the edit is tried on. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
   </ItemGroup>
 
 </Project>

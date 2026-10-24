@@ -87,12 +87,15 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Build
-        run: dotnet build Vigil.csproj -c Release -p:LibsDir=lib --nologo
+        run: |
+          dotnet build Vigil.csproj -c Release -p:LibsDir=lib --nologo
+          dotnet build src/Preloader/Vigil.Preloader.csproj -c Release -p:LibsDir=lib --nologo
 
       - name: Test
         run: dotnet test tests/Vigil.Tests --nologo
 
-      # Mod sites want every required file at the root of the archive, not inside a folder.
+      # The manifest, icon and readme sit at the root of the archive; the plugin goes in plugins/ and
+      # the patcher in patchers/, which mod managers install into BepInEx/plugins and BepInEx/patchers.
       - name: Package
         env:
           VERSION: ${{ inputs.version }}
@@ -100,13 +103,14 @@ jobs:
           set -euo pipefail
           name="Vigil-$VERSION"
 
-          mkdir -p dist/package dist/hexium
-          cp bin/Release/Vigil.dll dist/package/
+          mkdir -p dist/package/plugins dist/package/patchers dist/hexium
+          cp bin/Release/Vigil.dll dist/package/plugins/
+          cp src/Preloader/bin/Release/Vigil.Preloader.dll dist/package/patchers/
           cp packaging/icon.png dist/package/
           cp README.md CHANGELOG.md LICENSE dist/package/
           jq --arg v "$VERSION" '.version_number = $v' packaging/manifest.json > dist/package/manifest.json
           (cd dist/package && zip -qr "../hexium/$name.zip" .)
-          cp bin/Release/Vigil.dll dist/
+          cp bin/Release/Vigil.dll src/Preloader/bin/Release/Vigil.Preloader.dll dist/
 
           echo "--- package contents ---"
           unzip -l "dist/hexium/$name.zip"
@@ -130,10 +134,11 @@ jobs:
 
             A private tool for my group's Valheim server, not maintained for anyone else's use.
 
-            Install: with a mod manager from Hexium, or drop `Vigil.dll` into `BepInEx/plugins`. Requires BepInEx 5. Most of it needs a copy on the dedicated server as well.
+            Install: with a mod manager from Hexium, or unzip and copy `plugins/Vigil.dll` into `BepInEx/plugins` and `patchers/Vigil.Preloader.dll` into `BepInEx/patchers`. Requires BepInEx 5. Most of it needs a copy on the dedicated server as well.
           files: |
             dist/hexium/Vigil-${{ inputs.version }}.zip
             dist/Vigil.dll
+            dist/Vigil.Preloader.dll
 
       # If the publish step fails, fix the cause and run the workflow again with the same
       # version: the release step above updates the existing release rather than making a

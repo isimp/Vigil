@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Vigil's BepInEx patcher: the startup timeline's log listener and the bundle cache, which have
+       to be in place before the first plugin loads. It goes in BepInEx/patchers; Vigil.dll reads it
+       through a bridge found by name, so Vigil.dll alone still loads without it. -->
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>Vigil.Preloader</AssemblyName>
+    <RootNamespace>Vigil.Startup</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!-- The version is set once, in Vigil.csproj, and read from there. -->
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../Vigil.csproj')), '(?&lt;=&lt;Version&gt;)[^&lt;]+'))</Version>
+    <Authors>isimp</Authors>
+    <Product>Vigil</Product>
+    <Description>Vigil's patcher: times the game's start and keeps fast-loading copies of mods' LZMA asset bundles.</Description>
+    <Copyright>Copyright (c) 2026 isimp</Copyright>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <DebugType>portable</DebugType>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <Import Project="../../BuildChecks.props" />
+  <Import Project="../../GameReferences.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- Compile-time only: BepInEx 5.4.23 ships this version and loads it before any patcher. -->
+    <PackageReference Include="Mono.Cecil" Version="0.10.4" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!-- The startup and cache rules are Core code, tested in Vigil.Tests and compiled in here too. -->
+  <ItemGroup>
+    <Compile Include="../Core/Startup/*.cs" Link="Core/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

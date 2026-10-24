@@ -172,6 +172,7 @@ namespace Vigil.Recorder
                 yield return new PanelSection("World", "Rested and comfort", DrawRested, RestedBadge);
                 yield return new PanelSection("Patches", "Game patches", DrawPatches, PatchesBadge);
                 yield return new PanelSection("World", "Leftovers in the world", DrawLeftovers, LeftoversBadge, PanelZone.Change);
+                yield return new PanelSection("Health", "Startup", DrawStartup, StartupBadge);
                 yield return new PanelSection("Health", "Mods and configs", DrawParity, ParityBadge);
                 yield return new PanelSection("Health", "Vigil's own cost", DrawOwnCost, OwnCostBadge, PanelZone.Measure);
                 yield return new PanelSection("Tools", "Inspect", DrawInspect, null, PanelZone.Measure);
@@ -482,6 +483,7 @@ namespace Vigil.Recorder
         public override void SelfTest(List<SelfTestReport.Check> checks)
         {
             const string area = "Recorder";
+            StartupChecks(checks);
             checks.Add(Patching.Problems.Count == 0
                 ? new SelfTestReport.Check(area, "hooks put in", SelfTestReport.Result.Pass, null)
                 : new SelfTestReport.Check(area, "hooks put in", SelfTestReport.Result.Warn, Patching.Problems.Count + " not: " + string.Join("; ", Patching.Problems.Take(3).ToArray())));

@@ -183,6 +183,7 @@ namespace Vigil.Recorder
             DropWatch.Dropped = (who, drop, samples) => _recorder?.Drop(who, drop, samples);
             _recorder.ReportWritten = ReportWritten;
             BindSharing();
+            BindStartup(harmony);
             BindFireSounds();
             if (!_server) FireSoundsPatch.Hook(harmony);
             BindOwnership();
@@ -230,6 +231,7 @@ namespace Vigil.Recorder
             if (word == "census") return "Vigil: " + Safe(() => StartCensus(rest, toConsole: true));
             if (word == "memory") return "Vigil: " + Own(() => SceneCensus.WriteMemory(_dir));
             if (word == "patches") return "Vigil: " + Own(() => PatchWatch.WriteMap(_dir));
+            if (word == "startup") return "Vigil: " + Safe(() => StartupCommand(rest));
             if (word == "inspect" && rest.Trim().Equals("names", StringComparison.OrdinalIgnoreCase)) return "Vigil: " + Safe(ReadNamesCommand);
             if (word == "inspect") return "Vigil: " + Own(InspectCommand);
             if (word == "spawned") return "Vigil: " + Safe(() => SpawnedCommand(rest));
@@ -344,6 +346,7 @@ namespace Vigil.Recorder
         private static void NewConnectionPostfix()
         {
             s_peerArrived = true;
+            s_startupOwner?.JoinBegins();
             if (s_recordingMode != RecordingMode.Off && ZNet.instance != null && ZNet.instance.IsServer()) ProbeState.Joining = true;
         }
 
@@ -439,6 +442,7 @@ namespace Vigil.Recorder
 
         public override void Update()
         {
+            UpdateStartup();
             float frameAt = Time.realtimeSinceStartup;
             _frameMs = (frameAt - _lastUpdateAt) * 1000f;
             _lastUpdateAt = frameAt;

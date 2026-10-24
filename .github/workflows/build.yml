@@ -20,7 +20,9 @@ jobs:
       # lib/ holds metadata-only copies of everything the project references, so a build server
       # needs no Valheim install and no download step. See tools/strip-references.ps1.
       - name: Build
-        run: dotnet build Vigil.csproj -c Release -p:LibsDir=lib --nologo
+        run: |
+          dotnet build Vigil.csproj -c Release -p:LibsDir=lib --nologo
+          dotnet build src/Preloader/Vigil.Preloader.csproj -c Release -p:LibsDir=lib --nologo
 
       # The tests cover the part of Vigil that needs no game (src/Core).
       - name: Test
@@ -29,5 +31,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Vigil
-          path: bin/Release/Vigil.dll
+          path: |
+            bin/Release/Vigil.dll
+            src/Preloader/bin/Release/Vigil.Preloader.dll
           if-no-files-found: error

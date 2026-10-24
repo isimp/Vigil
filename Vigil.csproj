@@ -6,7 +6,7 @@
     <RootNamespace>Vigil</RootNamespace>
     <LangVersion>latest</LangVersion>
     <!-- The one place the version is set: the plugin's own version is generated from it. -->
-    <Version>0.38.0</Version>
+    <Version>0.39.0</Version>
     <Authors>isimp</Authors>
     <Product>Vigil</Product>
     <Description>Private admin and lag-diagnosis tool for my group's Valheim server; not maintained for anyone else's use.</Description>
@@ -27,10 +27,11 @@
     <Reference Include="System.IO.Compression" />
   </ItemGroup>
 
-  <!-- The tests and the tools are their own projects; they build src/Core on their own. -->
+  <!-- The tests and the tools are their own projects; they build src/Core on their own. The patcher
+       (src/Preloader) is its own assembly too; Vigil.dll reaches it through its bridge, found by name. -->
   <ItemGroup>
-    <Compile Remove="tests/**;tools/**" />
-    <None Remove="tests/**;tools/**" />
+    <Compile Remove="tests/**;tools/**;src/Preloader/**" />
+    <None Remove="tests/**;tools/**;src/Preloader/**" />
   </ItemGroup>
 
   <!-- VigilVersion.Value, for the plugin attribute, which needs a constant. -->

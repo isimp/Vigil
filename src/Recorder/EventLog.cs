@@ -119,9 +119,13 @@ namespace Vigil.Recorder
             t_steps.Push(Stopwatch.StartNew());
         }
 
+        /// <summary>Each timed join step ("ZNet.RPC_PeerInfo", milliseconds), for the startup timeline.</summary>
+        public static Action<string, long> StepTimed;
+
         private static void StepFinalizer(System.Reflection.MethodBase __originalMethod, Exception __exception)
         {
             long ms = t_steps != null && t_steps.Count > 0 ? t_steps.Pop().ElapsedMilliseconds : -1;
+            try { StepTimed?.Invoke(__originalMethod.DeclaringType?.Name + "." + __originalMethod.Name, ms); } catch (Exception) { }
             Write("join-step", __originalMethod.DeclaringType?.Name + "." + __originalMethod.Name,
                 ms + " ms (game code and every mod hook on it)" + (__exception != null ? ", failed: " + __exception.Message : ""));
         }
