@@ -6,6 +6,8 @@ The game starts quicker: Vigil's patcher holds mods' config saves while it start
 
 A mod checking for an optional mod that is not installed makes BepInEx search every folder under the plugins folder for its DLL, on every ask. While the game starts, Vigil's patcher remembers a search that found nothing and answers the next ask for the same assembly in the same folder at once; from the menu on, every search runs again, and an assembly already loaded is found as before. On for a player's game (`Startup.RememberFailedLookups`), off on a dedicated server unless `Startup.RememberFailedLookupsOnServer` is set. The startup report and *Health > Startup* say how many searches were spared, for which assemblies.
 
+Joining is quicker with Jotunn: when the server's synced settings arrive, Jotunn checks each one with the file's list of keys, which BepInEx copies whole for every setting, seconds for thousands of settings. A new patch in the *Patches* tab, *Jotunn's config sync with one copy of the keys*, hands Jotunn one copy of each file's keys per sync, which answers every check the same way; its first answers are asked both ways, and Jotunn's own way comes back at a disagreement. Outside Jotunn's sync the keys are BepInEx's as before. It is each player's own switch (`Patches.JotunnConfigSync`, on), and it steps aside, saying so, if a Jotunn update changes that code.
+
 ## 0.39.1
 
 *Skip winter* works again with Seasonality 3.8.5, which moved its next-season rule; it stepped aside there. From 3.8.5 every game turns the season itself, so a player without this Vigil sees winter for up to 2 s at the end of fall, until the server's spring reaches them; the server needs this Vigil for the patch to hold.

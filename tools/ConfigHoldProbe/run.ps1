@@ -15,7 +15,11 @@ foreach ($f in "BepInEx.dll", "0Harmony.dll", "MonoMod.RuntimeDetour.dll", "Mono
   if (Test-Path (Join-Path $Core $f)) { Copy-Item -Force (Join-Path $Core $f) $out }
 }
 Copy-Item -Force $Preloader $out
-& "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:"$out\Probe.exe" /r:"$out\BepInEx.dll" (Join-Path $PSScriptRoot "Probe.cs")
+# Vigil.dll and Jotunn.dll for the check of the patch on Jotunn's config sync, when they are at hand.
+$vigil = Join-Path $PSScriptRoot "..\..\bin\Release\Vigil.dll"
+$jotunn = Get-ChildItem (Join-Path (Split-Path $Core) "plugins") -Recurse -Filter "Jotunn.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ((Test-Path $vigil) -and $jotunn) { Copy-Item -Force $vigil $out; Copy-Item -Force $jotunn.FullName $out }
+& "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /out:"$out\Probe.exe" /r:"$out\BepInEx.dll" /r:"$out\0Harmony.dll" (Join-Path $PSScriptRoot "Probe.cs")
 if ($LASTEXITCODE -ne 0) { "The probe did not compile."; exit 1 }
 $env:PROBE_DIR = $out
 & $HostExe "$Valheim\MonoBleedingEdge\EmbedRuntime\mono-2.0-bdwgc.dll" "$Valheim\valheim_Data\Managed" "$Valheim\MonoBleedingEdge\etc" "$out\Probe.exe"

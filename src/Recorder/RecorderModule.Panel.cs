@@ -508,6 +508,12 @@ namespace Vigil.Recorder
                     ? new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Pass, SkipWinterPatch.State)
                     : new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Warn, SkipWinterPatch.State));
             }
+            const string jotunn = "game patch: Jotunn's config sync with one copy of the keys";
+            string jotunnState = JotunnSyncPatch.State;
+            checks.Add(new SelfTestReport.Check(area, jotunn,
+                jotunnState.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
+                : jotunnState.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
+                : SelfTestReport.Result.Info, jotunnState));
             checks.Add(Writable(_dir)
                 ? new SelfTestReport.Check(area, "recordings folder writable", SelfTestReport.Result.Pass, _dir)
                 : new SelfTestReport.Check(area, "recordings folder writable", SelfTestReport.Result.Fail, _dir));
