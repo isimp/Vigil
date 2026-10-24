@@ -11,7 +11,9 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _awaySleep;
+        private ConfigEntry<int> _awayMinutes;
+        private string _awayMinutesText = "5";
         private bool _patchesHooked;
 
         private void BindPatches()
@@ -45,6 +47,25 @@ namespace Vigil.Recorder
                 "both ways, and Jotunn's own way comes back at a disagreement.");
             JotunnSyncPatch.On = _jotunnSync.Value;
             _jotunnSync.SettingChanged += (_, __) => JotunnSyncPatch.On = _jotunnSync.Value;
+            _awaySleep = Config.Bind("Patches", "AwaySleep", false,
+                "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
+                "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
+                "It takes effect on the server and needs Vigil on the players' games to hear who is away; ServerSync passes the switch to every player running Vigil, and the server's admins can switch it in the panel's Patches tab.");
+            _host.Sync.AddConfigEntry(_awaySleep);
+            _awayMinutes = Config.Bind("Patches", "AwayMinutes", 5,
+                new ConfigDescription("Set on the dedicated server: the minutes a player's game menu stays open before they are away for sleeping (AwaySleep). ServerSync passes it to every player running Vigil.",
+                    new AcceptableValueRange<int>(AwaySleep.MinMinutes, AwaySleep.MaxMinutes)));
+            _host.Sync.AddConfigEntry(_awayMinutes);
+            ApplyAway();
+            _awaySleep.SettingChanged += (_, __) => ApplyAway();
+            _awayMinutes.SettingChanged += (_, __) => ApplyAway();
+        }
+
+        private void ApplyAway()
+        {
+            AwaySleepPatch.On = _awaySleep.Value;
+            AwaySleepPatch.LimitSeconds = AwaySleep.LimitSeconds(_awayMinutes.Value);
+            _awayMinutesText = _awayMinutes.Value.ToString(Ic);
         }
 
         /// <summary>On the first frame, when every plugin has loaded: the patches find the mods they work on (skip winter on the server too, where the season changes).</summary>
@@ -63,9 +84,11 @@ namespace Vigil.Recorder
             HookJoinPackages();
             JotunnSyncPatch.Hook();
             if (!string.IsNullOrEmpty(JotunnSyncPatch.Problem)) _host.Log.LogWarning("Vigil: the patch on Jotunn's config sync stepped aside: " + JotunnSyncPatch.Problem);
+            AwaySleepPatch.Hook();
+            if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
         }
 
-        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0)) + " of 4 on", Skin.Tone.Quiet);
+        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)) + " of 5 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -161,6 +184,41 @@ namespace Vigil.Recorder
             Ui.Note("When the server's synced settings arrive on joining, Jotunn checks each one against the file's list of keys, which BepInEx copies whole for every setting. On, Jotunn gets one copy of each file's keys per sync, which answers every check the same way, without the copies. The first answers are asked both ways, and Jotunn's own way comes back at a disagreement.");
             Ui.Row("Set by", "this game's own config (Patches.JotunnConfigSync), for each player themself");
             Ui.Row("On this game", Toned(JotunnSyncPatch.State, JotunnSyncPatch.Problem != null ? ResultTone.Caution : _jotunnSync.Value && JotunnSyncPatch.Answered > 0 ? ResultTone.Good : ResultTone.Quiet));
+
+            Ui.Heading("Away players don't hold up sleep");
+            Ui.BeginFormLine("Switch");
+            if (may)
+            {
+                int picked = Ui.Choice(_awaySleep.Value ? 0 : 1, OnOffWords);
+                if (picked >= 0 && (picked == 0) != _awaySleep.Value)
+                {
+                    bool on = picked == 0;
+                    Ui.Later(() =>
+                    {
+                        _awaySleep.Value = on;
+                        EventLog.Write("patch-set", PlayerName(), "AwaySleep " + (on ? "on" : "off"));
+                    });
+                }
+            }
+            else Ui.Text(_awaySleep.Value ? "On" : "Off");
+            Ui.EndLine();
+            if (may)
+            {
+                if (Ui.Tool("Away after", "Minutes in the game menu, " + AwaySleep.MinMinutes + " to " + AwaySleep.MaxMinutes, "Set", ref _awayMinutesText, 40, "min"))
+                {
+                    string text = _awayMinutesText;
+                    Ui.Later(() =>
+                    {
+                        if (!int.TryParse(text, System.Globalization.NumberStyles.Integer, Ic, out int minutes)) return;
+                        _awayMinutes.Value = System.Math.Max(AwaySleep.MinMinutes, System.Math.Min(AwaySleep.MaxMinutes, minutes));
+                        EventLog.Write("patch-set", PlayerName(), "AwayMinutes " + _awayMinutes.Value.ToString(Ic));
+                    });
+                }
+            }
+            else Ui.Row("Away after", _awayMinutes.Value.ToString(Ic) + " min in the game menu");
+            Ui.Note("A player whose game menu has stayed open for these minutes is away: the night is skipped once everyone else is in bed, and somebody has to be. Moving the mouse in the menu does not count; closing it does. An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. A player without this Vigil is never away.");
+            Ui.Row("Set by", "the server, for every player running Vigil (Patches.AwaySleep, Patches.AwayMinutes)");
+            Ui.Row("On this game", Toned(AwaySleepPatch.State(_host.Link), AwaySleepPatch.Problem != null ? ResultTone.Caution : _awaySleep.Value ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Note(may ? "You can switch patches: the server keeps the change and passes it on." : "Only the server's admins (or the world's host) switch the server's patches; everyone sees them. A patch whose target changed in an update steps aside and says so here and in the self-test.");
         }

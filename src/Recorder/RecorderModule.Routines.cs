@@ -53,6 +53,7 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "the server's reading of the whole world", 12f, LeftoversOnServer);
             yield return new SelfTestRoutine(Here, "the server's alerts", 12f, AlertsOnServer);
             yield return new SelfTestRoutine(Here, "the server's steady messages", 12f, SteadyOnServer);
+            yield return new SelfTestRoutine(Here, "away players and sleep, with the server", 45f, AwaySleepTried);
             yield return new SelfTestRoutine(Here, "a shared report reaching the server", 90f, SharedRoundTrip);
         }
 

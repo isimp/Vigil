@@ -101,6 +101,8 @@ namespace Vigil.Recorder
             if (command == "parity") return ParityReply();
             if (command == Greeting.Alerts) return AlertsReply(args);
             if (command == Greeting.Steady) return SteadyReply();
+            if (command == Greeting.Away) return AwaySleepPatch.Reported(args, from);
+            if (command == AwaySleep.CheckCommand) return AwaySleepPatch.ServerCheck(from);
             if (command == "link")
             {
                 args.TryGetValue("who", out string who);
@@ -508,6 +510,9 @@ namespace Vigil.Recorder
                     ? new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Pass, SkipWinterPatch.State)
                     : new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Warn, SkipWinterPatch.State));
             }
+            const string away = "game patch: away players don't hold up sleep";
+            checks.Add(new SelfTestReport.Check(area, away, AwaySleepPatch.Problem == null ? SelfTestReport.Result.Pass : SelfTestReport.Result.Warn,
+                AwaySleepPatch.Problem == null ? "hooked · " + AwaySleepPatch.State(_host.Link) : AwaySleepPatch.State(_host.Link)));
             const string jotunn = "game patch: Jotunn's config sync with one copy of the keys";
             string jotunnState = JotunnSyncPatch.State;
             checks.Add(new SelfTestReport.Check(area, jotunn,
