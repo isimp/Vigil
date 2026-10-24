@@ -20,6 +20,28 @@ namespace Vigil.Tests
         private static Assembly[] Here() => new[] { typeof(object).Assembly, typeof(Uri).Assembly, typeof(TypeLookupTests).Assembly };
 
         [Fact]
+        public void Vigil_never_asks_Harmony_to_find_a_type_by_name()
+        {
+            // AccessTools.TypeByName, and every AccessTools call given "Type:Member" as text, run Harmony's own search.
+            string src = Path.Combine(ProjectRoot(), "src");
+            var offenders = Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
+                .SelectMany(f => System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(f), "//.*", "")
+                    .Split('\n')
+                    .Select((line, i) => new { File = Path.GetFileName(f), Line = i + 1, Text = line }))
+                .Where(l => System.Text.RegularExpressions.Regex.IsMatch(l.Text, @"AccessTools\s*\.\s*(TypeByName\b|\w+\s*\(\s*""|\w+\s*\(\s*\$"")"))
+                .Select(l => l.File + ":" + l.Line)
+                .ToList();
+            Assert.Empty(offenders);
+        }
+
+        private static string ProjectRoot()
+        {
+            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+                if (File.Exists(Path.Combine(dir.FullName, "Vigil.csproj"))) return dir.FullName;
+            throw new DirectoryNotFoundException("Vigil.csproj not found above " + AppContext.BaseDirectory);
+        }
+
+        [Fact]
         public void A_type_is_found_by_its_full_name()
         {
             var lookup = new TypeLookup(Here);

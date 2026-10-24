@@ -8,6 +8,8 @@ A mod checking for an optional mod that is not installed makes BepInEx search ev
 
 Joining is quicker with Jotunn: when the server's synced settings arrive, Jotunn checks each one with the file's list of keys, which BepInEx copies whole for every setting, seconds for thousands of settings. A new patch in the *Patches* tab, *Jotunn's config sync with one copy of the keys*, hands Jotunn one copy of each file's keys per sync, which answers every check the same way; its first answers are asked both ways, and Jotunn's own way comes back at a disagreement. Outside Jotunn's sync the keys are BepInEx's as before. It is each player's own switch (`Patches.JotunnConfigSync`, on), and it steps aside, saying so, if a Jotunn update changes that code.
 
+The hook that watches patch changes found Harmony's rebuild method through Harmony's search by name, which lists every type of every assembly; it now asks Harmony's own assembly, so no lookup in Vigil goes through that search any more.
+
 ## 0.39.1
 
 *Skip winter* works again with Seasonality 3.8.5, which moved its next-season rule; it stepped aside there. From 3.8.5 every game turns the season itself, so a player without this Vigil sees winter for up to 2 s at the end of fall, until the server's spring reaches them; the server needs this Vigil for the patch to hold.

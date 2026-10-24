@@ -37,7 +37,9 @@ namespace Vigil.Recorder
             s_self = typeof(PatchWatch).Assembly;
             s_mainThread = Thread.CurrentThread.ManagedThreadId;
             const string id = "Harmony method rebuilds";
-            var m = AccessTools.Method("HarmonyLib.PatchFunctions:UpdateWrapper");
+            // Harmony's own assembly is asked for the type: Harmony's search by name lists every type of every assembly.
+            var functions = typeof(Harmony).Assembly.GetType("HarmonyLib.PatchFunctions", false);
+            var m = functions != null ? AccessTools.Method(functions, "UpdateWrapper") : null;
             if (m == null) { notes.Add("Patch changes during play are not watched: Harmony's rebuild method was not found."); return; }
             if (!journal.Allowed(id)) { notes.Add("Patch changes during play are not watched (that hook crashed the game once)."); return; }
             journal.Begin(id);
