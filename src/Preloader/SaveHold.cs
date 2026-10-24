@@ -28,7 +28,8 @@ namespace Vigil.Startup
         private readonly Func<DateTime> _clock;
         private readonly object _gate = new object(), _releaseGate = new object();
         private readonly Dictionary<string, Waiting> _waiting = new Dictionary<string, Waiting>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _files = new HashSet<string>(StringComparer.OrdinalIgnoreCase), _names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _readPast = new List<string>();
         private readonly Dictionary<string, int> _counts = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly List<string> _kept = new List<string>(), _failed = new List<string>();
         private readonly List<object> _written = new List<object>();
@@ -80,6 +81,7 @@ namespace Vigil.Startup
                     string name = string.IsNullOrEmpty(label) ? System.IO.Path.GetFileNameWithoutExtension(path) : label;
                     _waiting[path] = new Waiting(file, path, name, ++_seq, _stamp(path));
                     _files.Add(path);
+                    _names.Add(System.IO.Path.GetFileName(path));
                     _held++;
                     _counts[name] = (_counts.TryGetValue(name, out int n) ? n : 0) + 1;
                     return true;
@@ -94,24 +96,51 @@ namespace Vigil.Startup
         /// Before a file is read back from disk: its held save is written first, as it would be there
         /// already, unless someone wrote the file after that save, whose write then stands.
         /// </summary>
-        public void BeforeRead(string path)
+        public void BeforeRead(string path) => WriteBeforeRead(path);
+
+        /// <summary>
+        /// A mod about to open, check or copy a file itself, past BepInEx: as <see cref="BeforeRead"/>,
+        /// and the mod is named once for the file when its held save had to be written for it.
+        /// </summary>
+        public void ReadPast(string path, string who)
+        {
+            if (!WriteBeforeRead(path)) return;
+            string entry = (string.IsNullOrEmpty(who) ? "a mod" : who) + ": " + System.IO.Path.GetFileName(path);
+            lock (_gate)
+            {
+                if (!_readPast.Contains(entry)) _readPast.Add(entry);
+            }
+        }
+
+        /// <summary>Whether a file of this name has a held save: the quick test before a file a mod opens is looked at closer.</summary>
+        public bool Holds(string fileName)
+        {
+            lock (_gate) return Holding && fileName != null && _names.Contains(fileName);
+        }
+
+        public bool IsWaiting(string path)
+        {
+            lock (_gate) return Holding && path != null && _waiting.ContainsKey(path);
+        }
+
+        // True when the path's held save was written now.
+        private bool WriteBeforeRead(string path)
         {
             Waiting w;
             lock (_gate)
             {
-                if (!Holding || path == null || !_waiting.TryGetValue(path, out w)) return;
+                if (!Holding || path == null || !_waiting.TryGetValue(path, out w)) return false;
                 _waiting.Remove(path);
                 if (_stamp(path) != w.Stamp)
                 {
                     _kept.Add(w.Label);
-                    return;
+                    return false;
                 }
             }
 
-            if (Write(w))
-            {
-                lock (_gate) _flushed++;
-            }
+            if (!Write(w)) return false;
+            lock (_gate) _flushed++;
+            return true;
         }
 
         /// <summary>Ends the hold and writes each file with a held save once, in the order of their last saves. A second call gives the first result.</summary>
@@ -148,6 +177,7 @@ namespace Vigil.Startup
                 r.Most.AddRange(_counts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(MostShown));
                 r.Kept.AddRange(_kept);
                 r.Failed.AddRange(_failed);
+                r.ReadPast.AddRange(_readPast);
                 Result = r;
                 return r;
             }

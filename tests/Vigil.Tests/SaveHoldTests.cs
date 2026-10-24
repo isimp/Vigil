@@ -18,6 +18,7 @@ namespace Vigil.Tests
     {
         private const string OdinPath = @"C:\BepInEx\config\Raelaziel.OdinArchitect.cfg";
         private const string VigilPath = @"C:\BepInEx\config\isimp.Vigil.cfg";
+        private const string SpawnPath = @"C:\BepInEx\config\spawn_that.simple.cfg";
 
         [Fact]
         public void A_file_saved_many_times_during_the_start_is_written_once_when_it_ends()
@@ -207,6 +208,97 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_held_file_a_mod_reads_past_BepInEx_is_written_first_and_the_mod_is_named()
+        {
+            var t = new Rig();
+            t.Disk.Write(SpawnPath, "last session");
+            var spawn = t.File(SpawnPath, "Spawn That");
+            t.Hold.Begin();
+            spawn.Text = "with this start's new defaults";
+            t.Save(spawn);
+
+            string seen = t.ReadPast(SpawnPath, "Spawn That");
+
+            Assert.Equal("with this start's new defaults", seen);
+            var result = t.Hold.Release("the menu showed");
+            Assert.Equal(new[] { "Spawn That: spawn_that.simple.cfg" }, result.ReadPast);
+            Assert.Equal(1, result.Flushed);
+        }
+
+        [Fact]
+        public void A_file_with_no_held_save_is_read_as_it_is_and_nobody_is_named()
+        {
+            var t = new Rig();
+            t.Disk.Write(SpawnPath, "last session");
+            var odin = t.File(OdinPath, "OdinArchitect");
+            t.Hold.Begin();
+            t.Save(odin);
+
+            Assert.False(t.Hold.Holds("spawn_that.simple.cfg"));
+            Assert.Equal("last session", t.ReadPast(SpawnPath, "Spawn That"));
+            Assert.Equal(1, t.Disk.Writes);
+            Assert.Empty(t.Hold.Release("the menu showed").ReadPast);
+        }
+
+        [Fact]
+        public void A_mod_reading_a_held_file_again_after_another_save_is_named_once()
+        {
+            var t = new Rig();
+            var spawn = t.File(SpawnPath, "Spawn That");
+            t.Hold.Begin();
+            t.Save(spawn);
+            t.ReadPast(SpawnPath, "Spawn That");
+            spawn.Text = "changed again";
+            t.Save(spawn);
+
+            Assert.True(t.Hold.IsWaiting(SpawnPath));
+            Assert.Equal("changed again", t.ReadPast(SpawnPath, "Spawn That"));
+            Assert.False(t.Hold.IsWaiting(SpawnPath));
+            Assert.Single(t.Hold.Release("the menu showed").ReadPast);
+        }
+
+        [Fact]
+        public void A_held_file_written_from_outside_after_its_last_save_is_read_as_written_and_nobody_is_named()
+        {
+            var t = new Rig();
+            var spawn = t.File(SpawnPath, "Spawn That");
+            t.Hold.Begin();
+            t.Save(spawn);
+            t.Disk.Write(SpawnPath, "written by the mod itself");
+
+            Assert.Equal("written by the mod itself", t.ReadPast(SpawnPath, "Spawn That"));
+            var result = t.Hold.Release("the menu showed");
+            Assert.Empty(result.ReadPast);
+            Assert.Equal(new[] { "Spawn That" }, result.Kept);
+        }
+
+        [Fact]
+        public void After_the_hold_a_read_past_BepInEx_writes_nothing()
+        {
+            var t = new Rig();
+            var spawn = t.File(SpawnPath, "Spawn That");
+            t.Hold.Begin();
+            t.Save(spawn);
+            t.Hold.Release("the menu showed");
+            spawn.Text = "changed in game";
+
+            t.ReadPast(SpawnPath, "Spawn That");
+
+            Assert.Equal(1, t.Disk.Writes);
+            Assert.False(t.Hold.Holds("spawn_that.simple.cfg"));
+        }
+
+        [Fact]
+        public void The_report_names_the_mods_that_read_a_held_file_past_BepInEx()
+        {
+            var r = new SaveHoldResult("the menu showed", 3, 2, 2, 1, 12);
+            r.ReadPast.Add("Spawn That: spawn_that.simple.cfg");
+
+            Assert.Equal("Config saves: 1 file read past BepInEx, so written first: Spawn That: spawn_that.simple.cfg", r.Lines()[1]);
+            Assert.Equal(new[] { "Spawn That: spawn_that.simple.cfg" }, SaveHoldResult.Parse(r.EventText()).ReadPast);
+        }
+
+        [Fact]
         public void The_report_line_says_how_many_saves_were_held_and_which_files_saved_most()
         {
             var t = new Rig();
@@ -317,6 +409,13 @@ namespace Vigil.Tests
             {
                 Hold.BeforeRead(c.Path);
                 c.Text = Disk.Read(c.Path);
+            }
+
+            /// <summary>A mod opening a settings file itself, with the guard's prefix: what it reads from disk.</summary>
+            public string ReadPast(string path, string who)
+            {
+                if (Hold.Holds(System.IO.Path.GetFileName(path)) && Hold.IsWaiting(path)) Hold.ReadPast(path, who);
+                return Disk.Read(path);
             }
         }
     }

@@ -15,7 +15,8 @@ namespace Vigil.Startup
     /// Puts a <see cref="SaveHold"/> in front of BepInEx's config saves: a prefix on
     /// <c>ConfigFile.Save</c> hands each save to the hold, and prefixes on <c>ConfigFile.Reload</c> and
     /// the <c>ConfigFile</c> constructor write a held file before it is read back or opened by another
-    /// settings object. All go in from the patcher, before the chainloader starts, so
+    /// settings object; while it holds, a guard does the same for a mod opening, checking for or
+    /// copying a held file itself. All go in from the patcher, before the chainloader starts, so
     /// StartupAccelerator's holding back of patches (from the chainloader on) does not delay them. A
     /// timer ends the hold at its cap should Vigil.dll never end it.
     /// </summary>
@@ -61,6 +62,56 @@ namespace Vigil.Startup
             Hold = hold;
             hold.Begin();
             s_cap = new System.Threading.Timer(_ => StartupState.ReleaseSaves(SaveHold.CapWhy), null, SaveHold.Cap + TimeSpan.FromSeconds(5), System.Threading.Timeout.InfiniteTimeSpan);
+            InstallGuard();
+        }
+
+        /// <summary>Why mods' own reads of held files are not watched; null when they are.</summary>
+        public static string GuardProblem { get; private set; }
+
+        private static readonly List<MethodBase> Guarded = new List<MethodBase>();
+
+        // A mod reading, checking or copying a settings file itself goes past BepInEx. In Mono every
+        // read of a file's contents by path ends in one FileStream constructor, File.Exists in
+        // FileSystem.FileExists, and File.Copy and FileInfo.CopyTo in FileSystem.CopyFile; a held file
+        // about to be read there is written first. Without these the hold still works, unguarded.
+        private static void InstallGuard()
+        {
+            try
+            {
+                var fileSystem = typeof(File).Assembly.GetType("System.IO.FileSystem", false);
+                var open = AccessTools.Constructor(typeof(FileStream), new[] { typeof(string), typeof(FileMode), typeof(FileAccess), typeof(FileShare), typeof(int), typeof(bool), typeof(FileOptions) });
+                var exists = fileSystem == null ? null : AccessTools.Method(fileSystem, "FileExists", new[] { typeof(string) });
+                var copy = fileSystem == null ? null : AccessTools.Method(fileSystem, "CopyFile", new[] { typeof(string), typeof(string), typeof(bool) });
+                if (open == null || exists == null || copy == null)
+                {
+                    GuardProblem = "this runtime's file opening has another shape";
+                    return;
+                }
+
+                s_harmony.Patch(open, prefix: new HarmonyMethod(typeof(ConfigSaveHook), nameof(OpenStreamPrefix)) { priority = Priority.First });
+                Guarded.Add(open);
+                s_harmony.Patch(exists, prefix: new HarmonyMethod(typeof(ConfigSaveHook), nameof(ExistsPrefix)) { priority = Priority.First });
+                Guarded.Add(exists);
+                s_harmony.Patch(copy, prefix: new HarmonyMethod(typeof(ConfigSaveHook), nameof(CopyPrefix)) { priority = Priority.First });
+                Guarded.Add(copy);
+            }
+            catch (Exception e)
+            {
+                GuardProblem = e.GetType().Name + ": " + e.Message;
+                RemoveGuard();
+            }
+        }
+
+        // The guard has nothing to do once the hold is over: its prefixes come off.
+        private static void RemoveGuard()
+        {
+            foreach (var m in Guarded)
+            {
+                try { s_harmony.Unpatch(m, HarmonyPatchType.Prefix, HarmonyId); }
+                catch (Exception) { }
+            }
+
+            Guarded.Clear();
         }
 
         /// <summary>Ends the hold, writing each held file once; null when there was no hold. Later calls give the first result.</summary>
@@ -75,6 +126,7 @@ namespace Vigil.Startup
                 {
                     s_checked = true;
                     s_cap?.Dispose();
+                    RemoveGuard();
                     Check = CheckWritten(hold.Written);
                 }
             }
@@ -116,6 +168,74 @@ namespace Vigil.Startup
             if (t_writing || Hold == null || configPath == null) return;
             try { Hold.BeforeRead(Path.GetFullPath(configPath)); }
             catch (Exception) { }
+        }
+
+        // Called by Harmony on every file opened by path while the guard is in: a read of an existing file only.
+        private static void OpenStreamPrefix(string path, FileMode mode, FileAccess access)
+        {
+            if ((access & FileAccess.Read) == 0 || (mode != FileMode.Open && mode != FileMode.OpenOrCreate)) return;
+            Guard(path);
+        }
+
+        private static void ExistsPrefix(string fullPath) => Guard(fullPath);
+
+        private static void CopyPrefix(string sourceFullPath) => Guard(sourceFullPath);
+
+        private static void Guard(string path)
+        {
+            var hold = Hold;
+            if (hold == null || !hold.Holding || path == null || t_writing || t_guarding) return;
+            t_guarding = true;
+            try
+            {
+                if (!hold.Holds(Path.GetFileName(path))) return;
+                string full = Path.GetFullPath(path);
+                if (hold.IsWaiting(full)) hold.ReadPast(full, Reader());
+            }
+            catch (Exception)
+            {
+                // a path the runtime would refuse too
+            }
+            finally
+            {
+                t_guarding = false;
+            }
+        }
+
+        [ThreadStatic]
+        private static bool t_guarding;
+
+        private static readonly HashSet<string> Frameworks = new HashSet<string>(StringComparer.Ordinal) { "mscorlib", "System", "BepInEx", "BepInEx.Preloader", "0Harmony", "Vigil.Preloader" };
+        private static readonly string[] FrameworkFamilies = { "System.", "MonoMod.", "Mono." };
+
+        // The plugin whose code asked for the file: the first frame outside the runtime, BepInEx, Harmony and this patcher.
+        private static string Reader()
+        {
+            foreach (var frame in new System.Diagnostics.StackTrace(2, false).GetFrames() ?? Array.Empty<System.Diagnostics.StackFrame>())
+            {
+                var assembly = frame.GetMethod()?.DeclaringType?.Assembly;
+                if (assembly == null) continue;
+                string name = assembly.GetName().Name;
+                if (Frameworks.Contains(name) || FrameworkFamilies.Any(f => name.StartsWith(f, StringComparison.Ordinal))) continue;
+                return PluginOf(assembly) ?? name;
+            }
+
+            return null;
+        }
+
+        private static string PluginOf(Assembly assembly)
+        {
+            try
+            {
+                string location = assembly.Location;
+                if (string.IsNullOrEmpty(location)) return null;
+                return BepInEx.Bootstrap.Chainloader.PluginInfos.Values
+                    .FirstOrDefault(p => string.Equals(p.Location, location, StringComparison.OrdinalIgnoreCase))?.Metadata.Name;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         private static void WriteNow(object file)

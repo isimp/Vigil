@@ -230,7 +230,8 @@ namespace Vigil.Startup
             if (!HoldAsked) return "config saves not held" + (Server ? " on a dedicated server" : "");
             if (ConfigSaveHook.Hold == null) return "config saves not held: " + ConfigSaveHook.Problem;
             var r = ConfigSaveHook.Hold.Result;
-            return r == null ? "config saves held until " + (Server ? "the world is up" : "the menu shows") : "config saves held until " + r.Why;
+            string guard = ConfigSaveHook.GuardProblem == null ? "" : "; mods' own reads of held files not watched: " + ConfigSaveHook.GuardProblem;
+            return (r == null ? "config saves held until " + (Server ? "the world is up" : "the menu shows") : "config saves held until " + r.Why) + guard;
         }
 
         /// <summary>Ends the hold of config saves (the menu shown, the world up, the game quitting) and adds its step; "" when there was no hold.</summary>

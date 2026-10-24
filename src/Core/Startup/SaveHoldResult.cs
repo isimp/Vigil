@@ -42,6 +42,9 @@ namespace Vigil.Core
         /// <summary>Files that could not be written: "name: reason".</summary>
         public List<string> Failed { get; } = new List<string>();
 
+        /// <summary>Held files a mod opened, checked or copied itself, past BepInEx, and that were written first for it: "mod: file".</summary>
+        public List<string> ReadPast { get; } = new List<string>();
+
         public List<string> Lines()
         {
             string written = Written == Files && Flushed == 0
@@ -62,24 +65,27 @@ namespace Vigil.Core
                     : Kept.Count.ToString(Ci) + " files kept as other mods wrote them (" + string.Join(", ", Kept) + ")");
             }
 
+            if (ReadPast.Count > 0) odd.Add(ReadPast.Count.ToString(Ci) + (ReadPast.Count == 1 ? " file" : " files") + " read past BepInEx, so written first: " + string.Join(", ", ReadPast));
             if (Failed.Count > 0) odd.Add(Failed.Count.ToString(Ci) + (Failed.Count == 1 ? " file" : " files") + " not written: " + string.Join(", ", Failed));
             if (odd.Count > 0) lines.Add("Config saves: " + string.Join("; ", odd));
             return lines;
         }
 
-        /// <summary>The result as a startup step's text: why|held|files|written|flushed|ms|name=count;...|kept;...|failed;...</summary>
+        /// <summary>The result as a startup step's text: why|held|files|written|flushed|ms|name=count;...|kept;...|failed;...|read past;...</summary>
         public string EventText() => string.Join("|", new[]
         {
             Clean(Why), Held.ToString(Ci), Files.ToString(Ci), Written.ToString(Ci), Flushed.ToString(Ci), WriteMs.ToString("0.0", Ci),
             string.Join(";", Most.Select(m => Clean(m.Key) + "=" + m.Value.ToString(Ci))),
             string.Join(";", Kept.Select(Clean)),
             string.Join(";", Failed.Select(Clean)),
+            string.Join(";", ReadPast.Select(Clean)),
         });
 
+        /// <summary>The result from its step's text; a text without the read-past field (Vigil 0.40.0) reads as having none.</summary>
         public static SaveHoldResult Parse(string text)
         {
             var f = (text ?? "").Split('|');
-            if (f.Length != 9
+            if ((f.Length != 9 && f.Length != 10)
                 || !int.TryParse(f[1], NumberStyles.Integer, Ci, out int held) || !int.TryParse(f[2], NumberStyles.Integer, Ci, out int files)
                 || !int.TryParse(f[3], NumberStyles.Integer, Ci, out int written) || !int.TryParse(f[4], NumberStyles.Integer, Ci, out int flushed)
                 || !double.TryParse(f[5], NumberStyles.Float, Ci, out double ms))
@@ -96,6 +102,7 @@ namespace Vigil.Core
 
             r.Kept.AddRange(Items(f[7]));
             r.Failed.AddRange(Items(f[8]));
+            if (f.Length == 10) r.ReadPast.AddRange(Items(f[9]));
             return r;
         }
 

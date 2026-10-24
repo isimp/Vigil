@@ -495,7 +495,7 @@ namespace Vigil.Recorder
                 }
                 if (_watchExceptions && !ExceptionWatch.Works) _sessionNotes.Add("Exceptions are not counted: this runtime does not report them as they are thrown.");
                 StartSteps.Lap("first frame: file watch");
-                try { SessionInfo.Write(_dir); } catch (Exception) { }
+                try { SessionInfo.Write(_dir, configs: !_startup.HoldingNow); } catch (Exception) { }
                 StartSteps.Lap("first frame: mods and configs listed");
                 StartSteps.End();
             }

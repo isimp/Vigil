@@ -18,12 +18,15 @@ namespace Vigil.Recorder
     /// </summary>
     internal static class SessionInfo
     {
-        public static void Write(string dir)
+        /// <param name="dir">The recordings folder.</param>
+        /// <param name="configs">False while config saves are held: reading the files then would make the hold write each of them, so they are listed when it ends.</param>
+        public static void Write(string dir, bool configs = true)
         {
             WriteMods(Path.Combine(dir, "Vigil-mods.tsv"));
             WriteSystem(Path.Combine(dir, "Vigil-system.txt"));
-            string configs = Path.Combine(dir, "Vigil-configs.tsv");
-            new Thread(() => OwnThreads.Timed(() => WriteConfigs(Paths.ConfigPath, configs))) { IsBackground = true, Name = "Vigil.ConfigHashes" }.Start();
+            if (!configs) return;
+            string list = Path.Combine(dir, "Vigil-configs.tsv");
+            new Thread(() => OwnThreads.Timed(() => WriteConfigs(Paths.ConfigPath, list))) { IsBackground = true, Name = "Vigil.ConfigHashes" }.Start();
         }
 
         private static void WriteMods(string path)

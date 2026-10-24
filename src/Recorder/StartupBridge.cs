@@ -97,5 +97,11 @@ namespace Vigil.Recorder
 
         /// <summary>Files read back after the hold ended, settings compared, then the first settings whose file value differs.</summary>
         public string[] SaveCheck => Call("SaveCheck") as string[] ?? Array.Empty<string>();
+
+        /// <summary>Why mods' own reads of held files were not watched during the hold; "" when they were.</summary>
+        public string GuardProblem => Call("GuardProblem") as string ?? "";
+
+        /// <summary>Whether config saves are being held right now: the start is not over.</summary>
+        public bool HoldingNow => Call("HoldingNow") as bool? ?? false;
     }
 }

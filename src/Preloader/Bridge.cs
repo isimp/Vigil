@@ -63,5 +63,11 @@ namespace Vigil.Startup
 
         /// <summary>Files read back after the hold, settings compared, then the first settings whose file value differs.</summary>
         public static string[] SaveCheck() => ConfigSaveHook.Check;
+
+        /// <summary>Why mods' own reads of held files were not watched during the hold; "" when they were.</summary>
+        public static string GuardProblem() => ConfigSaveHook.GuardProblem ?? "";
+
+        /// <summary>Whether config saves are being held right now.</summary>
+        public static bool HoldingNow() => ConfigSaveHook.Hold?.Holding ?? false;
     }
 }

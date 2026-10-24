@@ -136,12 +136,11 @@ namespace Vigil.Recorder
 
         /// <summary>
         /// Ends the patcher's hold of config saves, which writes each held file once. The config files
-        /// were listed (Vigil-configs.tsv) before they were written, so they are listed again.
+        /// were left out of the first frame's list (Vigil-configs.tsv) while held, so they are listed now.
         /// </summary>
         private void EndHeldSaves(string why)
         {
-            var saves = _startup.ReleaseSaves(why);
-            if (saves == null || saves.Written + saves.Flushed == 0) return;
+            if (_startup.ReleaseSaves(why) == null) return;
             try { SessionInfo.Write(_dir); }
             catch (Exception) { }
         }
@@ -320,7 +319,12 @@ namespace Vigil.Recorder
             if (check.Length > 2) return new Check(Here, what, Outcome.Fail, "read back, not as set: " + string.Join(", ", check.Skip(2)));
             string read = check.Length == 2 ? string.Format(Ic, "; read back: {0} files, {1} settings, each as set", check[0], check[1]) : "";
             string kept = saves.Kept.Count > 0 ? "; kept as another mod wrote them: " + string.Join(", ", saves.Kept) : "";
-            return new Check(Here, what, Outcome.Pass, string.Format(Ic, "{0:N0} held for {1:N0} files, written when {2}", saves.Held, saves.Files, saves.Why) + read + kept);
+            string past = saves.ReadPast.Count > 0 ? "; read past BepInEx, so written first: " + string.Join(", ", saves.ReadPast) : "";
+            string summary = string.Format(Ic, "{0:N0} held for {1:N0} files, written when {2}", saves.Held, saves.Files, saves.Why) + read + kept + past;
+            string guard = _startup.GuardProblem;
+            return guard.Length > 0
+                ? new Check(Here, what, Outcome.Warn, summary + "; mods' own reads of held files were not watched: " + guard)
+                : new Check(Here, what, Outcome.Pass, summary);
         }
     }
 }

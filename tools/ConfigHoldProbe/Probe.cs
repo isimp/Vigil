@@ -36,13 +36,20 @@ public static class Probe
         object hold = hookType.GetProperty("Hold", BindingFlags.Public | BindingFlags.Static).GetValue(null, null);
         Console.WriteLine("hook: " + (hold != null ? "in" : "NOT IN: " + problem));
         if (hold == null) return 1;
+        // PROBE_NO_GUARD=1 takes the guard of mods' own reads out again, to show the read cases tell the difference.
+        if (Environment.GetEnvironmentVariable("PROBE_NO_GUARD") == "1")
+        {
+            hookType.GetMethod("RemoveGuard", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
+            Console.WriteLine("guard: taken out for this run");
+        }
 
         sw = Stopwatch.StartNew();
         Scenarios(held);
         double heldMs = sw.Elapsed.TotalMilliseconds;
         bool holding = (bool)hold.GetType().GetProperty("Holding").GetValue(hold, null);
         Console.WriteLine("still holding before the end: " + holding);
-        string bigBefore = File.Exists(Path.Combine(held, "big.cfg")) ? "exists" : "not written yet";
+        // FileInfo.Exists, which the guard leaves alone, so this look does not write the file.
+        string bigBefore = new FileInfo(Path.Combine(held, "big.cfg")).Exists ? "exists" : "not written yet";
         Console.WriteLine("big.cfg before the end: " + bigBefore);
 
         sw = Stopwatch.StartNew();
@@ -70,6 +77,15 @@ public static class Probe
     static ConfigFile File_(string dir, string name, string owner)
     {
         return new ConfigFile(Path.Combine(dir, name), true, owner == null ? null : new BepInPlugin("probe." + owner, owner, "1.2.3"));
+    }
+
+    // What a mod reading a file itself got: the text, or the exception it would have met.
+    static void Seen(string dir, string name, Func<string> read)
+    {
+        string got;
+        try { got = read(); }
+        catch (Exception e) { got = "threw " + e.GetType().Name; }
+        File.WriteAllText(Path.Combine(dir, name), got);
     }
 
     static void Scenarios(string dir)
@@ -120,6 +136,29 @@ public static class Probe
         x.Bind("X", "x1", 1, "from x");
         var y = File_(dir, "opened.cfg", "Y");
         y.Bind("Y", "y1", 2, "from y");
+
+        // Mods reading a settings file themselves, past BepInEx, while the game starts: what each saw
+        // is written beside the files, so the two runs compare it too.
+        var reader = File_(dir, "readpast.cfg", "ReadPast");
+        string readpast = Path.Combine(dir, "readpast.cfg");
+        reader.Bind("R", "a", 1, "first");
+        Seen(dir, "seen-readalltext.txt", () => File.ReadAllText(readpast));
+        reader.Bind("R", "b", 2, "second");
+        Seen(dir, "seen-streamreader.txt", () => { using (var sr = new StreamReader(readpast)) return sr.ReadToEnd(); });
+        reader.Bind("R", "c", 3, "third");
+        Seen(dir, "seen-readallbytes.txt", () => Convert.ToBase64String(File.ReadAllBytes(readpast)));
+
+        // A brand-new settings file checked for: it is there, as it would be.
+        var fresh = File_(dir, "fresh.cfg", "Fresh");
+        fresh.Bind("F", "f", 1, "new");
+        Seen(dir, "seen-exists.txt", () => File.Exists(Path.Combine(dir, "fresh.cfg")) ? "exists" : "missing");
+
+        // A settings file copied, both ways: each copy holds what the file would.
+        var copied = File_(dir, "copied.cfg", "Copied");
+        copied.Bind("C", "c", 1, "copied");
+        Seen(dir, "seen-copy-by-file.txt", () => { File.Copy(Path.Combine(dir, "copied.cfg"), Path.Combine(dir, "copy-by-file.txt"), true); return "copied"; });
+        copied.Bind("C", "d", 2, "copied again");
+        Seen(dir, "seen-copy-by-fileinfo.txt", () => { new FileInfo(Path.Combine(dir, "copied.cfg")).CopyTo(Path.Combine(dir, "copy-by-fileinfo.txt"), true); return "copied"; });
 
         // StartupAccelerator's way: saving switched off, values set, one Save asked for.
         var quiet = File_(dir, "quiet.cfg", "Quiet");
