@@ -64,14 +64,16 @@ namespace Vigil.Recorder
                 yield return WardTestTell("made", placed);
                 yield return null;
 
-                if (!WardRepairPatch.WouldRepair(wall.GetComponent<Piece>(), ward))
+                // Repairing by itself: 1 health off, no start. Protective Wards repairs only a damaged
+                // piece, so whether it would repair the wall is asked after the damage.
+                var wallPiece = wall.GetComponent<Piece>();
+                if (!WardRepairPatch.Damage(wall) || !WardRepairPatch.WouldRepair(wallPiece, ward))
                 {
-                    checks.Add(new Check(Here, what, Outcome.Fail, "Protective Wards would not repair the test's wall for its ward"));
+                    string state = "creator " + (wallPiece != null ? wallPiece.GetCreator().ToString(Ic) : "none") + ", health "
+                        + (wall.GetHealthPercentage() * 100f).ToString("0.#", Ic) + " %";
+                    checks.Add(new Check(Here, what, Outcome.Fail, "Protective Wards would not repair the test's wall, 1 health down, for its ward (" + state + ")"));
                     yield break;
                 }
-
-                // Repairing by itself: 1 health off, no start.
-                WardRepairPatch.Damage(wall);
                 WardRepairPatch.StartTrial(network: false, auto: true, WardTrialSeconds, WardTrialLasts);
                 float from = Time.realtimeSinceStartup;
                 while (WardRepairPatch.Health(wall) < wall.m_health && Time.realtimeSinceStartup < from + 10f) yield return null;
