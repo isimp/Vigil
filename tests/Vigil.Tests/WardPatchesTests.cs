@@ -366,6 +366,103 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_test_objects_ids_reach_the_server_whole_through_the_links_encoding()
+        {
+            var ids = new List<WardTestSite.Id> { new WardTestSite.Id(123456789012, 7), new WardTestSite.Id(-5, 4000000000) };
+
+            var line = KeyValues.Encode(new Dictionary<string, object> { { "step", "made" }, { "ids", WardTestSite.FormatIds(ids) } });
+            KeyValues.Decode(line).TryGetValue("ids", out string arrived);
+
+            Assert.Equal(ids, WardTestSite.ParseIds(arrived));
+        }
+
+        [Fact]
+        public void The_players_spots_reach_the_server_whole_through_the_links_encoding()
+        {
+            var spots = WardTestSite.Candidates(3072.5f, -3000.25f, 64, 1, 8, 12, 6);
+
+            var line = KeyValues.Encode(new Dictionary<string, object> { { "step", "site" }, { "spots", WardTestSite.FormatSpots(spots) } });
+            KeyValues.Decode(line).TryGetValue("spots", out string arrived);
+
+            Assert.Equal(spots, WardTestSite.ParseSpots(arrived));
+        }
+
+        [Fact]
+        public void The_servers_spot_reaches_the_player_whole_through_the_links_encoding()
+        {
+            var spot = new WardTestSite.Spot(-3016f, 2944.5f);
+
+            var line = KeyValues.Encode(new Dictionary<string, object> { { "ok", 1 }, { "spot", WardTestSite.FormatSpots(new[] { spot }) } });
+            KeyValues.Decode(line).TryGetValue("spot", out string arrived);
+
+            Assert.Equal(new[] { spot }, WardTestSite.ParseSpots(arrived));
+        }
+
+        [Fact]
+        public void The_server_records_only_test_objects_the_asker_placed_and_owns()
+        {
+            const long me = 4242;
+            Assert.True(WardTestSite.Accepts(WardTestSite.WardPrefab, creator: me, asker: me, ownedByAsker: true));
+            Assert.True(WardTestSite.Accepts(WardTestSite.WardPrefab, creator: WardTestSite.Stranger, asker: me, ownedByAsker: true));
+            Assert.True(WardTestSite.Accepts(WardTestSite.WallPrefab, creator: me, asker: me, ownedByAsker: true));
+        }
+
+        [Fact]
+        public void A_real_ward_or_piece_is_never_recorded_as_a_test_object()
+        {
+            const long me = 4242, friend = 777;
+            Assert.False(WardTestSite.Accepts(WardTestSite.WardPrefab, creator: friend, asker: me, ownedByAsker: true));
+            Assert.False(WardTestSite.Accepts(WardTestSite.WardPrefab, creator: me, asker: me, ownedByAsker: false));
+            Assert.False(WardTestSite.Accepts(WardTestSite.WallPrefab, creator: WardTestSite.Stranger, asker: me, ownedByAsker: true));
+            Assert.False(WardTestSite.Accepts("piece_chest_wood", creator: me, asker: me, ownedByAsker: true));
+        }
+
+        [Fact]
+        public void The_server_removes_a_recorded_object_only_while_it_still_is_a_test_object()
+        {
+            const long me = 4242, friend = 777;
+            Assert.True(WardTestSite.MayRemove(WardTestSite.WardPrefab, creator: WardTestSite.Stranger, recordedFor: me));
+            Assert.True(WardTestSite.MayRemove(WardTestSite.WallPrefab, creator: me, recordedFor: me));
+            Assert.False(WardTestSite.MayRemove(WardTestSite.WardPrefab, creator: friend, recordedFor: me));
+            Assert.False(WardTestSite.MayRemove("piece_chest_wood", creator: me, recordedFor: me));
+        }
+
+        [Fact]
+        public void The_right_password_is_typed_only_at_a_recorded_ward_of_the_made_up_stranger()
+        {
+            Assert.True(WardTestSite.TakesGuess(recorded: true, creator: WardTestSite.Stranger));
+            Assert.False(WardTestSite.TakesGuess(recorded: true, creator: 4242));
+            Assert.False(WardTestSite.TakesGuess(recorded: false, creator: WardTestSite.Stranger));
+        }
+
+        [Fact]
+        public void A_ward_looks_up_the_pieces_in_its_area_again_after_a_while_not_on_every_turn()
+        {
+            Assert.False(WardRepair.PiecesDue(builtAt: 100, now: 100 + WardRepair.PieceListSeconds - 1));
+            Assert.True(WardRepair.PiecesDue(builtAt: 100, now: 100 + WardRepair.PieceListSeconds));
+            Assert.True(WardRepair.PiecesDue(builtAt: double.NegativeInfinity, now: 0));
+        }
+
+        [Fact]
+        public void The_test_ward_is_small_enough_to_fit_beside_a_base_and_still_covers_its_wall()
+        {
+            Assert.InRange(WardTestSite.TestRadius, WardTestSite.WallOffset + 1f, 8f);
+        }
+
+        [Fact]
+        public void Without_a_spot_the_test_says_how_near_it_came_and_what_it_needs()
+        {
+            var spots = new List<WardTestSite.Spot> { new WardTestSite.Spot(0, 0), new WardTestSite.Spot(60, 0) };
+            var wards = new List<WardTestSite.Circle> { new WardTestSite.Circle(25, 0, 20), new WardTestSite.Circle(100, 0, 32) };
+
+            // Room at (0, 0): 5 m to the first ward's area; at (60, 0): 8 m to the second's. The best spot counts.
+            Assert.Equal(8f, WardTestSite.BestClearance(spots, wards), 3);
+            Assert.Equal("no spot in the zones around you keeps a test ward clear of the switched-on wards: the best is 5 m from a ward's area, the test needs 9 m (10 spots looked at)",
+                WardTestSite.NoSpotLine(5f, testRadius: 5f, margin: 4f, spots: 10));
+            Assert.True(float.IsPositiveInfinity(WardTestSite.BestClearance(spots, new List<WardTestSite.Circle>())));
+        }
+
+        [Fact]
         public void No_test_spot_when_every_spot_lies_too_near_a_ward()
         {
             var spots = new List<WardTestSite.Spot> { new WardTestSite.Spot(0, 0), new WardTestSite.Spot(50, 0) };

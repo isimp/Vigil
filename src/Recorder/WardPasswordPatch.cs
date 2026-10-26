@@ -26,6 +26,7 @@ namespace Vigil.Recorder
         private const string HarmonyId = "isimp.Vigil.patches.wardpassword";
 
         private static WardShape.PasswordShape s_shape;
+        private static Func<PrivateArea, Player, bool> s_access, s_offers;
         private static FieldInfo s_playerId, s_playerName;
         private static readonly WardPassword.Gate s_gate = new WardPassword.Gate();
         private static WardPassword.Answer? s_lastJudged;
@@ -66,7 +67,9 @@ namespace Vigil.Recorder
                     return;
                 }
                 var harmony = new Harmony(HarmonyId);
+                s_access = (Func<PrivateArea, Player, bool>)Delegate.CreateDelegate(typeof(Func<PrivateArea, Player, bool>), s_shape.Access);
                 harmony.Patch(s_shape.Offers, postfix: new HarmonyMethod(typeof(WardPasswordPatch), nameof(AfterOffers)));
+                s_offers = (Func<PrivateArea, Player, bool>)Delegate.CreateDelegate(typeof(Func<PrivateArea, Player, bool>), s_shape.Offers);
                 harmony.Patch(s_shape.Submitted, prefix: new HarmonyMethod(typeof(WardPasswordPatch), nameof(BeforeSubmitted)));
                 log?.Invoke("Vigil: the ward password patch is hooked into Protective Wards " + Version + ".");
             }
@@ -79,12 +82,10 @@ namespace Vigil.Recorder
 
         private static void AfterOffers(PrivateArea ward, Player player, ref bool __result)
         {
-            if (__result || !ServerHasOne || s_shape == null || ward == null || player == null) return;
+            if (__result || !ServerHasOne || s_access == null || ward == null || player == null || ward.m_ownerFaction != Character.Faction.Players) return;
             var view = ward.GetComponent<ZNetView>();
-            if (view == null || !view.IsValid()) return;
-            bool enabled = view.GetZDO().GetBool(ZDOVars.s_enabled);
-            bool hasAccess = (bool)s_shape.Access.Invoke(null, new object[] { ward, player });
-            __result = WardPassword.Offer(ServerHasOne, ward.m_ownerFaction == Character.Faction.Players, enabled, hasAccess, player.GetPlayerID(), wardOffers: false);
+            if (view == null || !view.IsValid() || !view.GetZDO().GetBool(ZDOVars.s_enabled)) return;
+            __result = WardPassword.Offer(ServerHasOne, playerWard: true, enabled: true, s_access(ward, player), player.GetPlayerID(), wardOffers: false);
         }
 
         private static bool BeforeSubmitted(long sender, ZPackage package)
@@ -167,12 +168,17 @@ namespace Vigil.Recorder
             {
                 case "site":
                     Remove(playerId, null);
-                    reply["spot"] = Site(args.TryGetValue("spots", out string spots) ? spots : "");
+                    string at = Site(args.TryGetValue("spots", out string spots) ? spots : "", out string none);
+                    if (at != null) reply["spot"] = at;
+                    else reply["why"] = none;
                     return reply;
                 case "made":
                     if (!s_placed.TryGetValue(playerId, out var list)) s_placed[playerId] = list = new List<WardTestSite.Id>();
-                    list.AddRange(WardTestSite.ParseIds(idText));
+                    // A game asks again until the server has every object; the ones it has are not added twice.
+                    var taken = WardTestSite.ParseIds(idText).Where(id => list.Contains(id) || Accepted(id, playerId, from.m_uid)).ToList();
+                    list.AddRange(taken.Where(id => !list.Contains(id)).ToList());
                     SavePlaced();
+                    reply["recorded"] = taken.Count;
                     return reply;
                 case "gone":
                     Remove(playerId, WardTestSite.ParseIds(idText));
@@ -196,7 +202,7 @@ namespace Vigil.Recorder
             reply["known"] = zdo != null ? 1 : 0;
             reply["admin"] = admin ? 1 : 0;
             if (zdo == null || admin) return reply;
-            bool testWard = s_placed.TryGetValue(playerId, out var mine) && mine.Contains(ward);
+            bool testWard = WardTestSite.TakesGuess(s_placed.TryGetValue(playerId, out var mine) && mine.Contains(ward), zdo.GetLong(ZDOVars.s_creator));
             string guess = WardPassword.ServerGuess(step, testWard, Password, out string why);
             if (guess == null)
             {
@@ -215,26 +221,33 @@ namespace Vigil.Recorder
             return reply;
         }
 
-        private static string Site(string spotText)
+        /// <summary>The spot as "x,z", or null with the reason in <paramref name="why"/>.</summary>
+        private static string Site(string spotText, out string why)
         {
-            var spots = new List<WardTestSite.Spot>();
-            foreach (string pair in spotText.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+            why = null;
+            var spots = WardTestSite.ParseSpots(spotText);
+            if (spots.Count == 0)
             {
-                string[] xz = pair.Split(',');
-                if (xz.Length == 2 && float.TryParse(xz[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x)
-                    && float.TryParse(xz[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float z))
-                {
-                    spots.Add(new WardTestSite.Spot(x, z));
-                }
+                why = "the server got no spots from your game";
+                return null;
             }
-            if (s_shape.AllWards == null || s_shape.Range == null || s_shape.DefaultRadius == null) return "";
+            if (s_shape.AllWards == null || s_shape.Range == null || s_shape.DefaultRadius == null)
+            {
+                why = "the server cannot read the wards' areas (Protective Wards changed)";
+                return null;
+            }
+            // Only switched-on wards chain or give connected access, so only they need room.
             float fallback = (float)s_shape.DefaultRadius.Invoke(null, null);
-            float testRadius = Math.Max(fallback, (float)s_shape.Range.Invoke(null, new object[] { null }));
-            var wards = ((IEnumerable)s_shape.AllWards.Invoke(null, null)).Cast<ZDO>().Where(z => z != null)
+            var wards = ((IEnumerable)s_shape.AllWards.Invoke(null, null)).Cast<ZDO>().Where(z => z != null && z.GetBool(ZDOVars.s_enabled))
                 .Select(z => new WardTestSite.Circle(z.GetPosition().x, z.GetPosition().z, Math.Max(fallback, (float)s_shape.Range.Invoke(null, new object[] { z }))))
                 .ToList();
-            var spot = WardTestSite.Pick(spots, wards, testRadius, WardTestMargin);
-            return spot == null ? "" : spot.Value.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture) + "," + spot.Value.Z.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+            var spot = WardTestSite.Pick(spots, wards, WardTestSite.TestRadius, WardTestMargin);
+            if (spot == null)
+            {
+                why = WardTestSite.NoSpotLine(WardTestSite.BestClearance(spots, wards), WardTestSite.TestRadius, WardTestMargin, spots.Count);
+                return null;
+            }
+            return WardTestSite.FormatSpots(new[] { spot.Value });
         }
 
         /// <summary>Metres between the test ward's area and any real ward's.</summary>
@@ -246,7 +259,7 @@ namespace Vigil.Recorder
             if (!s_placed.TryGetValue(playerId, out var list)) return;
             foreach (var id in list.Where(i => only == null || only.Contains(i)).ToList())
             {
-                Destroy(id);
+                Destroy(id, playerId);
                 list.Remove(id);
             }
             if (list.Count == 0) s_placed.Remove(playerId);
@@ -258,16 +271,29 @@ namespace Vigil.Recorder
         {
             ReadPlaced();
             int removed = 0;
-            foreach (var id in s_placed.Values.SelectMany(l => l).ToList()) removed += Destroy(id) ? 1 : 0;
+            foreach (var kv in s_placed.ToList())
+            {
+                foreach (var id in kv.Value) removed += Destroy(id, kv.Key) ? 1 : 0;
+            }
             s_placed.Clear();
             SavePlaced();
             return removed;
         }
 
-        private static bool Destroy(WardTestSite.Id id)
+        /// <summary>Whether the object the asker's test names is one it placed (<see cref="WardTestSite.Accepts"/>).</summary>
+        private static bool Accepted(WardTestSite.Id id, long playerId, long peer)
         {
             var zdo = ZDOMan.instance?.GetZDO(new ZDOID(id.User, id.Number));
-            if (zdo == null) return false;
+            return zdo != null && WardTestSite.Accepts(PrefabName(zdo), zdo.GetLong(ZDOVars.s_creator), playerId, zdo.GetOwner() == peer);
+        }
+
+        private static string PrefabName(ZDO zdo) => ZNetScene.instance?.GetPrefab(zdo.GetPrefab())?.name ?? "";
+
+        /// <summary>Removes a recorded object while it still is a test object (<see cref="WardTestSite.MayRemove"/>).</summary>
+        private static bool Destroy(WardTestSite.Id id, long recordedFor)
+        {
+            var zdo = ZDOMan.instance?.GetZDO(new ZDOID(id.User, id.Number));
+            if (zdo == null || !WardTestSite.MayRemove(PrefabName(zdo), zdo.GetLong(ZDOVars.s_creator), recordedFor)) return false;
             zdo.SetOwner(ZDOMan.GetSessionID());
             ZDOMan.instance.DestroyZDO(zdo);
             return true;
@@ -307,10 +333,10 @@ namespace Vigil.Recorder
         // ------------------------------------------------------------------ the player's part of the self-test
 
         /// <summary>Protective Wards' own prompt check, as patched, for the player at the ward.</summary>
-        public static bool Offered(PrivateArea ward, Player player) => s_shape != null && (bool)s_shape.Offers.Invoke(null, new object[] { ward, player });
+        public static bool Offered(PrivateArea ward, Player player) => s_offers != null && s_offers(ward, player);
 
         /// <summary>Protective Wards' own access check (direct or through connected wards).</summary>
-        public static bool HasAccess(PrivateArea ward, Player player) => s_shape != null && (bool)s_shape.Access.Invoke(null, new object[] { ward, player });
+        public static bool HasAccess(PrivateArea ward, Player player) => s_access != null && s_access(ward, player);
 
         public static bool Ready => s_shape != null;
     }

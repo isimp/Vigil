@@ -27,8 +27,6 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private const double WardTrialSeconds = 1, WardTrialLasts = 40;
-        private const string WardTestWall = "woodwall";
-        private const long WardTestStranger = 1;
         private static readonly HarmonyLib.AccessTools.FieldRef<Piece, long> s_pieceCreator = HarmonyLib.AccessTools.FieldRefAccess<Piece, long>("m_creator");
 
         private IEnumerator WardRepairTried(List<Check> checks)
@@ -49,19 +47,20 @@ namespace Vigil.Recorder
             WearNTear wall = null;
             try
             {
-                var wardObject = WardTestPlace("guard_stone", spot.At, player.GetPlayerID(), placed);
-                var wallAt = spot.At + new Vector3(3f, 0f, 0f);
+                var wardObject = WardTestPlace(Vigil.Core.WardTestSite.WardPrefab, spot.At, player.GetPlayerID(), placed);
+                var wallAt = spot.At + new Vector3(Vigil.Core.WardTestSite.WallOffset, 0f, 0f);
                 wallAt.y = ZoneSystem.instance.GetGroundHeight(wallAt) - 0.05f;
-                var wallObject = WardTestPlace(WardTestWall, wallAt, player.GetPlayerID(), placed);
+                var wallObject = WardTestPlace(Vigil.Core.WardTestSite.WallPrefab, wallAt, player.GetPlayerID(), placed);
                 ward = wardObject?.GetComponent<PrivateArea>();
                 wall = wallObject?.GetComponent<WearNTear>();
                 if (ward == null || wall == null)
                 {
-                    checks.Add(new Check(Here, what, Outcome.Fail, "the game has no " + (ward == null ? "ward" : WardTestWall) + " to place"));
+                    checks.Add(new Check(Here, what, Outcome.Fail, "the game has no " + (ward == null ? "ward" : Vigil.Core.WardTestSite.WallPrefab) + " to place"));
                     yield break;
                 }
                 WardTestEnable(ward);
                 WardRepairPatch.TestWards.Add(ward);
+                WardRepairPatch.KeepTestWardsSmall();
                 yield return WardTestTell("made", placed);
                 yield return null;
 
@@ -87,6 +86,7 @@ namespace Vigil.Recorder
                 // The ward's alt-use: start, count, repair, stop.
                 WardRepairPatch.Damage(wall);
                 WardRepairPatch.StartTrial(network: true, auto: false, WardTrialSeconds, WardTrialLasts);
+                WardRepairPatch.KeepTestWardsSmall();
                 ward.Interact(player, false, true);
                 var chain = WardRepairPatch.LastChain ?? new List<PrivateArea>();
                 bool shown = WardRepairPatch.Shows(ward);
@@ -140,17 +140,20 @@ namespace Vigil.Recorder
             try
             {
                 if (god) player.SetGodMode(false);
-                var ward = WardTestPlace("guard_stone", spot.At, WardTestStranger, placed)?.GetComponent<PrivateArea>();
+                var ward = WardTestPlace(Vigil.Core.WardTestSite.WardPrefab, spot.At, Vigil.Core.WardTestSite.Stranger, placed)?.GetComponent<PrivateArea>();
                 if (ward == null)
                 {
                     checks.Add(new Check(Here, what, Outcome.Fail, "the game has no ward to place"));
                     yield break;
                 }
                 WardTestEnable(ward);
+                WardRepairPatch.TestWards.Add(ward);
+                WardRepairPatch.KeepTestWardsSmall();
                 yield return WardTestTell("made", placed);
                 yield return null;
 
                 const string prompt = "the password prompt at a ward you have no access to";
+                WardRepairPatch.KeepTestWardsSmall();
                 bool access = WardPasswordPatch.HasAccess(ward, player);
                 bool offered = WardPasswordPatch.Offered(ward, player);
                 checks.Add(access
@@ -209,6 +212,7 @@ namespace Vigil.Recorder
             }
             finally
             {
+                WardRepairPatch.TestWards.RemoveWhere(w => w == null || placed.Contains(w.gameObject));
                 WardTestRemove(placed);
                 if (god && Player.m_localPlayer != null) Player.m_localPlayer.SetGodMode(true);
             }
@@ -221,6 +225,8 @@ namespace Vigil.Recorder
         private void RemoveWardTestLeftovers()
         {
             if (!_server || _wardLeftoversDone || ZNet.instance == null || ZDOMan.instance == null || Time.realtimeSinceStartup < 60f) return;
+            // Not before the world's objects are loaded: the record is forgotten once this has run.
+            if (s_allObjects(ZDOMan.instance).Count == 0) return;
             _wardLeftoversDone = true;
             int removed = WardPasswordPatch.RemoveLeftovers();
             if (removed > 0) _host.Log.LogInfo("Vigil: removed " + removed + " objects an earlier ward self-test left in the world.");
@@ -263,14 +269,13 @@ namespace Vigil.Recorder
             var dry = Vigil.Core.WardTestSite.Candidates(at.x, at.z, ZoneSystem.c_ZoneSize, activeArea: 1, step: 8, minDistance: 12, inset: 6)
                 .Where(s => zones.GetGroundHeight(new Vector3(s.X, 0f, s.Z)) > zones.m_waterLevel + 1f)
                 .Take(120)
-                .Select(s => s.X.ToString("R", CultureInfo.InvariantCulture) + "," + s.Z.ToString("R", CultureInfo.InvariantCulture))
                 .ToList();
             if (dry.Count == 0)
             {
                 spot.Why = "no dry ground in the zones around you";
                 yield break;
             }
-            var a = Ask(Greeting.WardTest, new Dictionary<string, object> { { "step", "site" }, { "spots", string.Join(";", dry.ToArray()) } });
+            var a = Ask(Greeting.WardTest, new Dictionary<string, object> { { "step", "site" }, { "spots", Vigil.Core.WardTestSite.FormatSpots(dry) } });
             while (!a.Done) yield return null;
             if (!a.Ok)
             {
@@ -278,14 +283,20 @@ namespace Vigil.Recorder
                 spot.Outcome = Outcome.Fail;
                 yield break;
             }
-            a.Reply.TryGetValue("spot", out string text);
-            string[] xz = (text ?? "").Split(',');
-            if (xz.Length != 2 || !float.TryParse(xz[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
-                || !float.TryParse(xz[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+            if (a.Reply.TryGetValue("why", out string none))
             {
-                spot.Why = "every dry spot in the zones around you lies too near a ward: run it a little away from bases";
+                spot.Why = none;
                 yield break;
             }
+            a.Reply.TryGetValue("spot", out string text);
+            var picked = Vigil.Core.WardTestSite.ParseSpots(text);
+            if (picked.Count != 1)
+            {
+                spot.Why = "the server's spot did not arrive whole: " + (text ?? "nothing");
+                spot.Outcome = Outcome.Fail;
+                yield break;
+            }
+            float x = picked[0].X, z = picked[0].Z;
             spot.At = new Vector3(x, zones.GetGroundHeight(new Vector3(x, 0f, z)) - 0.05f, z);
         }
 
@@ -319,11 +330,18 @@ namespace Vigil.Recorder
             return new WardTestSite.Id(id.UserID, id.ID);
         }
 
+        /// <summary>Tells the server what the test placed, again until it has recorded all of it (a new object reaches the server a moment later).</summary>
         private IEnumerator WardTestTell(string step, List<GameObject> placed)
         {
             var ids = placed.Where(o => o != null).Select(WardTestId).ToList();
-            var a = Ask(Greeting.WardTest, new Dictionary<string, object> { { "step", step }, { "ids", Vigil.Core.WardTestSite.FormatIds(ids) } });
-            while (!a.Done) yield return null;
+            float until = Time.realtimeSinceStartup + 6f;
+            while (true)
+            {
+                var a = Ask(Greeting.WardTest, new Dictionary<string, object> { { "step", step }, { "ids", Vigil.Core.WardTestSite.FormatIds(ids) } });
+                while (!a.Done) yield return null;
+                if (!a.Ok || Said(a.Reply, "recorded", ids.Count.ToString(CultureInfo.InvariantCulture)) || Time.realtimeSinceStartup >= until) yield break;
+                yield return new WaitForSecondsRealtime(0.5f);
+            }
         }
 
         /// <summary>Removes the test's objects on this game and tells the server they are gone.</summary>

@@ -20,7 +20,9 @@ namespace Vigil.Recorder
     /// (<c>CanBeRepaired</c>) is repaired, and the pieces left go into the ZDO. Every second the left
     /// counts of loaded wards are put into Protective Wards' own hover list (<c>wardIsRepairing</c>), so
     /// its hover shows "Repairing N" on every game and does not offer to start again. A ward owned by a
-    /// game without Vigil is not repaired by these patches.
+    /// game without Vigil is not repaired by these patches. Each ward's view and kind are read once,
+    /// the wards are looked through four times a second, and a turn checks the ward's kept list of
+    /// pieces (<see cref="WardRepair.PieceListSeconds"/>) rather than every loaded piece of the game.
     /// </summary>
     internal static class WardRepairPatch
     {
@@ -38,9 +40,30 @@ namespace Vigil.Recorder
         private static IDictionary s_repairing;
         private static List<PrivateArea> s_allAreas;
         private static readonly HashSet<PrivateArea> s_shown = new HashSet<PrivateArea>();
-        private static readonly Dictionary<PrivateArea, double> s_nextTurn = new Dictionary<PrivateArea, double>();
+        private static readonly Dictionary<PrivateArea, WardState> s_states = new Dictionary<PrivateArea, WardState>();
         private static readonly List<Piece> s_pieces = new List<Piece>();
-        private static double s_nextShow;
+        private static double s_nextShow, s_nextScan;
+
+        /// <summary>Seconds between two looks through the loaded wards for a turn that is due.</summary>
+        private const double ScanSeconds = 0.25;
+
+        /// <summary>What a ward's turns need, read once: its view, whether it is a player's ward, its pieces.</summary>
+        private sealed class WardState
+        {
+            public ZNetView View;
+            public bool PlayerWard;
+            public double NextTurn = double.NaN;
+            public double PiecesAt = double.NegativeInfinity;
+            public readonly List<KeyValuePair<Piece, WearNTear>> Pieces = new List<KeyValuePair<Piece, WearNTear>>();
+        }
+
+        private static WardState StateOf(PrivateArea area)
+        {
+            if (s_states.TryGetValue(area, out var state)) return state;
+            state = new WardState { View = area.GetComponent<ZNetView>(), PlayerWard = s_playerWard(area) };
+            s_states[area] = state;
+            return state;
+        }
         private static readonly HashSet<PrivateArea> s_startedHere = new HashSet<PrivateArea>();
 
         /// <summary>The server's switches and seconds per piece, kept current by the config entries.</summary>
@@ -128,10 +151,13 @@ namespace Vigil.Recorder
         private static void Started(PrivateArea area)
         {
             if (s_shape == null || area == null) return;
-            var view = area.GetComponent<ZNetView>();
+            var state = StateOf(area);
+            var view = state.View;
             if (view == null || !view.IsValid() || !view.IsOwner()) return;
             view.GetZDO().Set(s_startedKey, true);
-            s_nextTurn[area] = Time.realtimeSinceStartupAsDouble;
+            state.NextTurn = Time.realtimeSinceStartupAsDouble;
+            state.PiecesAt = double.NegativeInfinity;
+            s_nextScan = 0;
             s_startedHere.Add(area);
         }
 
@@ -144,7 +170,8 @@ namespace Vigil.Recorder
             var wards = start == WardRepair.Start.WholeNetwork
                 ? WardRepair.Network(ward, s_allAreas.ToList(), w => w != null && s_active(w) && s_playerWard(w), s_overlapping)
                 : new List<PrivateArea> { ward };
-            int damaged = wards.SelectMany(Damaged).Distinct().Count();
+            var damagedHere = DamagedNow(ward);
+            int damaged = wards.SelectMany(w => w == ward ? damagedHere : DamagedNow(w)).Distinct().Count();
             LastChain = wards;
             LastDamaged = damaged;
             if (damaged == 0)
@@ -158,7 +185,8 @@ namespace Vigil.Recorder
                 var view = w.GetComponent<ZNetView>();
                 if (view != null && view.IsValid()) view.InvokeRPC(StartRpc);
             }
-            Show(ward, damaged);
+            // The used ward shows its own count at once, as every ward does after its first turn.
+            if (damagedHere.Count > 0) Show(ward, damagedHere.Count);
             if (initiator != null)
             {
                 initiator.Message(MessageHud.MessageType.TopLeft, wards.Count == 1
@@ -173,17 +201,43 @@ namespace Vigil.Recorder
             yield break;
         }
 
-        private static List<Piece> Damaged(PrivateArea area)
+        /// <summary>The damaged pieces of the ward's area Protective Wards would repair, looked up through every loaded piece.</summary>
+        private static List<Piece> DamagedNow(PrivateArea area)
         {
             s_pieces.Clear();
             Piece.GetAllPiecesInRadius(area.transform.position, area.m_radius, s_pieces);
             return s_pieces.Where(p => p != null && s_canBeRepaired(p, area)).ToList();
         }
 
+        /// <summary>The same from the ward's kept list: health first (a value read), Protective Wards' rules only for the damaged.</summary>
+        private static List<Piece> Damaged(PrivateArea area, WardState state, double now)
+        {
+            if (WardRepair.PiecesDue(state.PiecesAt, now))
+            {
+                state.PiecesAt = now;
+                state.Pieces.Clear();
+                s_pieces.Clear();
+                Piece.GetAllPiecesInRadius(area.transform.position, area.m_radius, s_pieces);
+                foreach (var piece in s_pieces)
+                {
+                    var wear = piece != null ? piece.GetComponent<WearNTear>() : null;
+                    if (wear != null) state.Pieces.Add(new KeyValuePair<Piece, WearNTear>(piece, wear));
+                }
+            }
+            var damaged = new List<Piece>();
+            foreach (var kv in state.Pieces)
+            {
+                if (kv.Value == null || kv.Value.GetHealthPercentage() >= 1f) continue;
+                if (s_canBeRepaired(kv.Key, area)) damaged.Add(kv.Key);
+            }
+            return damaged;
+        }
+
         /// <summary>Every frame on a player's game or a host: the turn of at most one owned ward, and once a second the hover counts.</summary>
         public static void Update()
         {
             if (s_shape == null) return;
+            if (TestWards.Count > 0) KeepTestWardsSmall();
             double now = Time.realtimeSinceStartupAsDouble;
             if (!Network && !Auto && !(Trial.Active(now) && TestWards.Count > 0))
             {
@@ -195,31 +249,34 @@ namespace Vigil.Recorder
                 s_nextShow = now + 1;
                 ShowCounts();
             }
+            if (now < s_nextScan) return;
+            s_nextScan = now + ScanSeconds;
             foreach (var area in s_allAreas)
             {
                 if (area == null) continue;
-                var view = area.GetComponent<ZNetView>();
-                if (view == null || !view.IsValid() || !view.IsOwner() || !s_playerWard(area)) continue;
+                var state = StateOf(area);
+                var view = state.View;
+                if (!state.PlayerWard || view == null || !view.IsValid() || !view.IsOwner()) continue;
                 var on = Now(area);
                 if (!on.Network && !on.Auto) continue;
-                if (!s_nextTurn.TryGetValue(area, out double due))
+                if (double.IsNaN(state.NextTurn))
                 {
                     // A ward seen first waits a share of a turn, so the wards of a base take turns apart.
-                    s_nextTurn[area] = now + UnityEngine.Random.Range(0f, (float)on.Seconds);
+                    state.NextTurn = now + UnityEngine.Random.Range(0f, (float)on.Seconds);
                     continue;
                 }
-                if (now < due) continue;
-                s_nextTurn[area] = now + on.Seconds;
-                Turn(area, view.GetZDO(), on.Auto);
+                if (now < state.NextTurn) continue;
+                state.NextTurn = now + on.Seconds;
+                Turn(area, state, view.GetZDO(), on.Auto, now);
                 return;
             }
         }
 
-        private static void Turn(PrivateArea area, ZDO zdo, bool auto)
+        private static void Turn(PrivateArea area, WardState state, ZDO zdo, bool auto, double now)
         {
             bool started = zdo.GetBool(s_startedKey);
             bool active = s_active(area);
-            List<Piece> damaged = (started || auto) && active ? Damaged(area) : new List<Piece>();
+            List<Piece> damaged = (started || auto) && active ? Damaged(area, state, now) : new List<Piece>();
             var step = WardRepair.Next(owner: true, active, started, auto, damaged.Count);
             if (step == WardRepair.Step.RepairOne)
             {
@@ -241,12 +298,15 @@ namespace Vigil.Recorder
 
         private static void ShowCounts()
         {
-            foreach (var gone in s_shown.Where(a => a == null).ToList()) s_shown.Remove(gone);
-            foreach (var gone in s_nextTurn.Keys.Where(a => a == null).ToList()) s_nextTurn.Remove(gone);
+            s_shown.RemoveWhere(a => a == null);
+            if (s_states.Count > s_allAreas.Count)
+            {
+                foreach (var gone in s_states.Keys.Where(a => a == null).ToList()) s_states.Remove(gone);
+            }
             foreach (var area in s_allAreas)
             {
                 if (area == null) continue;
-                var view = area.GetComponent<ZNetView>();
+                var view = StateOf(area).View;
                 if (view == null || !view.IsValid()) continue;
                 int left = view.GetZDO().GetInt(s_leftKey, WardRepair.NotRepairing);
                 if (left > 0) Show(area, left);
@@ -280,13 +340,32 @@ namespace Vigil.Recorder
         public static void StartTrial(bool network, bool auto, double seconds, double lasts)
         {
             Trial.Start(network, auto, seconds, Time.realtimeSinceStartupAsDouble, lasts);
-            foreach (var area in TestWards) s_nextTurn.Remove(area);
+            foreach (var area in TestWards)
+            {
+                if (area == null) continue;
+                var state = StateOf(area);
+                state.NextTurn = double.NaN;
+                state.PiecesAt = double.NegativeInfinity;
+            }
+            s_nextScan = 0;
             s_startedHere.Clear();
             LastChain = null;
             LastDamaged = 0;
         }
 
         public static void EndTrial() => Trial.End();
+
+        /// <summary>
+        /// Gives the self-test's wards their small radius (<see cref="WardTestSite.TestRadius"/>) again:
+        /// Protective Wards sets a ward's radius back to its own whenever it refreshes the ward.
+        /// </summary>
+        public static void KeepTestWardsSmall()
+        {
+            foreach (var area in TestWards)
+            {
+                if (area != null && area.m_radius != WardTestSite.TestRadius) area.m_radius = WardTestSite.TestRadius;
+            }
+        }
 
         /// <summary>Whether this game's Vigil marked the ward started since the trial began.</summary>
         public static bool StartedHere(PrivateArea area) => s_startedHere.Contains(area);

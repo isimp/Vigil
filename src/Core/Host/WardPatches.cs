@@ -47,6 +47,16 @@ namespace Vigil.Core
         public static int ClampSeconds(int seconds) => Math.Max(MinSeconds, Math.Min(MaxSeconds, seconds));
 
         /// <summary>
+        /// Seconds a ward keeps its list of the pieces in its area. Finding them goes through every
+        /// loaded piece of the game, so a turn checks the kept list for damage instead; a piece built
+        /// since is seen at the next look.
+        /// </summary>
+        public const double PieceListSeconds = 30;
+
+        /// <summary>Whether a ward's list of pieces is due to be looked up again.</summary>
+        public static bool PiecesDue(double builtAt, double now) => now - builtAt >= PieceListSeconds;
+
+        /// <summary>
         /// The used ward and every active ward reached from it through overlapping areas, each once,
         /// the used ward first. A switched-off ward neither joins nor carries the chain on.
         /// </summary>
@@ -297,7 +307,7 @@ namespace Vigil.Core
     /// </summary>
     internal static class WardTestSite
     {
-        private static readonly char[] Separators = { ';' };
+        private static readonly char[] ItemSeparators = { '|' };
 
         internal readonly struct Spot : IEquatable<Spot>
         {
@@ -385,6 +395,63 @@ namespace Vigil.Core
             return spots.OrderBy(s => Distance(s.X, s.Z, px, pz)).ToList();
         }
 
+        /// <summary>
+        /// The radius the self-test keeps on its own wards. Protective Wards gives every ward its full
+        /// radius (32 m), which near a base leaves no clear spot; the test's ward only has to cover its
+        /// wall, <see cref="WallOffset"/> away.
+        /// </summary>
+        public const float TestRadius = 5f;
+
+        /// <summary>How far the repair test's wall stands from its ward.</summary>
+        public const float WallOffset = 3f;
+
+        public const string WardPrefab = "guard_stone";
+
+        public const string WallPrefab = "woodwall";
+
+        /// <summary>The made-up creator of the password test's ward: no player has this id.</summary>
+        public const long Stranger = 1;
+
+        /// <summary>
+        /// Whether the server records an object a player's test says it placed: a ward made by the
+        /// asker or the made-up stranger, or a wall made by the asker, owned by the asker's game. A real
+        /// ward or piece of anyone else is never recorded, so the server never removes it or types the
+        /// password at it.
+        /// </summary>
+        public static bool Accepts(string prefab, long creator, long asker, bool ownedByAsker)
+        {
+            if (!ownedByAsker || asker == 0) return false;
+            if (prefab == WardPrefab) return creator == asker || creator == Stranger;
+            return prefab == WallPrefab && creator == asker;
+        }
+
+        /// <summary>Whether a recorded object may be removed: it still is what the test placed.</summary>
+        public static bool MayRemove(string prefab, long creator, long recordedFor) =>
+            (prefab == WardPrefab && (creator == recordedFor || creator == Stranger)) || (prefab == WallPrefab && creator == recordedFor);
+
+        /// <summary>Whether the server types a guess at the ward: recorded for the asker and made by the made-up stranger.</summary>
+        public static bool TakesGuess(bool recorded, long creator) => recorded && creator == Stranger;
+
+        /// <summary>The most room any spot has to the nearest ward's area (infinite without wards).</summary>
+        public static float BestClearance(IEnumerable<Spot> candidates, IEnumerable<Circle> wards)
+        {
+            var all = wards.ToList();
+            if (all.Count == 0) return float.PositiveInfinity;
+            float best = float.NegativeInfinity;
+            foreach (var spot in candidates)
+            {
+                float room = all.Min(w => (float)Distance(spot.X, spot.Z, w.X, w.Z) - w.Radius);
+                if (room > best) best = room;
+            }
+            return best;
+        }
+
+        /// <summary>Why no spot was picked, with how near the best one came.</summary>
+        public static string NoSpotLine(float best, float testRadius, float margin, int spots) =>
+            "no spot in the zones around you keeps a test ward clear of the switched-on wards: the best is "
+            + Math.Max(0f, best).ToString("0", CultureInfo.InvariantCulture) + " m from a ward's area, the test needs "
+            + (testRadius + margin).ToString("0", CultureInfo.InvariantCulture) + " m (" + spots + " spots looked at)";
+
         /// <summary>The first spot whose area of <paramref name="testRadius"/> stays <paramref name="margin"/> clear of every ward's, or null.</summary>
         public static Spot? Pick(IEnumerable<Spot> candidates, IEnumerable<Circle> wards, float testRadius, float margin)
         {
@@ -396,14 +463,37 @@ namespace Vigil.Core
             return null;
         }
 
+        /// <summary>
+        /// Spots as "x,z|x,z": the link's encoding (<see cref="KeyValues"/>) turns ';' and '=' inside a
+        /// value into ',' and ':', so a list sent over it must not use those between items.
+        /// </summary>
+        public static string FormatSpots(IEnumerable<Spot> spots) =>
+            string.Join("|", spots.Select(s => s.X.ToString("R", CultureInfo.InvariantCulture) + "," + s.Z.ToString("R", CultureInfo.InvariantCulture)));
+
+        /// <summary>The spots in <see cref="FormatSpots"/>'s form; anything else is left out.</summary>
+        public static List<Spot> ParseSpots(string text)
+        {
+            var spots = new List<Spot>();
+            foreach (string pair in (text ?? "").Split(ItemSeparators, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string[] xz = pair.Split(',');
+                if (xz.Length == 2 && float.TryParse(xz[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
+                    && float.TryParse(xz[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+                {
+                    spots.Add(new Spot(x, z));
+                }
+            }
+            return spots;
+        }
+
         public static string FormatIds(IEnumerable<Id> ids) =>
-            string.Join(";", ids.Select(i => i.User.ToString(CultureInfo.InvariantCulture) + ":" + i.Number.ToString(CultureInfo.InvariantCulture)));
+            string.Join("|", ids.Select(i => i.User.ToString(CultureInfo.InvariantCulture) + ":" + i.Number.ToString(CultureInfo.InvariantCulture)));
 
         /// <summary>The ids in <see cref="FormatIds"/>'s form; anything else is left out.</summary>
         public static List<Id> ParseIds(string text)
         {
             var ids = new List<Id>();
-            foreach (string part in (text ?? "").Split(Separators, StringSplitOptions.RemoveEmptyEntries))
+            foreach (string part in (text ?? "").Split(ItemSeparators, StringSplitOptions.RemoveEmptyEntries))
             {
                 string[] two = part.Split(':');
                 if (two.Length == 2 && long.TryParse(two[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out long user)
