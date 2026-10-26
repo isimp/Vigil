@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -100,8 +101,9 @@ namespace Vigil.Core
         }
 
         /// <summary>
-        /// The self-test's trial: switches on for this game alone at a pace of its own, for a few
-        /// seconds; it ends by itself, and never switches off what the server has on.
+        /// The self-test's trial: switches on for the self-test's own ward on this game alone, at a pace
+        /// of its own, for a few seconds; it ends by itself, never switches off what the server has on,
+        /// and leaves every other ward to the server's switches.
         /// </summary>
         internal sealed class Trial
         {
@@ -121,8 +123,8 @@ namespace Vigil.Core
 
             public bool Active(double now) => now < _until;
 
-            public Switches Effective(bool network, bool auto, double seconds, double now) =>
-                Active(now) ? new Switches(network || _network, auto || _auto, _seconds) : new Switches(network, auto, seconds);
+            public Switches Effective(bool network, bool auto, double seconds, double now, bool testWard) =>
+                testWard && Active(now) ? new Switches(network || _network, auto || _auto, _seconds) : new Switches(network, auto, seconds);
         }
 
         /// <summary>
@@ -209,27 +211,56 @@ namespace Vigil.Core
             return "working · Protective Wards " + version + " · players without access are asked for the server's password";
         }
 
-        /// <summary>
-        /// The server's self-test answer: its patch is in, it has a password a player can type, and a
-        /// wrong guess sent through Protective Wards' own handler, for the asker at a ward they have
-        /// no access to, came back refused (<paramref name="judged"/>, null when no such ward exists).
-        /// </summary>
-        public static WardVerdict ServerCheck(bool found, string problem, string password, Answer? judged, int wards)
+        /// <summary>The self-test's three guesses at its own stranger's ward, in order.</summary>
+        public enum Step
         {
-            if (!found) return new WardVerdict(SelfTestReport.Result.Fail, "Protective Wards is not on the server");
-            if (problem != null) return new WardVerdict(SelfTestReport.Result.Fail, "stepped aside on the server: " + problem);
-            if (string.IsNullOrEmpty(password)) return new WardVerdict(SelfTestReport.Result.Info, "no password set on the server: nobody is asked");
-            if (password.Length > MaxLength) return new WardVerdict(SelfTestReport.Result.Fail, "the password is longer than " + MaxLength + " characters: nobody can type it");
-            switch (judged)
+            /// <summary>A wrong password: refused.</summary>
+            Wrong,
+
+            /// <summary>The right password at once after the wrong one: refused, the player still waiting.</summary>
+            Early,
+
+            /// <summary>The right password after the wait: the player is let in.</summary>
+            Right,
+        }
+
+        /// <summary>
+        /// What the server types for the self-test's step, or null with the reason. Only a ward the
+        /// self-test placed (and the server recorded) takes a guess, so the right password never puts
+        /// the tester on a real ward's list.
+        /// </summary>
+        public static string ServerGuess(Step step, bool testWard, string password, out string why)
+        {
+            why = null;
+            if (!testWard) why = "only a ward the self-test placed takes a self-test guess";
+            else if (string.IsNullOrEmpty(password)) why = "no password set on the server: nobody is asked";
+            else if (password.Length > MaxLength) why = "the server's password is longer than " + MaxLength + " characters: nobody can type it";
+            if (why != null) return null;
+            if (step != Step.Wrong) return password;
+            const string wrong = "vigil self-test";
+            return password == wrong ? wrong + "!" : wrong;
+        }
+
+        /// <summary>The self-test's verdict on one guess, from what the server's check decided (null: it never decided).</summary>
+        public static WardVerdict StepCheck(Step step, Answer? judged, bool admin)
+        {
+            if (admin) return new WardVerdict(SelfTestReport.Result.Info, "the server counts you as a ward admin (god mode opens every ward), so no guess was tried");
+            if (judged == null) return new WardVerdict(SelfTestReport.Result.Fail, "the guess did not reach the server's check");
+            if (judged == Answer.ProtectiveWards) return new WardVerdict(SelfTestReport.Result.Fail, "the guess went past the server's check to Protective Wards");
+            switch (step)
             {
-                case null:
-                    return new WardVerdict(SelfTestReport.Result.Info, "set; you have access to every ward on the server (" + wards + "), so no guess was tried");
-                case Answer.Wrong:
-                    return new WardVerdict(SelfTestReport.Result.Pass, "set; a wrong guess at a ward you have no access to was refused (" + wards + " wards on the server)");
-                case Answer.ProtectiveWards:
-                    return new WardVerdict(SelfTestReport.Result.Pass, "set; the guess went to the ward's own password, as it should");
+                case Step.Wrong:
+                    return judged == Answer.Wrong
+                        ? new WardVerdict(SelfTestReport.Result.Pass, "a wrong password was refused")
+                        : new WardVerdict(SelfTestReport.Result.Fail, "a wrong password let you in");
+                case Step.Early:
+                    return judged == Answer.Wrong
+                        ? new WardVerdict(SelfTestReport.Result.Pass, "the right password right after a wrong one was refused: the " + WaitSeconds + " s wait holds")
+                        : new WardVerdict(SelfTestReport.Result.Fail, "the right password right after a wrong one let you in without the wait");
                 default:
-                    return new WardVerdict(SelfTestReport.Result.Fail, "set; a wrong guess let you in: the check is broken");
+                    return judged == Answer.LetIn
+                        ? new WardVerdict(SelfTestReport.Result.Pass, "the right password put you on the ward's list")
+                        : new WardVerdict(SelfTestReport.Result.Fail, "the right password was refused");
             }
         }
 
@@ -254,6 +285,137 @@ namespace Vigil.Core
                 return wardHasOwn ? Answer.ProtectiveWards : Answer.Wrong;
             }
         }
+    }
+
+    /// <summary>
+    /// Where the ward self-test places its own wards: a spot on the ground the player's game has
+    /// loaded (the player's zone and the zones around it), whose area keeps clear of every real
+    /// ward's area by a margin, so the test ward joins no real chain and gives the tester no
+    /// connected access. Distances are across the ground only, which is what Protective Wards'
+    /// cylinder areas use and never less than its sphere distance, so a clear spot is clear in
+    /// either shape. The server picks the spot, as it knows every ward of the world.
+    /// </summary>
+    internal static class WardTestSite
+    {
+        private static readonly char[] Separators = { ';' };
+
+        internal readonly struct Spot : IEquatable<Spot>
+        {
+            public Spot(float x, float z)
+            {
+                X = x;
+                Z = z;
+            }
+
+            public float X { get; }
+
+            public float Z { get; }
+
+            public bool Equals(Spot other) => X.Equals(other.X) && Z.Equals(other.Z);
+
+            public override bool Equals(object obj) => obj is Spot other && Equals(other);
+
+            public override int GetHashCode() => (X.GetHashCode() * 397) ^ Z.GetHashCode();
+
+            public static bool operator ==(Spot a, Spot b) => a.Equals(b);
+
+            public static bool operator !=(Spot a, Spot b) => !a.Equals(b);
+        }
+
+        /// <summary>A real ward's area across the ground.</summary>
+        internal readonly struct Circle
+        {
+            public Circle(float x, float z, float radius)
+            {
+                X = x;
+                Z = z;
+                Radius = radius;
+            }
+
+            public float X { get; }
+
+            public float Z { get; }
+
+            public float Radius { get; }
+        }
+
+        /// <summary>An object the self-test placed, by its ZDO id's two parts.</summary>
+        internal readonly struct Id : IEquatable<Id>
+        {
+            public Id(long user, uint id)
+            {
+                User = user;
+                Number = id;
+            }
+
+            public long User { get; }
+
+            public uint Number { get; }
+
+            public bool Equals(Id other) => User == other.User && Number == other.Number;
+
+            public override bool Equals(object obj) => obj is Id other && Equals(other);
+
+            public override int GetHashCode() => (User.GetHashCode() * 397) ^ (int)Number;
+
+            public static bool operator ==(Id a, Id b) => a.Equals(b);
+
+            public static bool operator !=(Id a, Id b) => !a.Equals(b);
+        }
+
+        /// <summary>
+        /// Grid points of the player's loaded zones, <paramref name="inset"/> inside their edge and at
+        /// least <paramref name="minDistance"/> from the player, nearest first.
+        /// </summary>
+        public static List<Spot> Candidates(float px, float pz, float zoneSize, int activeArea, float step, float minDistance, float inset)
+        {
+            int zx = (int)Math.Floor((px + zoneSize / 2) / zoneSize);
+            int zz = (int)Math.Floor((pz + zoneSize / 2) / zoneSize);
+            float half = (activeArea + 0.5f) * zoneSize - inset;
+            int reach = (int)Math.Floor(half / step);
+            var spots = new List<Spot>();
+            for (int i = -reach; i <= reach; i++)
+            {
+                for (int j = -reach; j <= reach; j++)
+                {
+                    float x = zx * zoneSize + i * step, z = zz * zoneSize + j * step;
+                    if (Distance(x, z, px, pz) >= minDistance) spots.Add(new Spot(x, z));
+                }
+            }
+            return spots.OrderBy(s => Distance(s.X, s.Z, px, pz)).ToList();
+        }
+
+        /// <summary>The first spot whose area of <paramref name="testRadius"/> stays <paramref name="margin"/> clear of every ward's, or null.</summary>
+        public static Spot? Pick(IEnumerable<Spot> candidates, IEnumerable<Circle> wards, float testRadius, float margin)
+        {
+            var all = wards.ToList();
+            foreach (var spot in candidates)
+            {
+                if (all.All(w => Distance(spot.X, spot.Z, w.X, w.Z) > testRadius + w.Radius + margin)) return spot;
+            }
+            return null;
+        }
+
+        public static string FormatIds(IEnumerable<Id> ids) =>
+            string.Join(";", ids.Select(i => i.User.ToString(CultureInfo.InvariantCulture) + ":" + i.Number.ToString(CultureInfo.InvariantCulture)));
+
+        /// <summary>The ids in <see cref="FormatIds"/>'s form; anything else is left out.</summary>
+        public static List<Id> ParseIds(string text)
+        {
+            var ids = new List<Id>();
+            foreach (string part in (text ?? "").Split(Separators, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string[] two = part.Split(':');
+                if (two.Length == 2 && long.TryParse(two[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out long user)
+                    && uint.TryParse(two[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out uint number))
+                {
+                    ids.Add(new Id(user, number));
+                }
+            }
+            return ids;
+        }
+
+        private static double Distance(float ax, float az, float bx, float bz) => Math.Sqrt((ax - bx) * (ax - bx) + (az - bz) * (az - bz));
     }
 
     /// <summary>A self-test line's result and words.</summary>
@@ -335,8 +497,17 @@ namespace Vigil.Core
             /// <summary><c>WardZdoUtils.AddPermitted(ZDO, long, string)</c>.</summary>
             public MethodInfo Permit;
 
-            /// <summary><c>WardZdoUtils.GetAllWards()</c>, for the self-test only; null leaves its guess untried.</summary>
+            /// <summary><c>WardZdoUtils.GetAllWards()</c>, for the self-test's spot; null: the self-test steps aside.</summary>
             public MethodInfo AllWards;
+
+            /// <summary><c>WardZdoUtils.GetConfiguredWardRange(ZDO)</c>, a ward's radius as set.</summary>
+            public MethodInfo Range;
+
+            /// <summary><c>WardZdoUtils.GetWardDefaultRadius()</c>, the radius a ward without its own has.</summary>
+            public MethodInfo DefaultRadius;
+
+            /// <summary><c>ProtectiveWards.HasWardAdminAccess(long)</c>: the player passes every ward (admins, by its setting).</summary>
+            public MethodInfo Admin;
         }
 
         public static RepairShape FindRepair(Func<string, Type> type)
@@ -375,6 +546,9 @@ namespace Vigil.Core
                 DirectAccess = Method(zdos, "HasDirectAccessToWardZdo", typeof(bool), "ZDO", "Int64"),
                 Permit = Method(zdos, "AddPermitted", typeof(bool), "ZDO", "Int64", "String"),
                 AllWards = zdos.GetMethods(Static).FirstOrDefault(m => m.Name == "GetAllWards" && m.GetParameters().Length == 0 && typeof(IEnumerable).IsAssignableFrom(m.ReturnType)),
+                Range = Method(zdos, "GetConfiguredWardRange", typeof(float), "ZDO"),
+                DefaultRadius = Method(zdos, "GetWardDefaultRadius", typeof(float)),
+                Admin = Method(pw, "HasWardAdminAccess", typeof(bool), "Int64"),
             };
             shape.Answer = protection.GetMethods(Static).FirstOrDefault(m => m.Name == "SendPasswordEntryResult" && m.ReturnType == typeof(void)
                 && Names(m.GetParameters()).Take(2).SequenceEqual(AnswerTakes) && m.GetParameters().Length == 3 && m.GetParameters()[2].ParameterType.IsEnum);

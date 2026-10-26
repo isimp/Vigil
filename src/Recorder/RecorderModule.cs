@@ -124,6 +124,7 @@ namespace Vigil.Recorder
             if (previous != null) _sessionNotes.Add("The previous session's reports are in " + Path.Combine(RunArchive.FolderName, Path.GetFileName(previous)) + ".");
 
             string state = Path.Combine(dir, "Vigil-state");
+            WardPasswordPatch.RecordFile = Path.Combine(state, "ward-selftest.tsv");
             _journal = new InstrumentJournal(state);
             bool deepWasRunning = File.Exists(Path.Combine(state, "deep.active"));
             if (!_journal.PreviousEndedCleanly)
@@ -513,6 +514,7 @@ namespace Vigil.Recorder
             try { UpdatePatches(); } catch (Exception) { }
             try { if (!_server) AwaySleepPatch.Update(_host.Link, Now); } catch (Exception) { }
             try { if (!_server) WardRepairPatch.Update(); } catch (Exception) { }
+            try { RemoveWardTestLeftovers(); } catch (Exception) { }
             try { UpdateOwnCost(); } catch (Exception) { }
             NetAttribution.InWorld = _server ? ZNet.instance != null : Player.m_localPlayer != null;
             try { UpdateObjectData(); } catch (Exception) { }

@@ -32,14 +32,14 @@ namespace Vigil.Core
         /// <summary>A server that takes its players' away reports, so an away player does not hold up the night (the game patch on sleep).</summary>
         public const string Away = "away";
 
-        /// <summary>A server that checks its Protective Wards password patch for a player's self-test (the game patch on wards).</summary>
-        public const string Wards = "wards";
+        /// <summary>A server that runs its part of a player's ward self-test: a free spot for the test's own wards, a record of them, and guesses at them through its password patch.</summary>
+        public const string WardTest = "wardtest";
 
         /// <summary>What this Vigil can do, as it tells the other side.</summary>
-        public const string Own = Load + "," + Players + "," + Recording + "," + Status + "," + SelfTest + "," + Link + "," + Reports + "," + Parity + "," + Leftovers + "," + Alerts + "," + Steady + "," + Away + "," + Wards;
+        public const string Own = Load + "," + Players + "," + Recording + "," + Status + "," + SelfTest + "," + Link + "," + Reports + "," + Parity + "," + Leftovers + "," + Alerts + "," + Steady + "," + Away + "," + WardTest;
 
-        /// <summary>Whether any player, not only an admin, may ask the server's Vigil this: to take a shared report, spawn log or away report, for its mods and configs, or for its ward password check.</summary>
-        public static bool ForEveryone(string command) => command == Share || command == SpawnLog || command == Parity || command == Away || command == Wards;
+        /// <summary>Whether any player, not only an admin, may ask the server's Vigil this: to take a shared report, spawn log or away report, for its mods and configs, or for its part of the ward self-test.</summary>
+        public static bool ForEveryone(string command) => command == Share || command == SpawnLog || command == Parity || command == Away || command == WardTest;
 
         public const double WaitSeconds = 10;
 

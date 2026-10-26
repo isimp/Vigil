@@ -428,6 +428,9 @@ public sealed class VigilPlugin : BaseUnityPlugin
             {
                 checks.Add(new SelfTestReport.Check(routine.Area, routine.What, SelfTestReport.Result.Warn,
                     "took longer than " + routine.Seconds.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " s"));
+                // Ending the routine runs its finally blocks, so what it put in place is put back.
+                try { (inner as IDisposable)?.Dispose(); }
+                catch (Exception) { }
                 yield break;
             }
 

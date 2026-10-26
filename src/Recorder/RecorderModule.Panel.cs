@@ -103,7 +103,7 @@ namespace Vigil.Recorder
             if (command == Greeting.Steady) return SteadyReply();
             if (command == Greeting.Away) return AwaySleepPatch.Reported(args, from);
             if (command == AwaySleep.CheckCommand) return AwaySleepPatch.ServerCheck(from);
-            if (command == Greeting.Wards) return WardPasswordPatch.ServerCheck(from);
+            if (command == Greeting.WardTest) return WardPasswordPatch.ServerStep(args, from);
             if (command == "link")
             {
                 args.TryGetValue("who", out string who);
