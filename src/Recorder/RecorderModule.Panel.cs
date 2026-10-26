@@ -510,6 +510,7 @@ namespace Vigil.Recorder
                     ? new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Pass, SkipWinterPatch.State)
                     : new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Warn, SkipWinterPatch.State));
             }
+            WardChecks(area, checks);
             const string away = "game patch: away players don't hold up sleep";
             checks.Add(new SelfTestReport.Check(area, away, AwaySleepPatch.Problem == null ? SelfTestReport.Result.Pass : SelfTestReport.Result.Warn,
                 AwaySleepPatch.Problem == null ? "hooked · " + AwaySleepPatch.State(_host.Link) : AwaySleepPatch.State(_host.Link)));

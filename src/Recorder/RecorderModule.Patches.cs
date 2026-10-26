@@ -11,9 +11,10 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _awaySleep;
-        private ConfigEntry<int> _awayMinutes;
-        private string _awayMinutesText = "5";
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<int> _awayMinutes, _wardSeconds;
+        private ConfigEntry<string> _wardPassword;
+        private string _awayMinutesText = "5", _wardSecondsText = "10";
         private bool _patchesHooked;
 
         private void BindPatches()
@@ -59,6 +60,51 @@ namespace Vigil.Recorder
             ApplyAway();
             _awaySleep.SettingChanged += (_, __) => ApplyAway();
             _awayMinutes.SettingChanged += (_, __) => ApplyAway();
+            BindWardPatches();
+        }
+
+        private void BindWardPatches()
+        {
+            _wardNetwork = Config.Bind("Patches", "WardNetworkRepair", false,
+                "Set on the dedicated server: starting repair at a Protective Wards ward (its alt-use) starts it on every active ward chained to it by overlapping areas, and each ward repairs " +
+                "its own area, one damaged piece every WardRepairSeconds, until none is left; every player sees how many pieces are left. A ward's repair runs on the game that owns it, so it " +
+                "goes on while any player is near. ServerSync passes it to every player running Vigil; the server's admins can switch it in the panel's Patches tab.");
+            _host.Sync.AddConfigEntry(_wardNetwork);
+            _wardAuto = Config.Bind("Patches", "WardAutoRepair", false,
+                "Set on the dedicated server: every active Protective Wards ward repairs its own area by itself, one damaged piece every WardRepairSeconds, following Protective Wards' own " +
+                "repair rules (structures not placed by players, crafting station near). It runs on the game that owns the ward, so only while a player is near the base. ServerSync passes it " +
+                "to every player running Vigil; the server's admins can switch it in the panel's Patches tab.");
+            _host.Sync.AddConfigEntry(_wardAuto);
+            _wardSeconds = Config.Bind("Patches", "WardRepairSeconds", WardRepair.DefaultSeconds,
+                new ConfigDescription("Set on the dedicated server: seconds between two pieces a ward repairs (WardNetworkRepair, WardAutoRepair). ServerSync passes it to every player running Vigil.",
+                    new AcceptableValueRange<int>(WardRepair.MinSeconds, WardRepair.MaxSeconds)));
+            _host.Sync.AddConfigEntry(_wardSeconds);
+            // Never synced: the players' games are told only that there is a password (WardPasswordSet).
+            _wardPassword = Config.Bind("Patches", "WardPassword", "",
+                "Set only in the dedicated server's own config (never on a player's game: Gale copies a profile's configs to everyone who uses it): a player without access to an active " +
+                "Protective Wards ward is asked for a password at it, and this password adds them to that ward's permitted list, as a ward's own password would. Empty: nobody is asked. " +
+                "At most " + WardPassword.MaxLength + " characters; after a wrong guess a player waits " + WardPassword.WaitSeconds + " s before it is checked for them again.");
+            _wardPasswordSet = Config.Bind("Patches", "WardPasswordSet", false,
+                "Written by the server itself from WardPassword: whether players without access are asked for the server's ward password. ServerSync passes it to every player running Vigil.");
+            _host.Sync.AddConfigEntry(_wardPasswordSet);
+            ApplyWards();
+            _wardNetwork.SettingChanged += (_, __) => ApplyWards();
+            _wardAuto.SettingChanged += (_, __) => ApplyWards();
+            _wardSeconds.SettingChanged += (_, __) => ApplyWards();
+            _wardPassword.SettingChanged += (_, __) => ApplyWards();
+            _wardPasswordSet.SettingChanged += (_, __) => ApplyWards();
+        }
+
+        private void ApplyWards()
+        {
+            WardRepairPatch.Network = _wardNetwork.Value;
+            WardRepairPatch.Auto = _wardAuto.Value;
+            WardRepairPatch.Seconds = WardRepair.ClampSeconds(_wardSeconds.Value);
+            _wardSecondsText = _wardSeconds.Value.ToString(Ic);
+            WardPasswordPatch.Password = _wardPassword.Value ?? "";
+            bool has = WardPasswordPatch.Password.Length > 0;
+            if (_wardPasswordSet.Value != has && (ZNet.instance == null || ZNet.instance.IsServer())) _wardPasswordSet.Value = has;
+            WardPasswordPatch.ServerHasOne = _wardPasswordSet.Value;
         }
 
         private void ApplyAway()
@@ -86,9 +132,14 @@ namespace Vigil.Recorder
             if (!string.IsNullOrEmpty(JotunnSyncPatch.Problem)) _host.Log.LogWarning("Vigil: the patch on Jotunn's config sync stepped aside: " + JotunnSyncPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
+            WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
+            if (WardRepairPatch.Problem != null) _host.Log.LogWarning("Vigil: the ward repair patches stepped aside: " + WardRepairPatch.Problem);
+            WardPasswordPatch.Hook(line => _host.Log.LogInfo(line));
+            if (WardPasswordPatch.Problem != null) _host.Log.LogWarning("Vigil: the ward password patch stepped aside: " + WardPasswordPatch.Problem);
         }
 
-        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)) + " of 5 on", Skin.Tone.Quiet);
+        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)
+            + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 7 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -219,6 +270,8 @@ namespace Vigil.Recorder
             Ui.Note("A player whose game menu has stayed open for these minutes is away: the night is skipped once everyone else is in bed, and somebody has to be. Moving the mouse in the menu does not count; closing it does. An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. A player without this Vigil is never away.");
             Ui.Row("Set by", "the server, for every player running Vigil (Patches.AwaySleep, Patches.AwayMinutes)");
             Ui.Row("On this game", Toned(AwaySleepPatch.State(_host.Link), AwaySleepPatch.Problem != null ? ResultTone.Caution : _awaySleep.Value ? ResultTone.Good : ResultTone.Quiet));
+
+            DrawWardPatches(may);
 
             Ui.Note(may ? "You can switch patches: the server keeps the change and passes it on." : "Only the server's admins (or the world's host) switch the server's patches; everyone sees them. A patch whose target changed in an update steps aside and says so here and in the self-test.");
         }

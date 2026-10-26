@@ -512,6 +512,7 @@ namespace Vigil.Recorder
             try { UpdateArrivals(); } catch (Exception) { }
             try { UpdatePatches(); } catch (Exception) { }
             try { if (!_server) AwaySleepPatch.Update(_host.Link, Now); } catch (Exception) { }
+            try { if (!_server) WardRepairPatch.Update(); } catch (Exception) { }
             try { UpdateOwnCost(); } catch (Exception) { }
             NetAttribution.InWorld = _server ? ZNet.instance != null : Player.m_localPlayer != null;
             try { UpdateObjectData(); } catch (Exception) { }
