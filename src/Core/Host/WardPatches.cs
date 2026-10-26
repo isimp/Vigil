@@ -82,6 +82,67 @@ namespace Vigil.Core
         /// <summary>What a ward's alt-use (Protective Wards' "start repair") does by the server's switches.</summary>
         public static Start OnStart(bool network, bool auto) => network ? Start.WholeNetwork : auto ? Start.ThisWard : Start.ProtectiveWards;
 
+        /// <summary>The switches and pace this game works by.</summary>
+        internal readonly struct Switches
+        {
+            public Switches(bool network, bool auto, double seconds)
+            {
+                Network = network;
+                Auto = auto;
+                Seconds = seconds;
+            }
+
+            public bool Network { get; }
+
+            public bool Auto { get; }
+
+            public double Seconds { get; }
+        }
+
+        /// <summary>
+        /// The self-test's trial: switches on for this game alone at a pace of its own, for a few
+        /// seconds; it ends by itself, and never switches off what the server has on.
+        /// </summary>
+        internal sealed class Trial
+        {
+            private double _until = double.NegativeInfinity;
+            private bool _network, _auto;
+            private double _seconds;
+
+            public void Start(bool network, bool auto, double seconds, double now, double lasts)
+            {
+                _network = network;
+                _auto = auto;
+                _seconds = seconds;
+                _until = now + lasts;
+            }
+
+            public void End() => _until = double.NegativeInfinity;
+
+            public bool Active(double now) => now < _until;
+
+            public Switches Effective(bool network, bool auto, double seconds, double now) =>
+                Active(now) ? new Switches(network || _network, auto || _auto, _seconds) : new Switches(network, auto, seconds);
+        }
+
+        /// <summary>
+        /// The self-test's verdict on starting repair: every ward of the chain that this game owns has
+        /// to have started; the others are asked through their owners' games, which the test cannot see.
+        /// </summary>
+        public static WardVerdict ChainCheck(int chain, int ownedHere, int startedHere, int damaged)
+        {
+            if (chain == 0) return new WardVerdict(SelfTestReport.Result.Fail, "the ward's alt-use did not reach Vigil's repair");
+            string head = (chain == 1 ? "1 ward" : chain + " wards in the chain") + ", " + damaged + (damaged == 1 ? " damaged piece" : " damaged pieces");
+            if (startedHere < ownedHere)
+            {
+                return new WardVerdict(SelfTestReport.Result.Fail, head + "; only " + startedHere + " of the " + ownedHere + " owned by this game started");
+            }
+            if (chain == 1 && ownedHere == 1) return new WardVerdict(SelfTestReport.Result.Pass, head + "; it started");
+            int elsewhere = chain - ownedHere;
+            string asked = elsewhere == 0 ? "" : elsewhere == 1 ? ", 1 asked through its owner's game" : ", " + elsewhere + " asked through their owners' games";
+            return new WardVerdict(SelfTestReport.Result.Pass, head + "; the " + ownedHere + " owned by this game started" + asked);
+        }
+
         /// <summary>What the patch does on this game, in words.</summary>
         public static string StateLine(bool network, bool auto, bool found, string version, string problem)
         {
@@ -148,6 +209,30 @@ namespace Vigil.Core
             return "working · Protective Wards " + version + " · players without access are asked for the server's password";
         }
 
+        /// <summary>
+        /// The server's self-test answer: its patch is in, it has a password a player can type, and a
+        /// wrong guess sent through Protective Wards' own handler, for the asker at a ward they have
+        /// no access to, came back refused (<paramref name="judged"/>, null when no such ward exists).
+        /// </summary>
+        public static WardVerdict ServerCheck(bool found, string problem, string password, Answer? judged, int wards)
+        {
+            if (!found) return new WardVerdict(SelfTestReport.Result.Fail, "Protective Wards is not on the server");
+            if (problem != null) return new WardVerdict(SelfTestReport.Result.Fail, "stepped aside on the server: " + problem);
+            if (string.IsNullOrEmpty(password)) return new WardVerdict(SelfTestReport.Result.Info, "no password set on the server: nobody is asked");
+            if (password.Length > MaxLength) return new WardVerdict(SelfTestReport.Result.Fail, "the password is longer than " + MaxLength + " characters: nobody can type it");
+            switch (judged)
+            {
+                case null:
+                    return new WardVerdict(SelfTestReport.Result.Info, "set; you have access to every ward on the server (" + wards + "), so no guess was tried");
+                case Answer.Wrong:
+                    return new WardVerdict(SelfTestReport.Result.Pass, "set; a wrong guess at a ward you have no access to was refused (" + wards + " wards on the server)");
+                case Answer.ProtectiveWards:
+                    return new WardVerdict(SelfTestReport.Result.Pass, "set; the guess went to the ward's own password, as it should");
+                default:
+                    return new WardVerdict(SelfTestReport.Result.Fail, "set; a wrong guess let you in: the check is broken");
+            }
+        }
+
         /// <summary>The server's check of a typed password, with each player's wait after a wrong guess.</summary>
         internal sealed class Gate
         {
@@ -169,6 +254,20 @@ namespace Vigil.Core
                 return wardHasOwn ? Answer.ProtectiveWards : Answer.Wrong;
             }
         }
+    }
+
+    /// <summary>A self-test line's result and words.</summary>
+    internal readonly struct WardVerdict
+    {
+        public WardVerdict(SelfTestReport.Result result, string text)
+        {
+            Result = result;
+            Text = text;
+        }
+
+        public SelfTestReport.Result Result { get; }
+
+        public string Text { get; }
     }
 
     /// <summary>
@@ -235,6 +334,9 @@ namespace Vigil.Core
 
             /// <summary><c>WardZdoUtils.AddPermitted(ZDO, long, string)</c>.</summary>
             public MethodInfo Permit;
+
+            /// <summary><c>WardZdoUtils.GetAllWards()</c>, for the self-test only; null leaves its guess untried.</summary>
+            public MethodInfo AllWards;
         }
 
         public static RepairShape FindRepair(Func<string, Type> type)
@@ -272,6 +374,7 @@ namespace Vigil.Core
                 WardById = Method(zdos, "TryGetWard", typeof(bool), "ZDOID", "ZDO&"),
                 DirectAccess = Method(zdos, "HasDirectAccessToWardZdo", typeof(bool), "ZDO", "Int64"),
                 Permit = Method(zdos, "AddPermitted", typeof(bool), "ZDO", "Int64", "String"),
+                AllWards = zdos.GetMethods(Static).FirstOrDefault(m => m.Name == "GetAllWards" && m.GetParameters().Length == 0 && typeof(IEnumerable).IsAssignableFrom(m.ReturnType)),
             };
             shape.Answer = protection.GetMethods(Static).FirstOrDefault(m => m.Name == "SendPasswordEntryResult" && m.ReturnType == typeof(void)
                 && Names(m.GetParameters()).Take(2).SequenceEqual(AnswerTakes) && m.GetParameters().Length == 3 && m.GetParameters()[2].ParameterType.IsEnum);

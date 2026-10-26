@@ -54,6 +54,9 @@ namespace Vigil.Recorder
             yield return new SelfTestRoutine(Here, "the server's alerts", 12f, AlertsOnServer);
             yield return new SelfTestRoutine(Here, "the server's steady messages", 12f, SteadyOnServer);
             yield return new SelfTestRoutine(Here, "away players and sleep, with the server", 45f, AwaySleepTried);
+            yield return new SelfTestRoutine(Here, "a ward repairing by itself", 15f, WardAutoTried);
+            yield return new SelfTestRoutine(Here, "a ward's alt-use starting repair on the whole connected base", 30f, WardChainTried);
+            yield return new SelfTestRoutine(Here, "the server's ward password", 15f, WardPasswordTried);
             yield return new SelfTestRoutine(Here, "a shared report reaching the server", 90f, SharedRoundTrip);
         }
 

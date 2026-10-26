@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Bootstrap;
@@ -26,6 +28,7 @@ namespace Vigil.Recorder
         private static WardShape.PasswordShape s_shape;
         private static FieldInfo s_playerId, s_playerName;
         private static readonly WardPassword.Gate s_gate = new WardPassword.Gate();
+        private static WardPassword.Answer? s_lastJudged;
 
         /// <summary>Synced from the server: it has a ward password.</summary>
         public static bool ServerHasOne;
@@ -116,7 +119,9 @@ namespace Vigil.Recorder
             bool hasAccess = (bool)s_shape.DirectAccess.Invoke(null, new object[] { zdo, playerId });
             bool wardHasOwn = (bool)s_shape.OwnPassword.Invoke(null, new object[] { zdo });
 
-            switch (s_gate.Judge(Password, given, playerId, hasAccess, wardHasOwn, Time.realtimeSinceStartupAsDouble))
+            var judged = s_gate.Judge(Password, given, playerId, hasAccess, wardHasOwn, Time.realtimeSinceStartupAsDouble);
+            s_lastJudged = judged;
+            switch (judged)
             {
                 case WardPassword.Answer.LetIn:
                     s_shape.Permit.Invoke(null, new object[] { zdo, playerId, playerName });
@@ -130,6 +135,69 @@ namespace Vigil.Recorder
                 default:
                     return true;
             }
+        }
+
+        // ------------------------------------------------------------------ for the self-test
+
+        /// <summary>
+        /// The server's side of a player's self-test: with a password set, a wrong guess for the asker at
+        /// a ward they have no access to goes through Protective Wards' own handler, as the prompt sends
+        /// it, and the patch's judgement comes back. The asker then waits as after any wrong guess.
+        /// </summary>
+        public static Dictionary<string, object> ServerCheck(ZNetPeer from)
+        {
+            WardPassword.Answer? judged = null;
+            int wards = 0;
+            bool reached = true;
+            if (s_shape != null && WardPassword.Matches(Password, Password))
+            {
+                var zdo = from != null && !from.m_characterID.IsNone() ? ZDOMan.instance?.GetZDO(from.m_characterID) : null;
+                if (zdo == null) return new Dictionary<string, object> { { "ok", 0 }, { "text", "the server has no character of yours" } };
+                long playerId = zdo.GetLong(ZDOVars.s_playerID);
+                var all = s_shape.AllWards != null ? ((IEnumerable)s_shape.AllWards.Invoke(null, null)).Cast<ZDO>().Where(w => w != null).ToList() : new List<ZDO>();
+                wards = all.Count;
+                var foreign = all.FirstOrDefault(w => !(bool)s_shape.DirectAccess.Invoke(null, new object[] { w, playerId }));
+                if (foreign != null)
+                {
+                    string guess = "vigil self-test " + Password.Length;
+                    if (guess == Password) guess += "!";
+                    var package = new ZPackage();
+                    package.Write(foreign.m_uid);
+                    package.Write(playerId);
+                    package.Write(guess);
+                    package.SetPos(0);
+                    s_lastJudged = null;
+                    s_shape.Submitted.Invoke(null, new object[] { from.m_uid, package });
+                    judged = s_lastJudged;
+                    reached = judged != null;
+                }
+            }
+            var verdict = !reached
+                ? new WardVerdict(SelfTestReport.Result.Fail, "set; the guess did not reach the server's check (Protective Wards did not take you as the sender)")
+                : WardPassword.ServerCheck(Found, Problem, Password, judged, wards);
+            return new Dictionary<string, object> { { "ok", 1 }, { "result", verdict.Result.ToString() }, { "text", verdict.Text } };
+        }
+
+        /// <summary>
+        /// On a player's game: Protective Wards' own prompt check, as patched, at the nearest active ward
+        /// within 64 m that the player has no access to; null when there is none.
+        /// </summary>
+        public static bool? OfferedNearby(Player player)
+        {
+            var areas = WardRepairPatch.Areas;
+            if (s_shape == null || areas == null || player == null) return null;
+            Vector3 at = player.transform.position;
+            var ward = areas.Where(a => a != null && a.m_ownerFaction == Character.Faction.Players && Vector3.Distance(a.transform.position, at) <= 64f && Enabled(a)
+                    && !(bool)s_shape.Access.Invoke(null, new object[] { a, player }))
+                .OrderBy(a => Vector3.Distance(a.transform.position, at)).FirstOrDefault();
+            if (ward == null) return null;
+            return (bool)s_shape.Offers.Invoke(null, new object[] { ward, player });
+        }
+
+        private static bool Enabled(PrivateArea ward)
+        {
+            var view = ward.GetComponent<ZNetView>();
+            return view != null && view.IsValid() && view.GetZDO().GetBool(ZDOVars.s_enabled);
         }
     }
 }

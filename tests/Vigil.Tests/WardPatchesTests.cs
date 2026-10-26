@@ -243,6 +243,7 @@ namespace Vigil.Tests
             Assert.Equal("TryGetWard", shape.WardById.Name);
             Assert.Equal("HasDirectAccessToWardZdo", shape.DirectAccess.Name);
             Assert.Equal("AddPermitted", shape.Permit.Name);
+            Assert.Equal("GetAllWards", shape.AllWards.Name);
             Assert.Equal("Success", Enum.ToObject(shape.Results, shape.LetIn).ToString());
             Assert.Equal("IncorrectPassword", Enum.ToObject(shape.Results, shape.Wrong).ToString());
         }
@@ -254,6 +255,106 @@ namespace Vigil.Tests
             Assert.Null(WardShape.FindPassword(name => null));
             Assert.Null(WardShape.FindRepair(name => name == "ProtectiveWards.ProtectiveWards" ? typeof(Other.ProtectiveWards) : Pw210(name)));
             Assert.Null(WardShape.FindPassword(name => name == "ProtectiveWards.WardPasswordProtection" ? typeof(Other.WardPasswordProtection) : Pw210(name)));
+        }
+
+        [Fact]
+        public void A_self_test_trial_switches_repair_on_for_this_game_while_it_lasts_at_its_own_pace()
+        {
+            var trial = new WardRepair.Trial();
+            trial.Start(network: true, auto: false, seconds: 1, now: 100, lasts: 30);
+
+            var on = trial.Effective(network: false, auto: false, seconds: 10, now: 110);
+
+            Assert.True(on.Network);
+            Assert.False(on.Auto);
+            Assert.Equal(1, on.Seconds);
+        }
+
+        [Fact]
+        public void The_trial_ends_by_itself_or_when_ended_and_the_servers_switches_come_back()
+        {
+            var trial = new WardRepair.Trial();
+            trial.Start(network: false, auto: true, seconds: 1, now: 100, lasts: 30);
+
+            var after = trial.Effective(network: false, auto: false, seconds: 10, now: 131);
+            Assert.False(after.Auto);
+            Assert.Equal(10, after.Seconds);
+
+            trial.Start(network: false, auto: true, seconds: 1, now: 200, lasts: 30);
+            trial.End();
+            Assert.False(trial.Effective(false, false, 10, now: 201).Auto);
+        }
+
+        [Fact]
+        public void A_trial_never_switches_off_what_the_server_has_on()
+        {
+            var trial = new WardRepair.Trial();
+            trial.Start(network: false, auto: true, seconds: 1, now: 0, lasts: 30);
+
+            var on = trial.Effective(network: true, auto: false, seconds: 10, now: 1);
+
+            Assert.True(on.Network);
+            Assert.True(on.Auto);
+
+            trial.Start(network: true, auto: false, seconds: 1, now: 0, lasts: 30);
+            Assert.True(trial.Effective(network: false, auto: true, seconds: 10, now: 1).Auto);
+        }
+
+        [Fact]
+        public void Starting_repair_passes_when_every_ward_of_the_chain_this_game_owns_was_started()
+        {
+            var ok = WardRepair.ChainCheck(chain: 3, ownedHere: 2, startedHere: 2, damaged: 1);
+            Assert.Equal(SelfTestReport.Result.Pass, ok.Result);
+            Assert.Equal("3 wards in the chain, 1 damaged piece; the 2 owned by this game started, 1 asked through its owner's game", ok.Text);
+
+            var lone = WardRepair.ChainCheck(chain: 1, ownedHere: 1, startedHere: 1, damaged: 2);
+            Assert.Equal("1 ward, 2 damaged pieces; it started", lone.Text);
+        }
+
+        [Fact]
+        public void Starting_repair_fails_when_a_ward_owned_here_did_not_start_or_nothing_was_started()
+        {
+            var missed = WardRepair.ChainCheck(chain: 3, ownedHere: 3, startedHere: 2, damaged: 1);
+            Assert.Equal(SelfTestReport.Result.Fail, missed.Result);
+            Assert.Equal("3 wards in the chain, 1 damaged piece; only 2 of the 3 owned by this game started", missed.Text);
+
+            var none = WardRepair.ChainCheck(chain: 0, ownedHere: 0, startedHere: 0, damaged: 0);
+            Assert.Equal(SelfTestReport.Result.Fail, none.Result);
+            Assert.Equal("the ward's alt-use did not reach Vigil's repair", none.Text);
+        }
+
+        [Fact]
+        public void The_servers_password_check_refuses_a_wrong_guess_and_says_when_nothing_could_be_tried()
+        {
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.ServerCheck(true, null, "Ymir!", WardPassword.Answer.Wrong, wards: 4).Result);
+            Assert.Equal("set; a wrong guess at a ward you have no access to was refused (4 wards on the server)",
+                WardPassword.ServerCheck(true, null, "Ymir!", WardPassword.Answer.Wrong, wards: 4).Text);
+            Assert.Equal("set; the guess went to the ward's own password, as it should",
+                WardPassword.ServerCheck(true, null, "Ymir!", WardPassword.Answer.ProtectiveWards, wards: 4).Text);
+            Assert.Equal(SelfTestReport.Result.Info, WardPassword.ServerCheck(true, null, "Ymir!", null, wards: 4).Result);
+            Assert.Equal("set; you have access to every ward on the server (4), so no guess was tried",
+                WardPassword.ServerCheck(true, null, "Ymir!", null, wards: 4).Text);
+        }
+
+        [Fact]
+        public void The_servers_password_check_fails_on_a_wrong_guess_let_in_an_untypeable_password_or_a_missing_patch()
+        {
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.ServerCheck(true, null, "Ymir!", WardPassword.Answer.LetIn, 4).Result);
+            var tooLong = WardPassword.ServerCheck(true, null, new string('x', WardPassword.MaxLength + 1), null, 4);
+            Assert.Equal(SelfTestReport.Result.Fail, tooLong.Result);
+            Assert.Equal("the password is longer than " + WardPassword.MaxLength + " characters: nobody can type it", tooLong.Text);
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.ServerCheck(true, "its password prompt changed", "Ymir!", null, 4).Result);
+            Assert.Equal("Protective Wards is not on the server", WardPassword.ServerCheck(false, null, "Ymir!", null, 0).Text);
+            var none = WardPassword.ServerCheck(true, null, "", null, 4);
+            Assert.Equal(SelfTestReport.Result.Info, none.Result);
+            Assert.Equal("no password set on the server: nobody is asked", none.Text);
+        }
+
+        [Fact]
+        public void The_server_says_it_answers_ward_checks_in_its_greeting()
+        {
+            Assert.Contains(Greeting.Wards, Greeting.Own.Split(','));
+            Assert.True(Greeting.ForEveryone(Greeting.Wards));
         }
 
         [Fact]
@@ -352,6 +453,8 @@ namespace Vigil.Tests
                 internal static bool HasDirectAccessToWardZdo(ZDO zdo, long playerID) => false;
 
                 internal static bool AddPermitted(ZDO zdo, long playerID, string playerName) => false;
+
+                internal static IEnumerable<ZDO> GetAllWards() => Array.Empty<ZDO>();
             }
         }
 

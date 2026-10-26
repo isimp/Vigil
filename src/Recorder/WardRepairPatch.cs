@@ -41,11 +41,25 @@ namespace Vigil.Recorder
         private static readonly Dictionary<PrivateArea, double> s_nextTurn = new Dictionary<PrivateArea, double>();
         private static readonly List<Piece> s_pieces = new List<Piece>();
         private static double s_nextShow;
+        private static readonly HashSet<PrivateArea> s_startedHere = new HashSet<PrivateArea>();
 
         /// <summary>The server's switches and seconds per piece, kept current by the config entries.</summary>
         public static bool Network, Auto;
 
         public static double Seconds = WardRepair.DefaultSeconds;
+
+        /// <summary>The self-test's trial, on this game alone.</summary>
+        public static readonly WardRepair.Trial Trial = new WardRepair.Trial();
+
+        /// <summary>The last start through a ward's alt-use: the wards asked and the damaged pieces found.</summary>
+        public static List<PrivateArea> LastChain { get; private set; }
+
+        public static int LastDamaged { get; private set; }
+
+        /// <summary>Whether the hooks are in and Protective Wards' members are at hand.</summary>
+        public static bool Ready => s_shape != null;
+
+        private static WardRepair.Switches Now() => Trial.Effective(Network, Auto, Seconds, Time.realtimeSinceStartupAsDouble);
 
         public static bool Found { get; private set; }
 
@@ -77,6 +91,7 @@ namespace Vigil.Recorder
                     return;
                 }
                 s_allAreas = (List<PrivateArea>)areas.GetValue(null);
+                Areas = s_allAreas;
                 s_repairing = (IDictionary)s_shape.Repairing.GetValue(null);
                 s_canBeRepaired = (Func<Piece, PrivateArea, bool>)Delegate.CreateDelegate(typeof(Func<Piece, PrivateArea, bool>), s_shape.CanBeRepaired);
                 s_overlapping = (Func<PrivateArea, PrivateArea, bool>)Delegate.CreateDelegate(typeof(Func<PrivateArea, PrivateArea, bool>), s_shape.Overlapping);
@@ -113,17 +128,21 @@ namespace Vigil.Recorder
             if (view == null || !view.IsValid() || !view.IsOwner()) return;
             view.GetZDO().Set(s_startedKey, true);
             s_nextTurn[area] = Time.realtimeSinceStartupAsDouble;
+            s_startedHere.Add(area);
         }
 
         private static bool BeforeStartRepair(PrivateArea ward, Player initiator, ref IEnumerator __result)
         {
-            var start = WardRepair.OnStart(Network, Auto);
+            var on = Now();
+            var start = WardRepair.OnStart(on.Network, on.Auto);
             if (s_shape == null || ward == null || start == WardRepair.Start.ProtectiveWards) return true;
             __result = Nothing();
             var wards = start == WardRepair.Start.WholeNetwork
                 ? WardRepair.Network(ward, s_allAreas.ToList(), w => w != null && s_active(w) && s_playerWard(w), s_overlapping)
                 : new List<PrivateArea> { ward };
             int damaged = wards.SelectMany(Damaged).Distinct().Count();
+            LastChain = wards;
+            LastDamaged = damaged;
             if (damaged == 0)
             {
                 string none = Localization.instance != null ? Localization.instance.Localize("$msg_doesnotneedrepair") : "Doesn't need repair";
@@ -161,7 +180,8 @@ namespace Vigil.Recorder
         public static void Update()
         {
             if (s_shape == null) return;
-            if (!Network && !Auto)
+            var on = Now();
+            if (!on.Network && !on.Auto)
             {
                 if (s_shown.Count > 0) HideAll();
                 return;
@@ -180,22 +200,22 @@ namespace Vigil.Recorder
                 if (!s_nextTurn.TryGetValue(area, out double due))
                 {
                     // A ward seen first waits a share of a turn, so the wards of a base take turns apart.
-                    s_nextTurn[area] = now + UnityEngine.Random.Range(0f, (float)Seconds);
+                    s_nextTurn[area] = now + UnityEngine.Random.Range(0f, (float)on.Seconds);
                     continue;
                 }
                 if (now < due) continue;
-                s_nextTurn[area] = now + Seconds;
-                Turn(area, view.GetZDO());
+                s_nextTurn[area] = now + on.Seconds;
+                Turn(area, view.GetZDO(), on.Auto);
                 return;
             }
         }
 
-        private static void Turn(PrivateArea area, ZDO zdo)
+        private static void Turn(PrivateArea area, ZDO zdo, bool auto)
         {
             bool started = zdo.GetBool(s_startedKey);
             bool active = s_active(area);
-            List<Piece> damaged = (started || Auto) && active ? Damaged(area) : new List<Piece>();
-            var step = WardRepair.Next(owner: true, active, started, Auto, damaged.Count);
+            List<Piece> damaged = (started || auto) && active ? Damaged(area) : new List<Piece>();
+            var step = WardRepair.Next(owner: true, active, started, auto, damaged.Count);
             if (step == WardRepair.Step.RepairOne)
             {
                 foreach (var piece in damaged)
@@ -244,6 +264,108 @@ namespace Vigil.Recorder
         {
             foreach (var area in s_shown) if (area != null) s_repairing.Remove(area);
             s_shown.Clear();
+        }
+
+        // ------------------------------------------------------------------ for the self-test
+
+        /// <summary>The game's list of loaded wards (once hooked).</summary>
+        public static List<PrivateArea> Areas { get; private set; }
+
+        /// <summary>Starts the self-test's trial: wards owned here take their turns at its pace from now.</summary>
+        public static void StartTrial(bool network, bool auto, double seconds, double lasts)
+        {
+            Trial.Start(network, auto, seconds, Time.realtimeSinceStartupAsDouble, lasts);
+            s_nextTurn.Clear();
+            s_startedHere.Clear();
+            LastChain = null;
+            LastDamaged = 0;
+        }
+
+        public static void EndTrial() => Trial.End();
+
+        /// <summary>Whether this game's Vigil marked the ward started since the trial began.</summary>
+        public static bool StartedHere(PrivateArea area) => s_startedHere.Contains(area);
+
+        /// <summary>Whether Protective Wards' hover list holds the ward (its "Repairing N").</summary>
+        public static bool Shows(PrivateArea area) => s_repairing != null && s_repairing.Contains(area);
+
+        public static bool IsStarted(PrivateArea area) => Zdo(area)?.GetBool(s_startedKey) ?? false;
+
+        public static int Left(PrivateArea area) => Zdo(area)?.GetInt(s_leftKey, WardRepair.NotRepairing) ?? WardRepair.NotRepairing;
+
+        private static ZDO Zdo(PrivateArea area)
+        {
+            var view = area != null ? area.GetComponent<ZNetView>() : null;
+            return view != null && view.IsValid() ? view.GetZDO() : null;
+        }
+
+        /// <summary>The nearest active ward around the player that they made and this game owns, or null with the reason.</summary>
+        public static PrivateArea OwnWardAround(Player player, out string why)
+        {
+            why = null;
+            long me = player.GetPlayerID();
+            Vector3 at = player.transform.position;
+            var mine = s_allAreas.Where(a => a != null && s_playerWard(a) && s_active(a) && Creator(a) == me
+                    && Vector3.Distance(a.transform.position, at) <= a.m_radius)
+                .OrderBy(a => Vector3.Distance(a.transform.position, at)).ToList();
+            var owned = mine.FirstOrDefault(a => a.GetComponent<ZNetView>().IsOwner());
+            if (owned != null) return owned;
+            why = mine.Count == 0
+                ? "stand inside an active ward you made to run it"
+                : "the ward around you is run by another player's game: run it where you are alone";
+            return null;
+        }
+
+        private static long Creator(PrivateArea area)
+        {
+            var piece = area.GetComponent<Piece>();
+            return piece != null ? piece.GetCreator() : 0;
+        }
+
+        /// <summary>
+        /// Takes 1 health off a piece in the ward's area that this game owns, a player placed and is
+        /// whole, and that the ward would repair; null with the reason when there is none.
+        /// </summary>
+        public static WearNTear DamageOne(PrivateArea ward, out string why)
+        {
+            why = null;
+            s_pieces.Clear();
+            Piece.GetAllPiecesInRadius(ward.transform.position, ward.m_radius, s_pieces);
+            var candidates = s_pieces.Where(p => p != null && p.gameObject != ward.gameObject && p.IsPlacedByPlayer())
+                .OrderBy(p => Vector3.Distance(p.transform.position, ward.transform.position)).Take(40).ToList();
+            foreach (var piece in candidates)
+            {
+                var wear = piece.GetComponent<WearNTear>();
+                var view = piece.GetComponent<ZNetView>();
+                if (wear == null || view == null || !view.IsValid() || !view.IsOwner() || Health(wear) < wear.m_health) continue;
+                SetHealth(view, wear.m_health - 1f);
+                if (s_canBeRepaired(piece, ward)) return wear;
+                SetHealth(view, wear.m_health);
+            }
+            why = candidates.Count == 0 ? "no piece placed by a player in the ward's area" : "no whole piece in the ward's area that this game owns and the ward would repair";
+            return null;
+        }
+
+        /// <summary>The piece's health from its ZDO.</summary>
+        public static float Health(WearNTear wear)
+        {
+            var view = wear != null ? wear.GetComponent<ZNetView>() : null;
+            return view != null && view.IsValid() ? view.GetZDO().GetFloat(ZDOVars.s_health, wear.m_health) : float.NaN;
+        }
+
+        /// <summary>Gives a piece its health back when the test left it damaged.</summary>
+        public static void MakeWhole(WearNTear wear)
+        {
+            var view = wear != null ? wear.GetComponent<ZNetView>() : null;
+            if (view == null || !view.IsValid() || Health(wear) >= wear.m_health) return;
+            if (view.IsOwner()) SetHealth(view, wear.m_health);
+            else wear.Repair();
+        }
+
+        private static void SetHealth(ZNetView view, float health)
+        {
+            view.GetZDO().Set(ZDOVars.s_health, health);
+            view.InvokeRPC(ZNetView.Everybody, "RPC_HealthChanged", health);
         }
     }
 }
