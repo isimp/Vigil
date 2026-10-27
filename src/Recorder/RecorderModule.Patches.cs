@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -48,6 +48,11 @@ namespace Vigil.Recorder
                 "both ways, and Jotunn's own way comes back at a disagreement.");
             JotunnSyncPatch.On = _jotunnSync.Value;
             _jotunnSync.SettingChanged += (_, __) => JotunnSyncPatch.On = _jotunnSync.Value;
+            _chestScroll = Config.Bind("Patches", "ChestGridScroll", true,
+                "This game's own switch: with CycleChests, the mouse wheel switches chests whenever a chest is open, so a chest whose slots are taller than its view cannot be scrolled. " +
+                "On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before. Its arrow keys do not cycle while the pointer is over such a grid.");
+            ChestScrollPatch.On = _chestScroll.Value;
+            _chestScroll.SettingChanged += (_, __) => ChestScrollPatch.On = _chestScroll.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -130,6 +135,8 @@ namespace Vigil.Recorder
             HookJoinPackages();
             JotunnSyncPatch.Hook();
             if (!string.IsNullOrEmpty(JotunnSyncPatch.Problem)) _host.Log.LogWarning("Vigil: the patch on Jotunn's config sync stepped aside: " + JotunnSyncPatch.Problem);
+            if (!_server) ChestScrollPatch.Hook();
+            if (ChestScrollPatch.Problem != null) _host.Log.LogWarning("Vigil: the chest grid scroll patch stepped aside: " + ChestScrollPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -138,8 +145,8 @@ namespace Vigil.Recorder
             if (WardPasswordPatch.Problem != null) _host.Log.LogWarning("Vigil: the ward password patch stepped aside: " + WardPasswordPatch.Problem);
         }
 
-        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)
-            + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 7 on", Skin.Tone.Quiet);
+        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)
+            + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 8 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -235,6 +242,23 @@ namespace Vigil.Recorder
             Ui.Note("When the server's synced settings arrive on joining, Jotunn checks each one against the file's list of keys, which BepInEx copies whole for every setting. On, Jotunn gets one copy of each file's keys per sync, which answers every check the same way, without the copies. The first answers are asked both ways, and Jotunn's own way comes back at a disagreement.");
             Ui.Row("Set by", "this game's own config (Patches.JotunnConfigSync), for each player themself");
             Ui.Row("On this game", Toned(JotunnSyncPatch.State, JotunnSyncPatch.Problem != null ? ResultTone.Caution : _jotunnSync.Value && JotunnSyncPatch.Answered > 0 ? ResultTone.Good : ResultTone.Quiet));
+
+            Ui.Heading("The wheel scrolls a chest grid with a bar");
+            Ui.BeginFormLine("Switch");
+            int chest = Ui.Choice(_chestScroll.Value ? 0 : 1, OnOffWords);
+            if (chest >= 0 && (chest == 0) != _chestScroll.Value)
+            {
+                bool on = chest == 0;
+                Ui.Later(() =>
+                {
+                    _chestScroll.Value = on;
+                    EventLog.Write("patch-set", PlayerName(), "ChestGridScroll " + (on ? "on" : "off"));
+                });
+            }
+            Ui.EndLine();
+            Ui.Note("CycleChests switches chests whenever the wheel turns while a chest is open, so a chest whose slots are taller than its view cannot be scrolled. On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before. CycleChests' arrow keys do not cycle while the pointer is over such a grid.");
+            Ui.Row("Set by", "this game's own config (Patches.ChestGridScroll), for each player themself");
+            if (!_server) Ui.Row("On this game", Toned(ChestScrollPatch.State, ChestScrollPatch.Problem != null ? ResultTone.Caution : _chestScroll.Value && ChestScrollPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");
             Ui.BeginFormLine("Switch");

@@ -510,6 +510,11 @@ namespace Vigil.Recorder
                 checks.Add(SkipWinterPatch.Problem == null
                     ? new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Pass, SkipWinterPatch.State)
                     : new SelfTestReport.Check(area, "game patch: skip winter", SelfTestReport.Result.Warn, SkipWinterPatch.State));
+                string chest = ChestScrollPatch.State;
+                checks.Add(new SelfTestReport.Check(area, "game patch: the wheel scrolls a chest grid with a bar",
+                    chest.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
+                    : chest.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
+                    : SelfTestReport.Result.Info, chest));
             }
             WardChecks(area, checks);
             const string away = "game patch: away players don't hold up sleep";

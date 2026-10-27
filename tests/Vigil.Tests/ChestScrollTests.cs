@@ -1,0 +1,101 @@
+using System;
+using Vigil.Core;
+using Xunit;
+
+namespace Vigil.Tests
+{
+    /// <summary>
+    /// The game patch on CycleChests: the mouse wheel over a chest's grid that has a scroll bar
+    /// scrolls the grid; anywhere else it cycles chests as CycleChests does.
+    /// </summary>
+    public sealed class ChestScrollTests
+    {
+        [Fact]
+        public void The_wheel_over_a_chest_grid_with_a_bar_scrolls_the_grid()
+        {
+            Assert.True(ChestScroll.KeepsWheel(on: true, containerOpen: true, overGrid: true, hasBar: true));
+        }
+
+        [Fact]
+        public void The_wheel_cycles_chests_off_the_grid_without_a_bar_with_no_chest_open_or_with_the_switch_off()
+        {
+            Assert.False(ChestScroll.KeepsWheel(on: true, containerOpen: true, overGrid: false, hasBar: true));
+            Assert.False(ChestScroll.KeepsWheel(on: true, containerOpen: true, overGrid: true, hasBar: false));
+            Assert.False(ChestScroll.KeepsWheel(on: true, containerOpen: false, overGrid: true, hasBar: true));
+            Assert.False(ChestScroll.KeepsWheel(on: false, containerOpen: true, overGrid: true, hasBar: true));
+        }
+
+        [Fact]
+        public void A_grid_has_a_bar_when_its_slots_are_taller_than_its_view_as_the_game_lays_it_out()
+        {
+            Assert.True(ChestScroll.HasBar(slotsHeight: 700f, viewHeight: 480f));
+            Assert.False(ChestScroll.HasBar(slotsHeight: 480f, viewHeight: 480f));
+            Assert.False(ChestScroll.HasBar(slotsHeight: 300f, viewHeight: 480f));
+        }
+
+        [Fact]
+        public void The_state_says_what_the_patch_does_on_this_game()
+        {
+            Assert.Equal("off: this game's switch (Patches.ChestGridScroll)", ChestScroll.StateLine(on: false, found: true, version: "1.0.1", problem: null, kept: 0));
+            Assert.Equal("not needed: CycleChests is not installed", ChestScroll.StateLine(on: true, found: false, version: null, problem: null, kept: 0));
+            Assert.Equal("stepped aside: its wheel handling changed (an update)", ChestScroll.StateLine(on: true, found: true, version: "1.0.1", problem: "its wheel handling changed (an update)", kept: 0));
+            Assert.Equal("working · CycleChests 1.0.1 · the wheel over a chest grid with a bar scrolls it", ChestScroll.StateLine(on: true, found: true, version: "1.0.1", problem: null, kept: 0));
+            Assert.Equal("working · CycleChests 1.0.1 · the wheel over a chest grid with a bar scrolls it · 12 wheel turns kept in a chest", ChestScroll.StateLine(on: true, found: true, version: "1.0.1", problem: null, kept: 12));
+        }
+
+        [Fact]
+        public void CycleChests_101s_input_step_is_found()
+        {
+            var step = ChestScroll.FindInputStep(name => name == ChestScroll.TypeName ? typeof(Cc101.CycleChests) : null);
+
+            Assert.NotNull(step);
+            Assert.Equal("Prefix", step.Name);
+            Assert.Equal("Player_Update_Patch", step.DeclaringType.Name);
+        }
+
+        [Fact]
+        public void Another_shape_or_no_CycleChests_is_not_taken()
+        {
+            Assert.Null(ChestScroll.FindInputStep(name => null));
+            Assert.Null(ChestScroll.FindInputStep(name => name == ChestScroll.TypeName ? typeof(Other.CycleChests) : null));
+            Assert.Null(ChestScroll.FindInputStep(name => name == ChestScroll.TypeName ? typeof(Returns.CycleChests) : null));
+        }
+
+        // Stand-ins with the shapes of CycleChests 1.0.1's members (the game's type as a plain class).
+        private sealed class Player { }
+
+        private static class Cc101
+        {
+            public class CycleChests
+            {
+                public static class Player_Update_Patch
+                {
+                    private static void Prefix(Player __instance) { }
+                }
+            }
+        }
+
+        // The input step under another name, or deciding whether the game's update runs.
+        private static class Other
+        {
+            public class CycleChests
+            {
+                public static class Player_Update_Patch
+                {
+                    private static void Postfix(Player __instance) { }
+                }
+            }
+        }
+
+        private static class Returns
+        {
+            public class CycleChests
+            {
+                public static class Player_Update_Patch
+                {
+                    private static bool Prefix(Player __instance) => true;
+                }
+            }
+        }
+    }
+}

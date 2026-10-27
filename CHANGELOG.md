@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.42.5
+## 0.42.6
 
 Three new patches in the *Patches* tab work on Protective Wards' wards, each off until the server sets it. *Wards repair the whole connected base* (`Patches.WardNetworkRepair`): starting repair at a ward with its alt-use starts it on every active ward chained to it by overlapping areas, and each ward repairs its own area, one damaged piece every `Patches.WardRepairSeconds` (10), until nothing is damaged; every player sees how many pieces each ward has left. Protective Wards' own repair reaches only the wards touching the one used, one piece every 10 s for all of them, and stops when its player walks away. *Wards repair by themselves* (`Patches.WardAutoRepair`): every active ward does the same without being started, by Protective Wards' own repair rules. A ward repairs on the game that runs it, so only while a player is near the base; a ward run by a game without this Vigil is left out.
 
@@ -9,6 +9,8 @@ Three new patches in the *Patches* tab work on Protective Wards' wards, each off
 A door a ward locks asks for that ward's password too, as a locked door can be all that stands between a player and the ward. Its hover names alt-use (Shift+E) for *Enter password*, and alt-use opens the same prompt for the first ward that locks the door; plain use stays the door's own. Where two wards that are not connected lock one door, each is asked about in turn. This covers every door Protective Wards locks, gates and drawbridges included.
 
 The full self-test tries all three wherever the player stands. The server picks a spot near the player where a small test ward keeps clear of every switched-on ward, and the test places its own objects there for a few seconds and removes them after; what a test cut short leaves, the server removes later. Repair: a wall loses 1 health and has to be repaired by its ward without a start, then again after the ward's alt-use, which has to start, show the count and stop. Password: at a ward of nobody the player knows, the prompt has to appear, a wrong password and the right one right after it have to be refused, and the right one after the wait has to put the player on the list. A door of that stranger in the ward has to show the password line and open the prompt for the ward on alt-use before, and open on plain use after. God mode, which opens every ward to a ward admin, is off while that runs. A self-test routine that runs over its time now puts back what it changed.
+
+A new patch for CycleChests, *The wheel scrolls a chest grid with a bar* (`Patches.ChestGridScroll`, each player's own switch, on). CycleChests switches chests whenever the mouse wheel turns while a chest is open, so a chest whose slots are taller than its view could not be scrolled. Now the wheel over that chest's grid or its scroll bar scrolls it the game's way, and anywhere else it cycles chests as before. While the pointer is over such a grid, CycleChests' arrow keys do not cycle either. It steps aside, saying so, if a CycleChests update changes its wheel handling.
 
 ## 0.41.0
 
