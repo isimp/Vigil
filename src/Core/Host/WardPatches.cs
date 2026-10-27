@@ -212,6 +212,51 @@ namespace Vigil.Core
             return serverHasOne && playerWard && enabled && !hasAccess && playerId != 0;
         }
 
+        /// <summary>
+        /// Whether a ward keeps the player from opening a door, by Protective Wards' own rule: an
+        /// active player ward whose area holds the door, without access to it or a ward connected to
+        /// it, unless the player built the door. <paramref name="wardsLockDoors"/>: its "Doors" setting
+        /// is on or the door asks the game's ward check itself.
+        /// </summary>
+        public static bool LocksDoor(bool wardsLockDoors, bool active, bool inside, bool hasAccess, bool madeDoor) =>
+            wardsLockDoors && active && inside && !hasAccess && !madeDoor;
+
+        /// <summary>
+        /// The ward the player is asked about at a door: the first that locks it, as Protective Wards
+        /// stops at the first, or null when none locks it or that one takes no password.
+        /// </summary>
+        public static T DoorWard<T>(IEnumerable<T> wards, Func<T, bool> locks, Func<T, bool> asks) where T : class
+        {
+            var first = wards.FirstOrDefault(locks);
+            return first != null && asks(first) ? first : null;
+        }
+
+        /// <summary>Whether a use of a door opens the password prompt: alt-use, not held. Plain use stays the door's.</summary>
+        public static bool DoorUseAsks(bool hold, bool alt) => alt && !hold;
+
+        /// <summary>The hover line at a door the player is asked about, in Protective Wards' own words.</summary>
+        public const string DoorHoverLine = "\n[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] $pw_ward_password_enter";
+
+        /// <summary>
+        /// The self-test's verdict on its locked door: the hover line and the prompt for the door's
+        /// ward come exactly when the server has a password (<paramref name="opened"/> null: which
+        /// prompt opened cannot be seen).
+        /// </summary>
+        public static WardVerdict DoorPromptCheck(bool serverHasOne, bool hoverLine, bool? opened)
+        {
+            if (!serverHasOne)
+            {
+                return hoverLine || opened == true
+                    ? new WardVerdict(SelfTestReport.Result.Fail, "the door asks for a password, though the server has none")
+                    : new WardVerdict(SelfTestReport.Result.Pass, "no password line, as the server has no password");
+            }
+            if (!hoverLine) return new WardVerdict(SelfTestReport.Result.Fail, "the door's hover has no password line");
+            if (opened == null) return new WardVerdict(SelfTestReport.Result.Info, "the hover line is there; which prompt opened cannot be seen in this Protective Wards");
+            return opened.Value
+                ? new WardVerdict(SelfTestReport.Result.Pass, "the hover line is there and alt-use opened the password prompt for the door's ward")
+                : new WardVerdict(SelfTestReport.Result.Fail, "alt-use at the door opened no password prompt for its ward");
+        }
+
         /// <summary>What the patch does on this game, in words.</summary>
         public static string StateLine(bool serverHasOne, bool found, string version, string problem)
         {
@@ -219,6 +264,16 @@ namespace Vigil.Core
             if (!serverHasOne) return "off: the server has no ward password";
             if (problem != null) return "stepped aside: " + problem;
             return "working · Protective Wards " + version + " · players without access are asked for the server's password";
+        }
+
+        /// <summary>What the door part does on this game, in words: as the ward part, unless only the door part stepped aside.</summary>
+        public static string DoorStateLine(bool serverHasOne, bool found, string version, string problem, string doorProblem)
+        {
+            string ward = StateLine(serverHasOne, found, version, problem);
+            if (!ward.StartsWith("working", StringComparison.Ordinal)) return ward;
+            return doorProblem != null
+                ? "stepped aside: " + doorProblem
+                : "working · Protective Wards " + version + " · alt-use at a door a ward locks asks for that ward's password";
         }
 
         /// <summary>The self-test's three guesses at its own stranger's ward, in order.</summary>
@@ -409,25 +464,30 @@ namespace Vigil.Core
 
         public const string WallPrefab = "woodwall";
 
+        /// <summary>The password test's door, in its stranger's ward; the stranger's, as a door opens for its builder.</summary>
+        public const string DoorPrefab = "wood_door";
+
         /// <summary>The made-up creator of the password test's ward: no player has this id.</summary>
         public const long Stranger = 1;
 
         /// <summary>
         /// Whether the server records an object a player's test says it placed: a ward made by the
-        /// asker or the made-up stranger, or a wall made by the asker, owned by the asker's game. A real
-        /// ward or piece of anyone else is never recorded, so the server never removes it or types the
-        /// password at it.
+        /// asker or the made-up stranger, a wall made by the asker, or a door made by the stranger,
+        /// owned by the asker's game. A real ward or piece of anyone else is never recorded, so the
+        /// server never removes it or types the password at it.
         /// </summary>
         public static bool Accepts(string prefab, long creator, long asker, bool ownedByAsker)
         {
             if (!ownedByAsker || asker == 0) return false;
             if (prefab == WardPrefab) return creator == asker || creator == Stranger;
+            if (prefab == DoorPrefab) return creator == Stranger;
             return prefab == WallPrefab && creator == asker;
         }
 
         /// <summary>Whether a recorded object may be removed: it still is what the test placed.</summary>
         public static bool MayRemove(string prefab, long creator, long recordedFor) =>
-            (prefab == WardPrefab && (creator == recordedFor || creator == Stranger)) || (prefab == WallPrefab && creator == recordedFor);
+            (prefab == WardPrefab && (creator == recordedFor || creator == Stranger)) || (prefab == WallPrefab && creator == recordedFor)
+            || (prefab == DoorPrefab && creator == Stranger);
 
         /// <summary>Whether the server types a guess at the ward: recorded for the asker and made by the made-up stranger.</summary>
         public static bool TakesGuess(bool recorded, long creator) => recorded && creator == Stranger;
@@ -598,6 +658,52 @@ namespace Vigil.Core
 
             /// <summary><c>ProtectiveWards.HasWardAdminAccess(long)</c>: the player passes every ward (admins, by its setting).</summary>
             public MethodInfo Admin;
+        }
+
+        internal sealed class DoorShape
+        {
+            /// <summary><c>WardPasswordProtection.TryHandleInteraction(PrivateArea, Player)</c>: opens the prompt when it is offered.</summary>
+            public MethodInfo Prompt;
+
+            /// <summary><c>IsActivePlayerWard(PrivateArea)</c>.</summary>
+            public MethodInfo Active;
+
+            /// <summary><c>IsPointInsideWardArea(PrivateArea, Vector3, float)</c>.</summary>
+            public MethodInfo Inside;
+
+            /// <summary><c>IsObjectOwnedByPlayerWithWardAccess(Component, Player)</c>: the player built it.</summary>
+            public MethodInfo MadeBy;
+
+            /// <summary><c>wardAccessProtectDoors</c>, its "Doors" setting (a ConfigEntry of bool).</summary>
+            public FieldInfo LocksDoors;
+
+            /// <summary><c>s_promptWardID</c>, the ward the open prompt is for; null: the self-test cannot see it.</summary>
+            public FieldInfo PromptWard;
+
+            /// <summary><c>ClosePrompt()</c>; null: the self-test leaves the prompt to the player.</summary>
+            public MethodInfo ClosePrompt;
+        }
+
+        public static DoorShape FindDoor(Func<string, Type> type)
+        {
+            var pw = type("ProtectiveWards.ProtectiveWards");
+            var protection = type("ProtectiveWards.WardPasswordProtection");
+            if (pw == null || protection == null) return null;
+            var shape = new DoorShape
+            {
+                Prompt = Method(protection, "TryHandleInteraction", typeof(bool), "PrivateArea", "Player"),
+                Active = Method(pw, "IsActivePlayerWard", typeof(bool), "PrivateArea"),
+                Inside = Method(pw, "IsPointInsideWardArea", typeof(bool), "PrivateArea", "Vector3", "Single"),
+                MadeBy = Method(pw, "IsObjectOwnedByPlayerWithWardAccess", typeof(bool), "Component", "Player"),
+                LocksDoors = pw.GetField("wardAccessProtectDoors", Static),
+                PromptWard = protection.GetField("s_promptWardID", Static),
+                ClosePrompt = Method(protection, "ClosePrompt", typeof(void)),
+            };
+            var setting = shape.LocksDoors?.FieldType;
+            bool boolSetting = setting != null && setting.IsGenericType && setting.Name == "ConfigEntry`1"
+                && setting.GetGenericArguments()[0] == typeof(bool) && setting.GetProperty("Value") != null;
+            if (shape.PromptWard != null && shape.PromptWard.FieldType.Name != "ZDOID") shape.PromptWard = null;
+            return shape.Prompt != null && shape.Active != null && shape.Inside != null && shape.MadeBy != null && boolSetting ? shape : null;
         }
 
         public static RepairShape FindRepair(Func<string, Type> type)

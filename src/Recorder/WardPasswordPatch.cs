@@ -77,8 +77,102 @@ namespace Vigil.Recorder
             {
                 Problem = "Protective Wards could not be hooked: " + e.GetType().Name + " " + e.Message;
                 s_shape = null;
+                return;
+            }
+            HookDoors(log);
+        }
+
+        // ------------------------------------------------------------------ doors a ward locks
+
+        private static WardShape.DoorShape s_door;
+        private static Func<PrivateArea, bool> s_active;
+        private static Func<PrivateArea, Vector3, float, bool> s_inside;
+        private static Func<Component, Player, bool> s_madeBy;
+        private static Func<PrivateArea, Player, bool> s_prompt;
+        private static BepInEx.Configuration.ConfigEntry<bool> s_locksDoors;
+
+        /// <summary>The game's list of loaded wards, the one Protective Wards' door lock walks.</summary>
+        private static readonly AccessTools.FieldRef<List<PrivateArea>> s_allAreas =
+            AccessTools.StaticFieldRefAccess<List<PrivateArea>>(AccessTools.Field(typeof(PrivateArea), "m_allAreas"));
+
+        /// <summary>Why the door part stepped aside while the ward part works; null when it works.</summary>
+        public static string DoorProblem { get; private set; }
+
+        /// <summary>
+        /// At a door a ward locks, the player is asked for that ward's password too: a postfix on
+        /// <c>Door.GetHoverText</c> adds Protective Wards' own "enter password" line for alt-use, and a
+        /// prefix on <c>Player.Interact</c> opens its prompt for that ward on alt-use. The player's
+        /// interact step is patched, not the door's, because every prefix of the door runs even after
+        /// one skips it, and Protective Wards' own then shows its "no access" message over the prompt.
+        /// </summary>
+        private static void HookDoors(Action<string> log)
+        {
+            try
+            {
+                s_door = WardShape.FindDoor(TypeLookup.Loaded.Find);
+                var interact = AccessTools.Method(typeof(Player), "Interact", new[] { typeof(GameObject), typeof(bool), typeof(bool) });
+                if (s_door == null || interact == null)
+                {
+                    DoorProblem = "its door lock changed (an update)";
+                    s_door = null;
+                    return;
+                }
+                s_active = (Func<PrivateArea, bool>)Delegate.CreateDelegate(typeof(Func<PrivateArea, bool>), s_door.Active);
+                s_inside = (Func<PrivateArea, Vector3, float, bool>)Delegate.CreateDelegate(typeof(Func<PrivateArea, Vector3, float, bool>), s_door.Inside);
+                s_madeBy = (Func<Component, Player, bool>)Delegate.CreateDelegate(typeof(Func<Component, Player, bool>), s_door.MadeBy);
+                s_prompt = (Func<PrivateArea, Player, bool>)Delegate.CreateDelegate(typeof(Func<PrivateArea, Player, bool>), s_door.Prompt);
+                var harmony = new Harmony(HarmonyId);
+                harmony.Patch(AccessTools.Method(typeof(Door), nameof(Door.GetHoverText)), postfix: new HarmonyMethod(typeof(WardPasswordPatch), nameof(AfterDoorHover)));
+                harmony.Patch(interact, prefix: new HarmonyMethod(typeof(WardPasswordPatch), nameof(BeforeInteract)) { priority = Priority.First });
+                log?.Invoke("Vigil: doors a ward locks ask for its password too.");
+            }
+            catch (Exception e)
+            {
+                DoorProblem = "its doors could not be hooked: " + e.GetType().Name + " " + e.Message;
+                s_door = null;
             }
         }
+
+        /// <summary>The ward the player is asked about at the door (<see cref="WardPassword.DoorWard"/>), or null.</summary>
+        public static PrivateArea DoorWard(Door door, Player player)
+        {
+            if (s_door == null || door == null || player == null) return null;
+            // The setting is read when first needed: Protective Wards binds it after Vigil hooks.
+            if (s_locksDoors == null) s_locksDoors = s_door.LocksDoors.GetValue(null) as BepInEx.Configuration.ConfigEntry<bool>;
+            bool wardsLockDoors = door.m_checkGuardStone || (s_locksDoors?.Value ?? true);
+            if (!wardsLockDoors) return null;
+            var at = door.transform.position;
+            return WardPassword.DoorWard(s_allAreas(),
+                ward => WardPassword.LocksDoor(true, s_active(ward), s_inside(ward, at, 0f), s_access(ward, player), s_madeBy(door, player)),
+                ward => s_offers(ward, player));
+        }
+
+        private static void AfterDoorHover(Door __instance, ref string __result)
+        {
+            if (string.IsNullOrEmpty(__result) || Localization.instance == null || DoorWard(__instance, Player.m_localPlayer) == null) return;
+            // Localized at each hover, as the game's own lines are: the key names follow keyboard or gamepad.
+            __result += Localization.instance.Localize(WardPassword.DoorHoverLine);
+        }
+
+        private static bool BeforeInteract(Player __instance, GameObject go, bool hold, bool alt)
+        {
+            if (!WardPassword.DoorUseAsks(hold, alt) || go == null || __instance != Player.m_localPlayer || __instance.InAttack() || __instance.InDodge()) return true;
+            var door = go.GetComponentInParent<Interactable>() as Door;
+            var ward = DoorWard(door, __instance);
+            return ward == null || !s_prompt(ward, __instance);
+        }
+
+        /// <summary>The ward Protective Wards' open prompt is for (none when closed or unreadable).</summary>
+        public static ZDOID PromptWard => s_door?.PromptWard != null ? (ZDOID)s_door.PromptWard.GetValue(null) : ZDOID.None;
+
+        public static bool SeesPrompt => s_door?.PromptWard != null;
+
+        /// <summary>Closes Protective Wards' prompt, as its own cancel does.</summary>
+        public static void ClosePrompt() => s_door?.ClosePrompt?.Invoke(null, null);
+
+        public static bool DoorsReady => s_door != null;
+
+        public static string DoorState => WardPassword.DoorStateLine(ServerHasOne, Found, Version, Problem, DoorProblem);
 
         private static void AfterOffers(PrivateArea ward, Player player, ref bool __result)
         {

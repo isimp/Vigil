@@ -173,6 +173,99 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_door_inside_an_active_ward_the_player_has_no_access_to_is_locked()
+        {
+            Assert.True(WardPassword.LocksDoor(wardsLockDoors: true, active: true, inside: true, hasAccess: false, madeDoor: false));
+        }
+
+        [Fact]
+        public void A_door_is_not_locked_with_access_outside_the_area_at_a_switched_off_ward_or_for_its_builder()
+        {
+            Assert.False(WardPassword.LocksDoor(wardsLockDoors: true, active: true, inside: true, hasAccess: true, madeDoor: false));
+            Assert.False(WardPassword.LocksDoor(wardsLockDoors: true, active: true, inside: false, hasAccess: false, madeDoor: false));
+            Assert.False(WardPassword.LocksDoor(wardsLockDoors: true, active: false, inside: true, hasAccess: false, madeDoor: false));
+            Assert.False(WardPassword.LocksDoor(wardsLockDoors: true, active: true, inside: true, hasAccess: false, madeDoor: true));
+            Assert.False(WardPassword.LocksDoor(wardsLockDoors: false, active: true, inside: true, hasAccess: false, madeDoor: false));
+        }
+
+        [Fact]
+        public void At_a_locked_door_the_player_is_asked_about_the_first_ward_that_locks_it()
+        {
+            var a = W("a", 0);
+            var b = W("b", 5);
+            var c = W("c", 9);
+
+            var asked = WardPassword.DoorWard(new[] { a, b, c }, locks: w => w != a, asks: w => true);
+
+            Assert.Same(b, asked);
+        }
+
+        [Fact]
+        public void A_door_asks_nothing_when_no_ward_locks_it_or_the_locking_ward_takes_no_password()
+        {
+            var a = W("a", 0);
+            var b = W("b", 5);
+
+            Assert.Null(WardPassword.DoorWard(new[] { a, b }, locks: w => false, asks: w => true));
+            // The door stays locked by the first ward whatever a later one would take, so a later one is never asked about.
+            Assert.Null(WardPassword.DoorWard(new[] { a, b }, locks: w => true, asks: w => w == b));
+        }
+
+        [Fact]
+        public void Only_alt_use_of_a_door_opens_the_password_prompt_and_plain_use_stays_the_doors()
+        {
+            Assert.True(WardPassword.DoorUseAsks(hold: false, alt: true));
+            Assert.False(WardPassword.DoorUseAsks(hold: false, alt: false));
+            Assert.False(WardPassword.DoorUseAsks(hold: true, alt: true));
+        }
+
+        [Fact]
+        public void The_door_hover_line_names_alt_use_and_Protective_Wards_own_password_words()
+        {
+            Assert.Equal("\n[<color=yellow><b>$KEY_AltPlace + $KEY_Use</b></color>] $pw_ward_password_enter", WardPassword.DoorHoverLine);
+        }
+
+        [Fact]
+        public void The_self_test_passes_a_door_that_asks_exactly_when_the_server_has_a_password()
+        {
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.DoorPromptCheck(serverHasOne: true, hoverLine: true, opened: true).Result);
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.DoorPromptCheck(serverHasOne: false, hoverLine: false, opened: false).Result);
+        }
+
+        [Fact]
+        public void The_self_test_fails_a_door_without_the_line_or_the_prompt_or_asking_without_a_password()
+        {
+            var noLine = WardPassword.DoorPromptCheck(serverHasOne: true, hoverLine: false, opened: true);
+            Assert.Equal(SelfTestReport.Result.Fail, noLine.Result);
+            Assert.Equal("the door's hover has no password line", noLine.Text);
+            var noPrompt = WardPassword.DoorPromptCheck(serverHasOne: true, hoverLine: true, opened: false);
+            Assert.Equal(SelfTestReport.Result.Fail, noPrompt.Result);
+            Assert.Equal("alt-use at the door opened no password prompt for its ward", noPrompt.Text);
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.DoorPromptCheck(serverHasOne: false, hoverLine: true, opened: false).Result);
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.DoorPromptCheck(serverHasOne: false, hoverLine: false, opened: true).Result);
+        }
+
+        [Fact]
+        public void The_door_state_follows_the_ward_part_and_names_its_own_trouble()
+        {
+            Assert.Equal("working · Protective Wards 2.1.0 · alt-use at a door a ward locks asks for that ward's password",
+                WardPassword.DoorStateLine(serverHasOne: true, found: true, version: "2.1.0", problem: null, doorProblem: null));
+            Assert.Equal("stepped aside: its door lock changed (an update)",
+                WardPassword.DoorStateLine(serverHasOne: true, found: true, version: "2.1.0", problem: null, doorProblem: "its door lock changed (an update)"));
+            Assert.Equal("off: the server has no ward password",
+                WardPassword.DoorStateLine(serverHasOne: false, found: true, version: "2.1.0", problem: null, doorProblem: "x"));
+            Assert.Equal("not needed: Protective Wards is not installed",
+                WardPassword.DoorStateLine(serverHasOne: true, found: false, version: null, problem: null, doorProblem: null));
+        }
+
+        [Fact]
+        public void The_self_test_says_so_when_it_cannot_see_which_prompt_opened()
+        {
+            var unseen = WardPassword.DoorPromptCheck(serverHasOne: true, hoverLine: true, opened: null);
+            Assert.Equal(SelfTestReport.Result.Info, unseen.Result);
+        }
+
+        [Fact]
         public void The_server_lets_in_on_its_password_and_leaves_the_ward_own_password_to_Protective_Wards()
         {
             var gate = new WardPassword.Gate();
@@ -249,6 +342,37 @@ namespace Vigil.Tests
             Assert.Equal("HasWardAdminAccess", shape.Admin.Name);
             Assert.Equal("Success", Enum.ToObject(shape.Results, shape.LetIn).ToString());
             Assert.Equal("IncorrectPassword", Enum.ToObject(shape.Results, shape.Wrong).ToString());
+        }
+
+        [Fact]
+        public void Protective_Wards_210s_door_lock_and_prompt_are_found()
+        {
+            var shape = WardShape.FindDoor(Pw210);
+
+            Assert.NotNull(shape);
+            Assert.Equal("TryHandleInteraction", shape.Prompt.Name);
+            Assert.Equal("IsActivePlayerWard", shape.Active.Name);
+            Assert.Equal("IsPointInsideWardArea", shape.Inside.Name);
+            Assert.Equal("PrivateArea", shape.Inside.GetParameters()[0].ParameterType.Name);
+            Assert.Equal("IsObjectOwnedByPlayerWithWardAccess", shape.MadeBy.Name);
+            Assert.Equal("wardAccessProtectDoors", shape.LocksDoors.Name);
+            Assert.Equal("s_promptWardID", shape.PromptWard.Name);
+            Assert.Equal("ClosePrompt", shape.ClosePrompt.Name);
+        }
+
+        [Fact]
+        public void A_version_without_the_door_lock_setting_is_not_taken_and_the_prompt_lookups_are_optional()
+        {
+            Assert.Null(WardShape.FindDoor(name => null));
+            Assert.Null(WardShape.FindDoor(name => name == "ProtectiveWards.ProtectiveWards" ? typeof(NoCount.ProtectiveWards) : Pw210(name)));
+            Assert.Null(WardShape.FindDoor(name => name == "ProtectiveWards.ProtectiveWards" ? typeof(NotBoolDoors.ProtectiveWards) : Pw210(name)));
+            Assert.Null(WardShape.FindDoor(name => name == "ProtectiveWards.ProtectiveWards" ? typeof(NoBuilderCheck.ProtectiveWards) : Pw210(name)));
+            var shape = WardShape.FindDoor(name => name == "ProtectiveWards.WardPasswordProtection" ? typeof(NoPromptState.WardPasswordProtection) : Pw210(name));
+            Assert.NotNull(shape);
+            Assert.Null(shape.PromptWard);
+            Assert.Null(shape.ClosePrompt);
+            var odd = WardShape.FindDoor(name => name == "ProtectiveWards.WardPasswordProtection" ? typeof(OddPromptState.WardPasswordProtection) : Pw210(name));
+            Assert.Null(odd.PromptWard);
         }
 
         [Fact]
@@ -405,6 +529,19 @@ namespace Vigil.Tests
             Assert.True(WardTestSite.Accepts(WardTestSite.WardPrefab, creator: me, asker: me, ownedByAsker: true));
             Assert.True(WardTestSite.Accepts(WardTestSite.WardPrefab, creator: WardTestSite.Stranger, asker: me, ownedByAsker: true));
             Assert.True(WardTestSite.Accepts(WardTestSite.WallPrefab, creator: me, asker: me, ownedByAsker: true));
+            Assert.True(WardTestSite.Accepts(WardTestSite.DoorPrefab, creator: WardTestSite.Stranger, asker: me, ownedByAsker: true));
+        }
+
+        [Fact]
+        public void A_door_is_recorded_and_removed_only_as_the_made_up_strangers()
+        {
+            const long me = 4242, friend = 777;
+            // A door the tester built would open for the tester, so the test's door is the stranger's.
+            Assert.False(WardTestSite.Accepts(WardTestSite.DoorPrefab, creator: me, asker: me, ownedByAsker: true));
+            Assert.False(WardTestSite.Accepts(WardTestSite.DoorPrefab, creator: WardTestSite.Stranger, asker: me, ownedByAsker: false));
+            Assert.True(WardTestSite.MayRemove(WardTestSite.DoorPrefab, creator: WardTestSite.Stranger, recordedFor: me));
+            Assert.False(WardTestSite.MayRemove(WardTestSite.DoorPrefab, creator: friend, recordedFor: me));
+            Assert.False(WardTestSite.MayRemove(WardTestSite.DoorPrefab, creator: me, recordedFor: me));
         }
 
         [Fact]
@@ -579,11 +716,28 @@ namespace Vigil.Tests
 
         private struct ZDOID { }
 
+        private struct Vector3 { }
+
+        private class Component { }
+
+        private sealed class ConfigEntry<T>
+        {
+            public T Value { get; set; }
+        }
+
         private static class Pw
         {
             public class ProtectiveWards
             {
                 internal static Dictionary<PrivateArea, int> wardIsRepairing = new Dictionary<PrivateArea, int>();
+
+                public static ConfigEntry<bool> wardAccessProtectDoors = new ConfigEntry<bool>();
+
+                public static bool IsPointInsideWardArea(PrivateArea ward, Vector3 point, float radius = 0f) => false;
+
+                public static bool IsPointInsideWardArea(ZDO ward, Vector3 point, float radius = 0f) => false;
+
+                public static bool IsObjectOwnedByPlayerWithWardAccess(Component component, Player interactingPlayer) => false;
 
                 internal readonly struct RoutedPlayerContext
                 {
@@ -624,7 +778,13 @@ namespace Vigil.Tests
             {
                 private enum PasswordEntryResult { Success, IncorrectPassword, Unavailable, AlreadyPermitted }
 
+                private static ZDOID s_promptWardID;
+
                 private static bool ShouldOfferPasswordEntry(PrivateArea ward, Player player) => false;
+
+                internal static bool TryHandleInteraction(PrivateArea ward, Player player) => s_promptWardID.Equals(default(ZDOID));
+
+                private static void ClosePrompt() { }
 
                 internal static bool IsPasswordProtectionActive(PrivateArea ward) => false;
 
@@ -685,6 +845,53 @@ namespace Vigil.Tests
                 private static void RPC_SubmitWardPasswordServer(long sender, ZPackage package) { }
 
                 private static void SendPasswordEntryResult(long peerID, ZDOID wardID, PasswordEntryResult result) { }
+            }
+        }
+
+        // 2.1.0's door lock with its "Doors" setting holding a number, or without the builder's exemption.
+        private static class NotBoolDoors
+        {
+            public class ProtectiveWards
+            {
+                public static ConfigEntry<int> wardAccessProtectDoors = new ConfigEntry<int>();
+
+                public static bool IsActivePlayerWard(PrivateArea ward) => false;
+
+                public static bool IsPointInsideWardArea(PrivateArea ward, Vector3 point, float radius = 0f) => false;
+
+                public static bool IsObjectOwnedByPlayerWithWardAccess(Component component, Player interactingPlayer) => false;
+            }
+        }
+
+        private static class NoBuilderCheck
+        {
+            public class ProtectiveWards
+            {
+                public static ConfigEntry<bool> wardAccessProtectDoors = new ConfigEntry<bool>();
+
+                public static bool IsActivePlayerWard(PrivateArea ward) => false;
+
+                public static bool IsPointInsideWardArea(PrivateArea ward, Vector3 point, float radius = 0f) => false;
+            }
+        }
+
+        // 2.1.0's prompt without the fields the self-test reads: the door way in still works.
+        private static class NoPromptState
+        {
+            public static class WardPasswordProtection
+            {
+                internal static bool TryHandleInteraction(PrivateArea ward, Player player) => false;
+            }
+        }
+
+        // The prompt's ward kept as something other than a ZDOID: the self-test cannot read it.
+        private static class OddPromptState
+        {
+            public static class WardPasswordProtection
+            {
+                private static int s_promptWardID;
+
+                internal static bool TryHandleInteraction(PrivateArea ward, Player player) => s_promptWardID > 0;
             }
         }
 

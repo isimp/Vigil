@@ -21,13 +21,17 @@ namespace Vigil.Recorder
     /// (<see cref="WardRepair.Trial"/>). Password: a ward of nobody the player knows; Protective Wards'
     /// prompt has to be offered, then the server sends a wrong password, the right one at once (refused,
     /// the wait after a wrong guess) and the right one after the wait (let in), and the player's game
-    /// has to see itself on the ward's list. God mode, which opens every ward to a ward admin, is off
+    /// has to see itself on the ward's list. A door of the stranger's in that ward has to show the
+    /// password line and open the prompt for the ward on alt-use (<c>Player.Interact</c>, as Shift+E)
+    /// before, and open on plain use after. God mode, which opens every ward to a ward admin, is off
     /// while the password test runs and back on after.
     /// </summary>
     internal sealed partial class RecorderModule
     {
         private const double WardTrialSeconds = 1, WardTrialLasts = 40;
         private static readonly HarmonyLib.AccessTools.FieldRef<Piece, long> s_pieceCreator = HarmonyLib.AccessTools.FieldRefAccess<Piece, long>("m_creator");
+        private static readonly Action<Player, GameObject, bool, bool> s_playerInteract = HarmonyLib.AccessTools.MethodDelegate<Action<Player, GameObject, bool, bool>>(
+            HarmonyLib.AccessTools.Method(typeof(Player), "Interact", new[] { typeof(GameObject), typeof(bool), typeof(bool) }));
 
         private IEnumerator WardRepairTried(List<Check> checks)
         {
@@ -148,6 +152,9 @@ namespace Vigil.Recorder
                     checks.Add(new Check(Here, what, Outcome.Fail, "the game has no ward to place"));
                     yield break;
                 }
+                var doorAt = spot.At + new Vector3(Vigil.Core.WardTestSite.WallOffset, 0f, 0f);
+                doorAt.y = ZoneSystem.instance.GetGroundHeight(doorAt) - 0.05f;
+                var door = WardTestPlace(Vigil.Core.WardTestSite.DoorPrefab, doorAt, Vigil.Core.WardTestSite.Stranger, placed)?.GetComponent<Door>();
                 WardTestEnable(ward);
                 WardRepairPatch.TestWards.Add(ward);
                 WardRepairPatch.KeepTestWardsSmall();
@@ -163,6 +170,7 @@ namespace Vigil.Recorder
                     : offered == WardPasswordPatch.ServerHasOne
                         ? new Check(Here, prompt, Outcome.Pass, offered ? "offered, as the server has a password" : "not offered, as the server has no password")
                         : new Check(Here, prompt, Outcome.Fail, offered ? "offered, though the server has no password" : "not offered, though the server has a password"));
+                if (!access) WardTestDoorAsks(checks, door, ward, player);
                 if (!WardPasswordPatch.ServerHasOne)
                 {
                     checks.Add(new Check(Here, what, Outcome.Info, "no password set on the server: nobody is asked, so no guess was tried"));
@@ -211,6 +219,7 @@ namespace Vigil.Recorder
                 checks.Add(WardPasswordPatch.HasAccess(ward, player)
                     ? new Check(Here, "your game seeing you on the ward's list", Outcome.Pass, "after " + (Time.realtimeSinceStartup - from).ToString("0.0", Ic) + " s")
                     : new Check(Here, "your game seeing you on the ward's list", Outcome.Fail, "not after 5 s"));
+                if (door != null && WardPasswordPatch.DoorsReady) yield return WardTestDoorOpens(checks, door, player);
             }
             finally
             {
@@ -219,6 +228,54 @@ namespace Vigil.Recorder
                 if (god && Player.m_localPlayer != null) Player.m_localPlayer.SetGodMode(true);
             }
             if (god) checks.Add(new Check(Here, "god mode during the password test", Outcome.Info, "off while it ran (it opens every ward to a ward admin), on again now"));
+        }
+
+        /// <summary>The test's locked door: the hover line and, on alt-use through the player's interact step, the prompt for its ward.</summary>
+        private static void WardTestDoorAsks(List<Check> checks, Door door, PrivateArea ward, Player player)
+        {
+            const string what = "the password at a door the ward locks";
+            if (door == null)
+            {
+                checks.Add(new Check(Here, what, Outcome.Fail, "the game has no " + Vigil.Core.WardTestSite.DoorPrefab + " to place"));
+                return;
+            }
+            if (!WardPasswordPatch.DoorsReady)
+            {
+                checks.Add(new Check(Here, what, Outcome.Warn, WardPasswordPatch.DoorState));
+                return;
+            }
+            bool line = door.GetHoverText().Contains(Localization.instance.Localize(WardPassword.DoorHoverLine).Trim());
+            bool? opened = null;
+            try
+            {
+                s_playerInteract(player, door.gameObject, false, true);
+                var wardId = ward.GetComponent<ZNetView>().GetZDO().m_uid;
+                if (WardPasswordPatch.SeesPrompt) opened = WardPasswordPatch.PromptWard == wardId;
+            }
+            finally
+            {
+                WardPasswordPatch.ClosePrompt();
+            }
+            var verdict = WardPassword.DoorPromptCheck(WardPasswordPatch.ServerHasOne, line, opened);
+            checks.Add(new Check(Here, what, verdict.Result, verdict.Text));
+        }
+
+        /// <summary>After the password: plain use through the player's interact step opens the test's door.</summary>
+        private static IEnumerator WardTestDoorOpens(List<Check> checks, Door door, Player player)
+        {
+            const string what = "the door the ward locked, after the password";
+            var view = door.GetComponent<ZNetView>();
+            if (WardPasswordPatch.DoorWard(door, player) != null)
+            {
+                checks.Add(new Check(Here, what, Outcome.Fail, "still locked by a ward"));
+                yield break;
+            }
+            s_playerInteract(player, door.gameObject, false, false);
+            float from = Time.realtimeSinceStartup;
+            while (view != null && view.IsValid() && view.GetZDO().GetInt(ZDOVars.s_state) == 0 && Time.realtimeSinceStartup < from + 3f) yield return null;
+            checks.Add(view != null && view.IsValid() && view.GetZDO().GetInt(ZDOVars.s_state) != 0
+                ? new Check(Here, what, Outcome.Pass, "opened on plain use")
+                : new Check(Here, what, Outcome.Fail, "did not open on plain use within 3 s"));
         }
 
         private bool _wardLeftoversDone;

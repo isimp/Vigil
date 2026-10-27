@@ -41,6 +41,9 @@ namespace Vigil.Recorder
             Ui.Note("A player without access to an active ward is asked for a password at it (Protective Wards' own prompt); the server's password adds them to that ward's permitted list, as a ward's own password would, and with connected access that opens its whole base. A ward with its own password still takes that one; a switched-off ward keeps Protective Wards' own way in. The password is set only in the dedicated server's config (Patches.WardPassword), never here and never on a player's game: Gale copies a profile's configs to everyone who uses it.");
             Ui.Row("On this game", Toned(WardPasswordPatch.State + (_server && WardPasswordPatch.LetIn > 0 ? " · " + WardPasswordPatch.LetIn + " let in since the start" : ""),
                 WardPasswordPatch.Problem != null && WardPasswordPatch.ServerHasOne ? ResultTone.Caution : WardPasswordPatch.ServerHasOne && WardPasswordPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+            Ui.Note("A door a ward locks asks for that ward's password too: its hover names alt-use, and alt-use opens the same prompt for the first ward that locks it. Plain use stays the door's. Where two wards that are not connected lock one door, each is asked about in turn.");
+            Ui.Row("Doors", Toned(WardPasswordPatch.DoorState,
+                WardPasswordPatch.DoorProblem != null && WardPasswordPatch.ServerHasOne ? ResultTone.Caution : WardPasswordPatch.ServerHasOne && WardPasswordPatch.DoorsReady ? ResultTone.Good : ResultTone.Quiet));
         }
 
         private void SwitchLine(bool may, BepInEx.Configuration.ConfigEntry<bool> entry, string name)
@@ -67,6 +70,7 @@ namespace Vigil.Recorder
         {
             Add(checks, area, "game patch: wards repair the whole connected base, or by themselves", WardRepairPatch.State);
             Add(checks, area, "game patch: server password for wards", WardPasswordPatch.State);
+            Add(checks, area, "game patch: server password for wards, at doors", WardPasswordPatch.DoorState);
         }
 
         private static void Add(List<SelfTestReport.Check> checks, string area, string what, string state) =>
