@@ -13,16 +13,47 @@ namespace Vigil.Tests
         [Fact]
         public void The_wheel_over_a_chest_grid_with_a_bar_scrolls_the_grid()
         {
-            Assert.True(ChestScroll.KeepsWheel(on: true, containerOpen: true, overGrid: true, hasBar: true));
+            Assert.True(ChestScroll.KeepsWheel(on: true, wheelTurned: true, containerOpen: true, overGrid: true, hasBar: true));
         }
 
         [Fact]
         public void The_wheel_cycles_chests_off_the_grid_without_a_bar_with_no_chest_open_or_with_the_switch_off()
         {
-            Assert.False(ChestScroll.KeepsWheel(on: true, containerOpen: true, overGrid: false, hasBar: true));
-            Assert.False(ChestScroll.KeepsWheel(on: true, containerOpen: true, overGrid: true, hasBar: false));
-            Assert.False(ChestScroll.KeepsWheel(on: true, containerOpen: false, overGrid: true, hasBar: true));
-            Assert.False(ChestScroll.KeepsWheel(on: false, containerOpen: true, overGrid: true, hasBar: true));
+            Assert.False(ChestScroll.KeepsWheel(on: true, wheelTurned: true, containerOpen: true, overGrid: false, hasBar: true));
+            Assert.False(ChestScroll.KeepsWheel(on: true, wheelTurned: true, containerOpen: true, overGrid: true, hasBar: false));
+            Assert.False(ChestScroll.KeepsWheel(on: true, wheelTurned: true, containerOpen: false, overGrid: true, hasBar: true));
+            Assert.False(ChestScroll.KeepsWheel(on: false, wheelTurned: true, containerOpen: true, overGrid: true, hasBar: true));
+        }
+
+        [Fact]
+        public void Frames_without_a_wheel_turn_reach_CycleChests_so_its_arrow_keys_and_its_wheel_memory_keep_working()
+        {
+            // CycleChests cycles only when the wheel's direction differs from the one it remembers, and
+            // forgets it only in frames it sees without a turn; a frame kept from it freezes that memory.
+            Assert.False(ChestScroll.KeepsWheel(on: true, wheelTurned: false, containerOpen: true, overGrid: true, hasBar: true));
+        }
+
+        [Fact]
+        public void The_trace_writes_one_line_for_each_burst_of_wheel_turns()
+        {
+            Assert.True(ChestScroll.StartsBurst(lastTurnAt: 10.0, now: 10.5));
+            Assert.False(ChestScroll.StartsBurst(lastTurnAt: 10.0, now: 10.1));
+        }
+
+        [Fact]
+        public void The_trace_line_names_the_pointer_the_grid_the_bar_and_the_decision()
+        {
+            Assert.Equal("wheel at 812,430 · in grid yes · on bar no · slots 960 px, view 560 px (bar) · CycleChests skipped · chest piece_chest",
+                ChestScroll.TraceLine(812.4f, 430f, inGrid: true, onBar: false, slotsHeight: 960f, viewHeight: 560f, kept: true, chest: "piece_chest"));
+            Assert.Equal("wheel at 100,50 · in grid no · on bar no · slots 300 px, view 560 px (no bar) · CycleChests ran · chest piece_chest_wood",
+                ChestScroll.TraceLine(100f, 50f, inGrid: false, onBar: false, slotsHeight: 300f, viewHeight: 560f, kept: false, chest: "piece_chest_wood"));
+        }
+
+        [Fact]
+        public void The_frame_after_says_whether_the_chest_changed_and_the_grid_scrolled()
+        {
+            Assert.Equal("a frame later: same chest · scroll 1.00 → 0.86", ChestScroll.AfterLine(sameChest: true, before: 1f, after: 0.86f));
+            Assert.Equal("a frame later: another chest · scroll 1.00 → 1.00 (unmoved)", ChestScroll.AfterLine(sameChest: false, before: 1f, after: 1f));
         }
 
         [Fact]
