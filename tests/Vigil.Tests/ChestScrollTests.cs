@@ -34,29 +34,6 @@ namespace Vigil.Tests
         }
 
         [Fact]
-        public void The_trace_writes_one_line_for_each_burst_of_wheel_turns()
-        {
-            Assert.True(ChestScroll.StartsBurst(lastTurnAt: 10.0, now: 10.5));
-            Assert.False(ChestScroll.StartsBurst(lastTurnAt: 10.0, now: 10.1));
-        }
-
-        [Fact]
-        public void The_trace_line_names_the_pointer_the_grid_the_bar_and_the_decision()
-        {
-            Assert.Equal("wheel at 812,430 · in grid yes · on bar no · slots 960 px, view 560 px (bar) · CycleChests skipped · chest piece_chest",
-                ChestScroll.TraceLine(812.4f, 430f, inGrid: true, onBar: false, slotsHeight: 960f, viewHeight: 560f, kept: true, chest: "piece_chest"));
-            Assert.Equal("wheel at 100,50 · in grid no · on bar no · slots 300 px, view 560 px (no bar) · CycleChests ran · chest piece_chest_wood",
-                ChestScroll.TraceLine(100f, 50f, inGrid: false, onBar: false, slotsHeight: 300f, viewHeight: 560f, kept: false, chest: "piece_chest_wood"));
-        }
-
-        [Fact]
-        public void The_frame_after_says_whether_the_chest_changed_and_the_grid_scrolled()
-        {
-            Assert.Equal("a frame later: same chest · scroll 1.00 → 0.86", ChestScroll.AfterLine(sameChest: true, before: 1f, after: 0.86f));
-            Assert.Equal("a frame later: another chest · scroll 1.00 → 1.00 (unmoved)", ChestScroll.AfterLine(sameChest: false, before: 1f, after: 1f));
-        }
-
-        [Fact]
         public void A_grid_has_a_bar_when_its_slots_are_taller_than_its_view_as_the_game_lays_it_out()
         {
             Assert.True(ChestScroll.HasBar(slotsHeight: 700f, viewHeight: 480f));

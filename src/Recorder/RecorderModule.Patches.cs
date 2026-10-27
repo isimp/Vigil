@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _chestScrollTrace, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -53,11 +53,6 @@ namespace Vigil.Recorder
                 "On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before.");
             ChestScrollPatch.On = _chestScroll.Value;
             _chestScroll.SettingChanged += (_, __) => ChestScrollPatch.On = _chestScroll.Value;
-            _chestScrollTrace = Config.Bind("Patches", "ChestGridScrollTrace", true,
-                "This game's own switch: while a chest is open, each burst of wheel turns writes a line to the game's log with where the pointer was, whether the chest's grid has a bar, " +
-                "what the patch decided, and one frame later whether the chest changed and the grid scrolled.");
-            ChestScrollPatch.Trace = _chestScrollTrace.Value;
-            _chestScrollTrace.SettingChanged += (_, __) => ChestScrollPatch.Trace = _chestScrollTrace.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -261,7 +256,7 @@ namespace Vigil.Recorder
                 });
             }
             Ui.EndLine();
-            Ui.Note("CycleChests switches chests whenever the wheel turns while a chest is open, so a chest whose slots are taller than its view cannot be scrolled. On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before. Only frames with a wheel turn are kept from CycleChests, so its arrow keys work everywhere. Patches.ChestGridScrollTrace writes a line to the game's log for each burst of wheel turns while a chest is open.");
+            Ui.Note("CycleChests switches chests whenever the wheel turns while a chest is open, so a chest whose slots are taller than its view cannot be scrolled. On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before. Only frames with a wheel turn are kept from CycleChests, so its arrow keys work everywhere.");
             Ui.Row("Set by", "this game's own config (Patches.ChestGridScroll), for each player themself");
             if (!_server) Ui.Row("On this game", Toned(ChestScrollPatch.State, ChestScrollPatch.Problem != null ? ResultTone.Caution : _chestScroll.Value && ChestScrollPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 

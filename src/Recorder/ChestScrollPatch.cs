@@ -55,15 +55,6 @@ namespace Vigil.Recorder
             }
         }
 
-        /// <summary>Writes a line to the game's log for each burst of wheel turns while a chest is open (Patches.ChestGridScrollTrace).</summary>
-        public static bool Trace = true;
-
-        private static double s_lastTurnAt = double.NegativeInfinity;
-        private static bool s_afterDue;
-        private static Container s_tracedChest;
-        private static float s_beforeScroll, s_lastScroll;
-        private static readonly AccessTools.FieldRef<InventoryGui, Container> s_currentContainer = AccessTools.FieldRefAccess<InventoryGui, Container>("m_currentContainer");
-
         // CycleChests' step is static and names its player parameter __instance, which Harmony would
         // fill with null here (the object a static method runs on), so the player is the first argument.
         private static bool BeforeInputStep(Player __0)
@@ -73,37 +64,12 @@ namespace Vigil.Recorder
             if (gui == null || !gui.IsContainerOpen()) return true;
             var grid = gui.ContainerGrid;
             if (grid == null || grid.m_gridRoot == null || !(grid.transform is RectTransform view)) return true;
-            var scroll = Trace ? grid.GetComponentInParent<UnityEngine.UI.ScrollRect>() ?? grid.GetComponentInChildren<UnityEngine.UI.ScrollRect>() : null;
-            float scrolled = scroll != null ? scroll.verticalNormalizedPosition : 0f;
-            if (s_afterDue)
-            {
-                s_afterDue = false;
-                Debug.Log("[Vigil] chest scroll: " + ChestScroll.AfterLine(s_currentContainer(gui) == s_tracedChest, s_beforeScroll, scrolled));
-            }
-            float before = s_lastScroll;
-            s_lastScroll = scrolled;
-
             bool turned = Input.mouseScrollDelta.y != 0f;
             if (!turned) return true;
             Vector3 pointer = ZInput.pointerPosition;
-            bool inGrid = Over(view, pointer);
-            bool onBar = grid.m_scrollbar != null && grid.m_scrollbar.gameObject.activeInHierarchy && Over((RectTransform)grid.m_scrollbar.transform, pointer);
-            float slots = grid.m_gridRoot.rect.height, height = view.rect.height;
-            bool kept = ChestScroll.KeepsWheel(On, turned, true, inGrid || onBar, ChestScroll.HasBar(slots, height));
+            bool over = Over(view, pointer) || (grid.m_scrollbar != null && grid.m_scrollbar.gameObject.activeInHierarchy && Over((RectTransform)grid.m_scrollbar.transform, pointer));
+            bool kept = ChestScroll.KeepsWheel(On, turned, true, over, ChestScroll.HasBar(grid.m_gridRoot.rect.height, view.rect.height));
             if (kept) Kept++;
-
-            double now = Time.realtimeSinceStartupAsDouble;
-            if (Trace && ChestScroll.StartsBurst(s_lastTurnAt, now))
-            {
-                var ci = System.Globalization.CultureInfo.InvariantCulture;
-                string chest = s_currentContainer(gui) != null ? s_currentContainer(gui).name : "none";
-                string view2 = scroll == null ? "none" : (scroll.enabled ? "on" : "off") + ", sensitivity " + scroll.scrollSensitivity.ToString("0.#", ci) + ", content " + (scroll.content == grid.m_gridRoot ? "the slots" : scroll.content != null ? scroll.content.name : "none");
-                Debug.Log("[Vigil] chest scroll: " + ChestScroll.TraceLine(pointer.x, pointer.y, inGrid, onBar, slots, height, kept, chest) + " · scroll view " + view2);
-                s_tracedChest = s_currentContainer(gui);
-                s_beforeScroll = before;
-                s_afterDue = true;
-            }
-            s_lastTurnAt = now;
             return !kept;
         }
 
