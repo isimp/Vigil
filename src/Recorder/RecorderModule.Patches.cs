@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -53,6 +53,12 @@ namespace Vigil.Recorder
                 "On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before.");
             ChestScrollPatch.On = _chestScroll.Value;
             _chestScroll.SettingChanged += (_, __) => ChestScrollPatch.On = _chestScroll.Value;
+            _containerFit = Config.Bind("Patches", "WideContainerFit", true,
+                "This game's own switch: the game centres a container's slots in the chest frame and scrolls only up and down, so a container wider than the frame " +
+                "(such as a tombstone ExtraSlots widened for its equipped items) loses both sides. On, such a container is shrunk evenly until every column fits; " +
+                "one that fits keeps its size. Only the drawing changes, never the items or their slots.");
+            ContainerFitPatch.On = _containerFit.Value;
+            _containerFit.SettingChanged += (_, __) => ContainerFitPatch.On = _containerFit.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -137,6 +143,8 @@ namespace Vigil.Recorder
             if (!string.IsNullOrEmpty(JotunnSyncPatch.Problem)) _host.Log.LogWarning("Vigil: the patch on Jotunn's config sync stepped aside: " + JotunnSyncPatch.Problem);
             if (!_server) ChestScrollPatch.Hook();
             if (ChestScrollPatch.Problem != null) _host.Log.LogWarning("Vigil: the chest grid scroll patch stepped aside: " + ChestScrollPatch.Problem);
+            if (!_server) ContainerFitPatch.Hook();
+            if (ContainerFitPatch.Problem != null) _host.Log.LogWarning("Vigil: the wide container patch stepped aside: " + ContainerFitPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -145,8 +153,8 @@ namespace Vigil.Recorder
             if (WardPasswordPatch.Problem != null) _host.Log.LogWarning("Vigil: the ward password patch stepped aside: " + WardPasswordPatch.Problem);
         }
 
-        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)
-            + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 8 on", Skin.Tone.Quiet);
+        private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0)
+            + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 9 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -259,6 +267,23 @@ namespace Vigil.Recorder
             Ui.Note("CycleChests switches chests whenever the wheel turns while a chest is open, so a chest whose slots are taller than its view cannot be scrolled. On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before. Only frames with a wheel turn are kept from CycleChests, so its arrow keys work everywhere.");
             Ui.Row("Set by", "this game's own config (Patches.ChestGridScroll), for each player themself");
             if (!_server) Ui.Row("On this game", Toned(ChestScrollPatch.State, ChestScrollPatch.Problem != null ? ResultTone.Caution : _chestScroll.Value && ChestScrollPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            Ui.Heading("Wide containers fit the frame");
+            Ui.BeginFormLine("Switch");
+            int fit = Ui.Choice(_containerFit.Value ? 0 : 1, OnOffWords);
+            if (fit >= 0 && (fit == 0) != _containerFit.Value)
+            {
+                bool on = fit == 0;
+                Ui.Later(() =>
+                {
+                    _containerFit.Value = on;
+                    EventLog.Write("patch-set", PlayerName(), "WideContainerFit " + (on ? "on" : "off"));
+                });
+            }
+            Ui.EndLine();
+            Ui.Note("The game centres a container's slots in the chest frame and scrolls only up and down, so a container wider than the frame, such as a tombstone ExtraSlots widened for its equipped items, loses both sides out of sight and out of reach. On, such a container is shrunk evenly until every column fits; one that fits keeps its size. Only the drawing changes, never the items or their slots.");
+            Ui.Row("Set by", "this game's own config (Patches.WideContainerFit), for each player themself");
+            if (!_server) Ui.Row("On this game", Toned(ContainerFitPatch.State, ContainerFitPatch.Problem != null ? ResultTone.Caution : _containerFit.Value ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");
             Ui.BeginFormLine("Switch");

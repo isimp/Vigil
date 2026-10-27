@@ -68,7 +68,7 @@ namespace Vigil.Recorder
             if (!turned) return true;
             Vector3 pointer = ZInput.pointerPosition;
             bool over = Over(view, pointer) || (grid.m_scrollbar != null && grid.m_scrollbar.gameObject.activeInHierarchy && Over((RectTransform)grid.m_scrollbar.transform, pointer));
-            bool kept = ChestScroll.KeepsWheel(On, turned, true, over, ChestScroll.HasBar(grid.m_gridRoot.rect.height, view.rect.height));
+            bool kept = ChestScroll.KeepsWheel(On, turned, true, over, ChestScroll.HasBar(grid.m_gridRoot.rect.height * grid.m_gridRoot.localScale.y, view.rect.height));
             if (kept) Kept++;
             return !kept;
         }

@@ -515,6 +515,11 @@ namespace Vigil.Recorder
                     chest.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                     : chest.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
                     : SelfTestReport.Result.Info, chest));
+                string fit = ContainerFitPatch.State;
+                checks.Add(new SelfTestReport.Check(area, "game patch: wide containers fit the frame",
+                    fit.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
+                    : fit.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
+                    : SelfTestReport.Result.Info, fit));
             }
             WardChecks(area, checks);
             const string away = "game patch: away players don't hold up sleep";
