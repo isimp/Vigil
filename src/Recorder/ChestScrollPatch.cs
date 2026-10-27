@@ -64,9 +64,11 @@ namespace Vigil.Recorder
         private static float s_beforeScroll, s_lastScroll;
         private static readonly AccessTools.FieldRef<InventoryGui, Container> s_currentContainer = AccessTools.FieldRefAccess<InventoryGui, Container>("m_currentContainer");
 
-        private static bool BeforeInputStep(Player __instance)
+        // CycleChests' step is static and names its player parameter __instance, which Harmony would
+        // fill with null here (the object a static method runs on), so the player is the first argument.
+        private static bool BeforeInputStep(Player __0)
         {
-            if (!On || __instance != Player.m_localPlayer) return true;
+            if (!On || __0 == null || __0 != Player.m_localPlayer) return true;
             var gui = InventoryGui.instance;
             if (gui == null || !gui.IsContainerOpen()) return true;
             var grid = gui.ContainerGrid;

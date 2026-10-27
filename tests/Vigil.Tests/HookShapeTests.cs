@@ -27,6 +27,17 @@ namespace Vigil.Tests
             Assert.Empty(offenders);
         }
 
+        [Fact]
+        public void The_chest_scroll_patch_takes_CycleChests_player_by_position_as_its_step_is_static()
+        {
+            // CycleChests' input step is a static method whose one parameter is named __instance; Harmony
+            // fills a patch parameter of that name with the object the method runs on, null for a static
+            // method, so the player has to be taken as the first argument (__0).
+            string code = Regex.Replace(File.ReadAllText(Path.Combine(ProjectRoot(), "src", "Recorder", "ChestScrollPatch.cs")), "//.*", "");
+            Assert.Matches(@"BeforeInputStep\(\s*Player\s+__0\s*\)", code);
+            Assert.DoesNotMatch(@"BeforeInputStep\([^)]*__instance", code);
+        }
+
         private static string ProjectRoot()
         {
             for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)

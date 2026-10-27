@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.42.7
+## 0.42.8
 
 Three new patches in the *Patches* tab work on Protective Wards' wards, each off until the server sets it. *Wards repair the whole connected base* (`Patches.WardNetworkRepair`): starting repair at a ward with its alt-use starts it on every active ward chained to it by overlapping areas, and each ward repairs its own area, one damaged piece every `Patches.WardRepairSeconds` (10), until nothing is damaged; every player sees how many pieces each ward has left. Protective Wards' own repair reaches only the wards touching the one used, one piece every 10 s for all of them, and stops when its player walks away. *Wards repair by themselves* (`Patches.WardAutoRepair`): every active ward does the same without being started, by Protective Wards' own repair rules. A ward repairs on the game that runs it, so only while a player is near the base; a ward run by a game without this Vigil is left out.
 
