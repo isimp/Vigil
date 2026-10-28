@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.16
+
+New patch, off until switched on: *ComfortMe clears its hover highlight only when one is lit* (`Patches.ComfortMeHighlight`). Outside its comfort tab ComfortMe switches off the hover highlight on every piece button of the build menu on every frame, hammer out or not, looking each button's highlight up again each time. On, it does that only after a highlight was lit or the menu's buttons were rebuilt; with nothing lit there is nothing to switch off. The highlight looks the same. The *Patches* tab counts the clearings skipped and what one costs when it runs.
+
 ## 0.43.15
 
 New patch, off until switched on: *The build menu sets up its navigation a frame later* (`Patches.BuildMenuNavigationLater`). After every open and every change of the search text the build menu links its buttons for the arrow keys and a controller, and before linking it forces every canvas to update twice and lays the whole button grid out again. With the patch on, the linking waits for the next frame, when the screen layout has placed the buttons anyway, and follows the game's rules without forcing anything. For that one frame the arrow keys and a controller still follow the links of before; the mouse is not affected. Each open's line in `Vigil-events.tsv` says what the linking took, and every search of the menu now has a line of its own: the search's time, the buttons it left shown, a rebuild of the buttons in it and its navigation setup.

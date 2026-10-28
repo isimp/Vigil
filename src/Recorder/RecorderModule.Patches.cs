@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _buildNavLater, _comfortBadges, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _buildNavLater, _comfortBadges, _comfortPlates, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -85,6 +85,9 @@ namespace Vigil.Recorder
                 "On, it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed.");
             ComfortBadgesPatch.On = _comfortBadges.Value;
             _comfortBadges.SettingChanged += (_, __) => ComfortBadgesPatch.On = _comfortBadges.Value;
+            _comfortPlates = Config.Bind("Patches", "ComfortMeHighlight", false, "This game's own switch: " + "Outside its comfort tab ComfortMe switches off the hover highlight on every piece button of the build menu on every frame, hammer out or not, looking each button's highlight up again each time. On, it does that only after a highlight was lit or the menu's buttons were rebuilt; with nothing lit there is nothing to switch off. The highlight looks the same.");
+            ComfortPlatesPatch.On = _comfortPlates.Value;
+            _comfortPlates.SettingChanged += (_, __) => ComfortPlatesPatch.On = _comfortPlates.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -178,6 +181,8 @@ namespace Vigil.Recorder
             if (BuildMenuPatch.NavigationProblem != null) _host.Log.LogWarning("Vigil: the build menu navigation patch stepped aside: " + BuildMenuPatch.NavigationProblem);
             if (!_server) ComfortBadgesPatch.Hook();
             if (ComfortBadgesPatch.Problem != null) _host.Log.LogWarning("Vigil: the ComfortMe badge patch stepped aside: " + ComfortBadgesPatch.Problem);
+            if (!_server) ComfortPlatesPatch.Hook();
+            if (ComfortPlatesPatch.Problem != null) _host.Log.LogWarning("Vigil: the ComfortMe highlight patch stepped aside: " + ComfortPlatesPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -207,7 +212,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 14 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 15 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -357,6 +362,9 @@ namespace Vigil.Recorder
             OwnSwitch("ComfortMe redraws its badges only on a change", _comfortBadges, "ComfortMeBadges",
                 "ComfortMe redraws the badge on every piece button of the build menu on every frame the menu is open, over a thousand on the All tab. On, it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed. Badges look the same; one that follows your materials follows them within 0.2 s, as ComfortMe's comfort does.");
             if (!_server) Ui.Row("On this game", Toned(ComfortBadgesPatch.State, ComfortBadgesPatch.Problem != null ? ResultTone.Caution : _comfortBadges.Value && ComfortBadgesPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("ComfortMe clears its hover highlight only when one is lit", _comfortPlates, "ComfortMeHighlight", "Outside its comfort tab ComfortMe switches off the hover highlight on every piece button of the build menu on every frame, hammer out or not, looking each button's highlight up again each time. On, it does that only after a highlight was lit or the menu's buttons were rebuilt; with nothing lit there is nothing to switch off. The highlight looks the same.");
+            if (!_server) Ui.Row("On this game", Toned(ComfortPlatesPatch.State, ComfortPlatesPatch.Problem != null ? ResultTone.Caution : _comfortPlates.Value && ComfortPlatesPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");
             Ui.BeginFormLine("Switch");
