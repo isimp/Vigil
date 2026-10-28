@@ -37,7 +37,12 @@ namespace Vigil.Recorder
         public static int KeptButtons { get; private set; }
         public static int KeptFrame { get; private set; } = -1;
 
-        public static string State => MenuReuse.StateLine(On, Problem, Kept, Rebuilt);
+        public static MenuReuse.Diff LastDiff { get; private set; }
+
+        public static string State => MenuReuse.StateLine(On, Problem, Kept, Rebuilt, LastDiff);
+
+        private static Action<string> s_log;
+        private static readonly HashSet<MenuReuse.Diff> s_logged = new HashSet<MenuReuse.Diff>();
 
         private static AccessTools.FieldRef<BuildUi, PieceTable> s_tool;
         private static AccessTools.FieldRef<BuildUi, List<IPieceList>> s_lists;
@@ -48,8 +53,9 @@ namespace Vigil.Recorder
         private static readonly List<Piece> s_wanted = new List<Piece>();
         private static readonly List<Piece> s_shown = new List<Piece>();
 
-        public static void Hook()
+        public static void Hook(Action<string> log)
         {
+            s_log = log;
             try
             {
                 var update = AccessTools.DeclaredMethod(typeof(BuildUi), "UpdatePieceButtons");
@@ -101,14 +107,19 @@ namespace Vigil.Recorder
                     if (b == null || !b.gameObject.activeSelf) { allShown = false; break; }
                     s_shown.Add(b.Piece);
                 }
-                bool keep = MenuReuse.Reuse(s_wanted, s_shown, p => p == null || p.m_repairPiece || p.m_removePiece, list.ShowTags, special != null ? special.Piece : null, allShown);
-                s_wanted.Clear();
-                s_shown.Clear();
-                if (!keep)
+                var diff = MenuReuse.Compare(s_wanted, s_shown, IsSpecial, list.ShowTags, special != null ? special.Piece : null, allShown, out int at);
+                LastDiff = diff;
+                if (diff != MenuReuse.Diff.Same)
                 {
                     Rebuilt++;
+                    // Each reason once a session in the game's log, with what differed.
+                    if (s_logged.Add(diff)) s_log?.Invoke("[Vigil] build menu: buttons rebuilt, " + MenuReuse.Words(diff) + Detail(diff, at, special));
+                    s_wanted.Clear();
+                    s_shown.Clear();
                     return true;
                 }
+                s_wanted.Clear();
+                s_shown.Clear();
                 s_count(__instance) = tool.m_availablePieces.Count;
                 foreach (var b in buttons)
                 {
@@ -130,6 +141,34 @@ namespace Vigil.Recorder
                 // Left to the game from here on; it rebuilds the buttons as it always did.
                 Problem = "the build menu refresh failed: " + e.GetType().Name + " " + e.Message;
                 return true;
+            }
+        }
+
+        private static bool IsSpecial(Piece p) => p == null || p.m_repairPiece || p.m_removePiece;
+
+        private static string Name(Piece p) => p != null ? p.gameObject.name : "none";
+
+        // What differed, from the lists still filled: the pieces at the button, the counts, the repair pieces.
+        private static string Detail(MenuReuse.Diff diff, int at, BuildUiPieceButton special)
+        {
+            int wanted = 0;
+            var repairs = new List<string>();
+            foreach (var p in s_wanted) { if (IsSpecial(p)) repairs.Add(Name(p)); else wanted++; }
+            switch (diff)
+            {
+                case MenuReuse.Diff.OtherPiece:
+                    Piece now = null;
+                    int n = -1;
+                    foreach (var p in s_wanted) { if (IsSpecial(p)) continue; if (++n == at) { now = p; break; } }
+                    return " (button " + at + ": " + Name(now) + " instead of " + Name(at < s_shown.Count ? s_shown[at] : null) + ")";
+                case MenuReuse.Diff.MorePieces:
+                case MenuReuse.Diff.FewerPieces:
+                    return " (" + wanted + " pieces, " + s_shown.Count + " buttons)";
+                case MenuReuse.Diff.TwoRepairs:
+                case MenuReuse.Diff.RepairChanged:
+                    return " (repair pieces: " + (repairs.Count == 0 ? "none" : string.Join(", ", repairs.ToArray())) + "; repair button: " + Name(special != null ? special.Piece : null) + ")";
+                default:
+                    return "";
             }
         }
 

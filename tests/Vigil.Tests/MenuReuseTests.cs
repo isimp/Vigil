@@ -83,6 +83,47 @@ namespace Vigil.Tests
             Assert.False(Reuse(new P[0], new P[0], null));
         }
 
+        // ---- why the buttons were rebuilt, for the patch's line and the game's log
+
+        private static MenuReuse.Diff Why(IList<P> wanted, IList<P> shown, P shownSpecial, bool showTags = true, bool allShown = true) =>
+            MenuReuse.Compare(wanted, shown, p => p.Special, showTags, shownSpecial, allShown, out _);
+
+        [Fact]
+        public void Each_rebuild_names_its_reason()
+        {
+            Assert.Equal(MenuReuse.Diff.Same, Why(new[] { Repair, Wall }, new[] { Wall }, Repair));
+            Assert.Equal(MenuReuse.Diff.NotShown, Why(new[] { Repair, Wall }, new[] { Wall }, Repair, allShown: false));
+            Assert.Equal(MenuReuse.Diff.Empty, Why(new P[0], new P[0], null));
+            Assert.Equal(MenuReuse.Diff.MorePieces, Why(new[] { Repair, Wall, Floor }, new[] { Wall }, Repair));
+            Assert.Equal(MenuReuse.Diff.FewerPieces, Why(new[] { Repair, Wall }, new[] { Wall, Floor }, Repair));
+            Assert.Equal(MenuReuse.Diff.OtherPiece, Why(new[] { Repair, Door }, new[] { Wall }, Repair));
+            Assert.Equal(MenuReuse.Diff.RepairChanged, Why(new[] { Wall }, new[] { Wall }, Repair));
+            Assert.Equal(MenuReuse.Diff.TwoRepairs, Why(new[] { Repair, new P("remove", special: true), Wall }, new[] { Wall }, Repair));
+        }
+
+        [Fact]
+        public void Another_piece_gives_the_button_where_it_differs()
+        {
+            MenuReuse.Compare(new[] { Repair, Wall, Door }, new[] { Wall, Floor }, p => p.Special, true, Repair, true, out int at);
+            Assert.Equal(1, at);
+        }
+
+        [Fact]
+        public void Each_reason_reads_as_words()
+        {
+            Assert.Equal("two repair or remove pieces in the list", MenuReuse.Words(MenuReuse.Diff.TwoRepairs));
+            Assert.Equal("another piece in a button's place", MenuReuse.Words(MenuReuse.Diff.OtherPiece));
+            Assert.Equal("a button hidden or gone", MenuReuse.Words(MenuReuse.Diff.NotShown));
+        }
+
+        [Fact]
+        public void The_state_line_names_the_last_reason_for_a_rebuild()
+        {
+            Assert.Equal("working · buttons kept on 0 of 13 opens · last rebuild: two repair or remove pieces in the list",
+                MenuReuse.StateLine(true, null, 0, 13, MenuReuse.Diff.TwoRepairs));
+            Assert.Equal("working · buttons kept on 3 of 7 opens", MenuReuse.StateLine(true, null, 3, 4, MenuReuse.Diff.Same));
+        }
+
         [Fact]
         public void Navigation_is_set_up_only_while_the_menu_is_shown()
         {

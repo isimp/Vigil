@@ -169,7 +169,7 @@ namespace Vigil.Recorder
             if (ContainerFitPatch.Problem != null) _host.Log.LogWarning("Vigil: the wide container patch stepped aside: " + ContainerFitPatch.Problem);
             if (!_server) RelocatePatch.Hook(line => _host.Log.LogInfo(line));
             if (RelocatePatch.Problem != null) _host.Log.LogWarning("Vigil: the EasyRelocate patches stepped aside: " + RelocatePatch.Problem);
-            if (!_server) BuildMenuPatch.Hook();
+            if (!_server) BuildMenuPatch.Hook(line => _host.Log.LogInfo(line));
             if (BuildMenuPatch.Problem != null) _host.Log.LogWarning("Vigil: the build menu patch stepped aside: " + BuildMenuPatch.Problem);
             if (!_server) ComfortBadgesPatch.Hook();
             if (ComfortBadgesPatch.Problem != null) _host.Log.LogWarning("Vigil: the ComfortMe badge patch stepped aside: " + ComfortBadgesPatch.Problem);

@@ -6,7 +6,7 @@
     <RootNamespace>Vigil</RootNamespace>
     <LangVersion>latest</LangVersion>
     <!-- The one place the version is set: the plugin's own version is generated from it. -->
-    <Version>0.43.6</Version>
+    <Version>0.43.7</Version>
     <Authors>isimp</Authors>
     <Product>Vigil</Product>
     <Description>Private admin and lag-diagnosis tool for my group's Valheim server; not maintained for anyone else's use.</Description>

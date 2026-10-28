@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.7
+
+*The build menu opens faster* now says why it rebuilt the buttons: its line in the *Patches* tab names the last reason, and the game's log gets each reason once a session with what differed, such as the piece at a button or the repair pieces in the list.
+
 ## 0.43.6
 
 Every patch a player switches for their own game is now off until switched on: *Jotunn's config sync with one copy of the keys*, *The wheel scrolls a chest grid with a bar*, *Wide containers fit the frame*, both EasyRelocate patches, *The build menu opens faster* and *ComfortMe redraws its badges only on a change*. A config that already has a patch's line keeps its value, so a profile's owner switches them in their own config and Gale's profile sync carries that to everyone on the profile.
