@@ -259,6 +259,31 @@ namespace Vigil.Tests
             Assert.Equal("(no object)", UiRebuild.Place(new string[0], 5));
         }
 
+        // ---- search
+
+        [Fact]
+        public void A_search_line_gives_the_text_s_length_the_buttons_shown_and_the_navigation_setup_in_it()
+        {
+            var s = new MenuSearch { FrameMs = 150, SearchMs = 88.4, Letters = 3, Shown = 42, Buttons = 1166, NavigationMs = 74 };
+            Assert.Equal("searched for 3 letters, frame 150 ms: the search 88 ms, 42 of 1,166 piece buttons shown, navigation setup 74 ms in it", s.Describe());
+        }
+
+        [Fact]
+        public void A_search_that_rebuilt_the_buttons_and_put_off_its_navigation_says_both()
+        {
+            var s = new MenuSearch { FrameMs = 300, SearchMs = 210, Letters = 1, Shown = 300, Buttons = 1169, PiecesMs = 150, NavigationLater = true };
+            Assert.Equal("searched for 1 letter, frame 300 ms: the search 210 ms, 300 of 1,169 piece buttons shown, the buttons rebuilt for it 150 ms, navigation setup put off to the next frame", s.Describe());
+            Assert.Equal("search emptied, frame 40 ms: the search 20 ms, 1,169 of 1,169 piece buttons shown, navigation setup 0 ms in it",
+                new MenuSearch { FrameMs = 40, SearchMs = 20, Letters = 0, Shown = 1169, Buttons = 1169 }.Describe());
+        }
+
+        [Fact]
+        public void An_open_with_its_navigation_put_off_says_what_the_linking_took_a_frame_later()
+        {
+            var open = new MenuOpen { FrameMs = 150, OpenMs = 140, TagsMs = 20, PiecesMs = 18, Kept = 1166, ChecksMs = 12, LayoutMs = 60, NextLayoutMs = 20, LaterNavigationMs = 1.4 };
+            Assert.EndsWith("untimed 0 ms; next frame's layout 20 ms, the navigation set up there in 1.4 ms", open.Describe());
+        }
+
         // ---- opens over the session
 
         [Fact]

@@ -23,6 +23,7 @@ namespace Vigil.Recorder
         private readonly MenuTally _menuOpens = new MenuTally();
         private MenuOpen _pendingOpen;
         private MenuClose _pendingClose, _closeAwaitingRecord;
+        private MenuSearch _pendingSearch;
         private bool _hammerGuide, _hammerSwitched;
         private PhaseTimer.Slot _phToggle, _phOpen, _phTags, _phPieces, _phSetup, _phChecks, _phClose, _phPick, _phGhost, _phLayout, _phNav;
         private bool _buildSlotsRead;
@@ -53,6 +54,7 @@ namespace Vigil.Recorder
             if (menu || _menuWasOpen) _secMenuFrames++;
             else if (place) _secToolFrames++;
             if (state == BuildState.Change) StartMenuLine(opened: menu, dtMs, ui);
+            SearchLine(dtMs, openedNow: state == BuildState.Change && menu);
             _menuWasOpen = menu;
             // Counted while the menu is open (a close's own frame) and in the frame after a close.
             if (menu || _pendingClose != null) UiRebuildProbe.Arm();
@@ -125,6 +127,28 @@ namespace Vigil.Recorder
             }
         }
 
+        // A search's line. Its steps are read now, before the timers close the frame; a search the game
+        // ran before Vigil's frame start fell in the frame now starting, so its line waits for that
+        // frame's length. A search inside an open is the open's.
+        private void SearchLine(float dtMs, bool openedNow)
+        {
+            if (_pendingSearch != null)
+            {
+                _pendingSearch.FrameMs = dtMs;
+                EventLog.Write("build menu", "", _pendingSearch.Describe());
+                _pendingSearch = null;
+            }
+            var search = MenuSearchProbe.Take();
+            if (search == null || openedNow) return;
+            ReadBuildSlots();
+            search.NavigationMs = FrameMs(_phNav);
+            search.PiecesMs = FrameMs(_phPieces);
+            search.NavigationLater = BuildMenuPatch.NavigationLaterOn && BuildMenuPatch.NavigationProblem == null;
+            if (MenuSearchProbe.Frame == UnityEngine.Time.frameCount) { _pendingSearch = search; return; }
+            search.FrameMs = dtMs;
+            EventLog.Write("build menu", "", search.Describe());
+        }
+
         private void FinishMenuLine(float dtMs, UiRebuild ui)
         {
             if (_pendingOpen != null)
@@ -133,6 +157,7 @@ namespace Vigil.Recorder
                 _pendingOpen = null;
                 open.NextLayoutMs = FrameMs(_phLayout);
                 open.Handlers = LanguageHandlers();
+                if (BuildMenuPatch.LastLinkFrame >= UnityEngine.Time.frameCount - 1) open.LaterNavigationMs = BuildMenuPatch.LastLinkMs;
                 _menuOpens.Add(open.FrameMs, open.Buttons);
                 EventLog.Write("build menu", "", open.Describe());
             }

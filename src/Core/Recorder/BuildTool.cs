@@ -106,6 +106,8 @@ namespace Vigil.Core
         public int Kept;
         /// <summary>Handlers on the game's language change, or -1 when not read.</summary>
         public int Handlers = -1;
+        /// <summary>The navigation linked in the next frame (the patch "a frame later"), or -1 when it was not put off.</summary>
+        public double LaterNavigationMs = -1;
 
         public string Describe()
         {
@@ -125,6 +127,7 @@ namespace Vigil.Core
             parts.Add(string.Format(ci, "untimed {0:0} ms", Pos(FrameMs - outer - LayoutMs)));
             string s = string.Format(ci, "opened, frame {0:0} ms: ", FrameMs) + string.Join(", ", parts.ToArray()) +
                 string.Format(ci, "; next frame's layout {0:0} ms", NextLayoutMs);
+            if (LaterNavigationMs >= 0) s += string.Format(ci, ", the navigation set up there in {0:0.0} ms", LaterNavigationMs);
             if (Handlers >= 0) s += string.Format(ci, "; {0:N0} language handlers", Handlers);
             return s;
         }
@@ -241,6 +244,29 @@ namespace Vigil.Core
         {
             if (namesFromRoot == null || namesFromRoot.Count == 0) return "(no object)";
             return string.Join("/", namesFromRoot.Take(depth).ToArray());
+        }
+    }
+
+    /// <summary>
+    /// One change of the build menu's search text: the search's own time (its outermost call; a
+    /// first letter typed on a tag switches to all pieces and rebuilds the buttons inside it), the
+    /// buttons it left shown, and its navigation setup.
+    /// </summary>
+    public sealed class MenuSearch
+    {
+        public double FrameMs, SearchMs, PiecesMs, NavigationMs;
+        public int Letters, Shown, Buttons;
+        /// <summary>The navigation setup was put off to the next frame (the patch "a frame later").</summary>
+        public bool NavigationLater;
+
+        public string Describe()
+        {
+            var ci = CultureInfo.InvariantCulture;
+            string what = Letters == 0 ? "search emptied" : string.Format(ci, "searched for {0} letter{1}", Letters, Letters == 1 ? "" : "s");
+            string s = string.Format(ci, "{0}, frame {1:0} ms: the search {2:0} ms, {3:N0} of {4:N0} piece buttons shown", what, FrameMs, SearchMs, Shown, Buttons);
+            if (PiecesMs > 0) s += string.Format(ci, ", the buttons rebuilt for it {0:0} ms", PiecesMs);
+            s += NavigationLater ? ", navigation setup put off to the next frame" : string.Format(ci, ", navigation setup {0:0} ms in it", NavigationMs);
+            return s;
         }
     }
 

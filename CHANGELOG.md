@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.15
+
+New patch, off until switched on: *The build menu sets up its navigation a frame later* (`Patches.BuildMenuNavigationLater`). After every open and every change of the search text the build menu links its buttons for the arrow keys and a controller, and before linking it forces every canvas to update twice and lays the whole button grid out again. With the patch on, the linking waits for the next frame, when the screen layout has placed the buttons anyway, and follows the game's rules without forcing anything. For that one frame the arrow keys and a controller still follow the links of before; the mouse is not affected. Each open's line in `Vigil-events.tsv` says what the linking took, and every search of the menu now has a line of its own: the search's time, the buttons it left shown, a rebuild of the buttons in it and its navigation setup.
+
 ## 0.43.14
 
 A close line in `Vigil-events.tsv` that came from picking a piece says when the game handled the click at the start of the next frame, before Vigil's frame starts, and counts the pick's time in that frame, where it ran. The rebuilt parts are named by type and by whether they are hidden, nine names deep, and a close's own frame says what its screen layout rebuilt too.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
@@ -45,6 +46,28 @@ namespace Vigil.Recorder
 
         public static string State => MenuReuse.StateLine(On, Problem, Kept, Rebuilt, LastDiff, Strays);
 
+        /// <summary>The switch of "The build menu sets up its navigation a frame later" (<see cref="GridLinks"/>), kept current by its config entry.</summary>
+        public static bool NavigationLaterOn;
+
+        /// <summary>Why the navigation patch stepped aside; null while it is in.</summary>
+        public static string NavigationProblem { get; private set; }
+
+        /// <summary>Requests put off, and the last linking: its time, its buttons and its frame (-1 before the first).</summary>
+        public static long PutOff { get; private set; }
+        public static double LastLinkMs { get; private set; }
+        public static int LastLinkButtons { get; private set; }
+        public static int LastLinkFrame { get; private set; } = -1;
+
+        public static string NavigationState => GridLinks.StateLine(NavigationLaterOn, NavigationProblem, PutOff, LastLinkMs, LastLinkButtons);
+
+        private static AccessTools.FieldRef<BuildUi, RectTransform> s_pieceGrid, s_tagGrid;
+        private static Func<BuildUi, Navigation> s_pieceEdge, s_tagEdge;
+        private static MethodInfo s_gameNavigation;
+        private static BuildUi s_pendingUi;
+        private static int s_pendingFrame = -1;
+        private static readonly List<Selectable> s_selectables = new List<Selectable>();
+        private static readonly List<float> s_rows = new List<float>();
+
         private static Action<string> s_log;
         private static readonly HashSet<MenuReuse.Diff> s_logged = new HashSet<MenuReuse.Diff>();
 
@@ -87,6 +110,7 @@ namespace Vigil.Recorder
                 var harmony = new Harmony(HarmonyId);
                 harmony.Patch(update, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeUpdatePieceButtons)), postfix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(AfterUpdatePieceButtons)));
                 harmony.Patch(navigation, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeNavigation)));
+                HookNavigationLater(harmony, navigation);
             }
             catch (Exception e)
             {
@@ -217,20 +241,107 @@ namespace Vigil.Recorder
             }
         }
 
+        // The navigation patch's own parts; missing ones leave "opens faster" working.
+        private static void HookNavigationLater(Harmony harmony, MethodInfo navigation)
+        {
+            var update = AccessTools.DeclaredMethod(typeof(BuildUi), "Update");
+            var pieceEdge = AccessTools.DeclaredMethod(typeof(BuildUi), "GetPieceListEdgeNavigation");
+            var tagEdge = AccessTools.DeclaredMethod(typeof(BuildUi), "GetTagListEdgeNavigation");
+            if (update == null || pieceEdge == null || tagEdge == null || pieceEdge.ReturnType != typeof(Navigation) || tagEdge.ReturnType != typeof(Navigation) ||
+                AccessTools.Field(typeof(BuildUi), "m_pieceButtonsContainer")?.FieldType != typeof(RectTransform) ||
+                AccessTools.Field(typeof(BuildUi), "m_tagListScrollContent")?.FieldType != typeof(RectTransform))
+            {
+                NavigationProblem = "the build menu changed (an update)";
+                return;
+            }
+            s_pieceGrid = AccessTools.FieldRefAccess<BuildUi, RectTransform>("m_pieceButtonsContainer");
+            s_tagGrid = AccessTools.FieldRefAccess<BuildUi, RectTransform>("m_tagListScrollContent");
+            s_pieceEdge = AccessTools.MethodDelegate<Func<BuildUi, Navigation>>(pieceEdge);
+            s_tagEdge = AccessTools.MethodDelegate<Func<BuildUi, Navigation>>(tagEdge);
+            s_gameNavigation = navigation;
+            harmony.Patch(update, postfix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(AfterBuildUiUpdate)));
+        }
+
         private static bool BeforeNavigation(BuildUi __instance)
         {
-            if (Problem != null || !MenuReuse.SkipNavigation(On, __instance.gameObject.activeInHierarchy)) return true;
+            bool skipHidden = Problem == null && MenuReuse.SkipNavigation(On, __instance.gameObject.activeInHierarchy);
+            bool later = NavigationProblem == null && NavigationLaterOn && s_gameNavigation != null;
+            if (!skipHidden && !later) return true;
             try
             {
+                // The repair button's links, which the game sets whether it is shown or not.
                 var special = s_special(__instance);
                 if (special != null) special.GetComponent<Button>().navigation = s_specialNavigation(__instance);
-                return false;
             }
             catch (Exception e)
             {
                 Problem = "the build menu's navigation failed: " + e.GetType().Name + " " + e.Message;
-                return true;
+                if (!later) return true;
             }
+            if (later)
+            {
+                s_pendingUi = __instance;
+                s_pendingFrame = Time.frameCount;
+                PutOff++;
+            }
+            return false;
+        }
+
+        // Runs every frame the menu is open, after the frame of a request, when the screen layout
+        // has placed the buttons.
+        private static void AfterBuildUiUpdate(BuildUi __instance)
+        {
+            if (!GridLinks.Due(s_pendingFrame, Time.frameCount) || s_pendingUi != __instance) return;
+            s_pendingFrame = -1;
+            s_pendingUi = null;
+            if (!__instance.gameObject.activeInHierarchy) return;
+            try
+            {
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+                int n = Link(s_pieceGrid(__instance), s_pieceEdge(__instance)) + Link(s_tagGrid(__instance), s_tagEdge(__instance));
+                LastLinkMs = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                LastLinkButtons = n;
+                LastLinkFrame = Time.frameCount;
+            }
+            catch (Exception e)
+            {
+                NavigationProblem = "the build menu's navigation failed: " + e.GetType().Name + " " + e.Message;
+                try { s_gameNavigation.Invoke(__instance, null); } catch (Exception) { }
+            }
+        }
+
+        // The shown, usable buttons of a grid in its order, linked to their neighbours, the grid's
+        // edge links at the sides. Returns how many were linked.
+        private static int Link(RectTransform grid, Navigation edge)
+        {
+            if (grid == null) return 0;
+            s_selectables.Clear();
+            s_rows.Clear();
+            for (int i = 0; i < grid.childCount; i++)
+            {
+                var child = grid.GetChild(i);
+                if (!child.gameObject.activeInHierarchy) continue;
+                var sel = child.GetComponent<Selectable>();
+                if (sel == null || !sel.IsInteractable()) continue;
+                s_selectables.Add(sel);
+                if (child is RectTransform rt) s_rows.Add(rt.anchoredPosition.y);
+            }
+            int count = s_selectables.Count;
+            if (count == 0) return 0;
+            int columns = s_rows.Count == count ? GridLinks.Columns(s_rows) : 1;
+            for (int i = 0; i < count; i++)
+            {
+                var l = GridLinks.Neighbours(i, count, columns);
+                var nav = s_selectables[i].navigation;
+                nav.mode = Navigation.Mode.Explicit;
+                nav.selectOnLeft = l.Left >= 0 ? s_selectables[l.Left] : edge.selectOnLeft;
+                nav.selectOnRight = l.Right >= 0 ? s_selectables[l.Right] : edge.selectOnRight;
+                nav.selectOnUp = l.Up >= 0 ? s_selectables[l.Up] : edge.selectOnUp;
+                nav.selectOnDown = l.Down >= 0 ? s_selectables[l.Down] : edge.selectOnDown;
+                s_selectables[i].navigation = nav;
+            }
+            s_selectables.Clear();
+            return count;
         }
     }
 }
