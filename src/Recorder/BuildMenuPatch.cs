@@ -24,7 +24,7 @@ namespace Vigil.Recorder
         private const string HarmonyId = "isimp.Vigil.patches.buildmenu";
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
-        public static bool On = true;
+        public static bool On;
 
         /// <summary>Why the patch stepped aside; null while it is in.</summary>
         public static string Problem { get; private set; }

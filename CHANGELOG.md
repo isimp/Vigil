@@ -1,12 +1,16 @@
 # Changelog
 
+## 0.43.6
+
+Every patch a player switches for their own game is now off until switched on: *Jotunn's config sync with one copy of the keys*, *The wheel scrolls a chest grid with a bar*, *Wide containers fit the frame*, both EasyRelocate patches, *The build menu opens faster* and *ComfortMe redraws its badges only on a change*. A config that already has a patch's line keeps its value, so a profile's owner switches them in their own config and Gale's profile sync carries that to everyone on the profile.
+
 ## 0.43.5
 
-A new patch for ComfortMe, *ComfortMe redraws its badges only on a change* (`Patches.ComfortMeBadges`, each player's own switch, on). ComfortMe redrew the comfort badge on every piece button of the build menu on every frame the menu was open, over a thousand on the *All* tab. Now it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed. The badges look the same. The *Patches* tab and the self-test say how many redraws were skipped and what one costs when it runs.
+A new patch for ComfortMe, *ComfortMe redraws its badges only on a change* (`Patches.ComfortMeBadges`, each player's own switch, off until switched on). ComfortMe redrew the comfort badge on every piece button of the build menu on every frame the menu was open, over a thousand on the *All* tab. Now it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed. The badges look the same. The *Patches* tab and the self-test say how many redraws were skipped and what one costs when it runs.
 
 ## 0.43.4
 
-A new patch, *The build menu opens faster* (`Patches.BuildMenuFaster`, each player's own switch, on). Opening the build menu rebuilt one button per piece, over a thousand on the *All* tab with the piece mods, and set up the menu's arrow-key and controller navigation while it was still hidden, where that only forced every canvas to update. Now, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes. Each open's line in `Vigil-events.tsv` now says whether its buttons were kept and what the navigation setup took.
+A new patch, *The build menu opens faster* (`Patches.BuildMenuFaster`, each player's own switch, off until switched on). Opening the build menu rebuilt one button per piece, over a thousand on the *All* tab with the piece mods, and set up the menu's arrow-key and controller navigation while it was still hidden, where that only forced every canvas to update. Now, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes. Each open's line in `Vigil-events.tsv` now says whether its buttons were kept and what the navigation setup took.
 
 ## 0.43.3
 
@@ -18,7 +22,7 @@ Vigil now tracks what a build tool costs. Each second in `Vigil-timeline.tsv` ha
 
 ## 0.43.0
 
-Two new patches for EasyRelocate, each player's own switch, both on. *EasyRelocate: quicker, and a move always ends* (`Patches.EasyRelocateFixes`): the first grab of a session no longer freezes the game for about a second while EasyRelocate searches every mod for two mods that are not installed, a grab and the end of a move no longer cost about 50 ms each, and while a piece moves its ghost is updated once a frame instead of twice, so moving a piece costs what building with the hammer costs. A move now always ends: the grab key works while other keys are held, Esc ends it, a text box taking the keys ends it instead of freezing it, and an error in EasyRelocate ends it as a relog would. Each of these writes a `[Vigil] relocate` line to the game's log, so a ghost that still sticks shows why. *EasyRelocate's ghost is a spirit* (`Patches.EasyRelocateSpiritGhost`): the piece being moved is drawn see-through, pale blue where it can be placed, pale red where not, breathing slowly.
+Two new patches for EasyRelocate, each player's own switch, both off until switched on. *EasyRelocate: quicker, and a move always ends* (`Patches.EasyRelocateFixes`): the first grab of a session no longer freezes the game for about a second while EasyRelocate searches every mod for two mods that are not installed, a grab and the end of a move no longer cost about 50 ms each, and while a piece moves its ghost is updated once a frame instead of twice, so moving a piece costs what building with the hammer costs. A move now always ends: the grab key works while other keys are held, Esc ends it, a text box taking the keys ends it instead of freezing it, and an error in EasyRelocate ends it as a relog would. Each of these writes a `[Vigil] relocate` line to the game's log, so a ghost that still sticks shows why. *EasyRelocate's ghost is a spirit* (`Patches.EasyRelocateSpiritGhost`): the piece being moved is drawn see-through, pale blue where it can be placed, pale red where not, breathing slowly.
 
 ## 0.42.10
 

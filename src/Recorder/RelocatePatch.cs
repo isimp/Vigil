@@ -25,9 +25,9 @@ namespace Vigil.Recorder
     {
         private const string HarmonyId = "isimp.Vigil.patches.relocate";
 
-        public static bool FixesOn = true;
+        public static bool FixesOn;
 
-        public static bool SpiritOn = true;
+        public static bool SpiritOn;
 
         public static bool Found { get; private set; }
 

@@ -42,41 +42,41 @@ namespace Vigil.Recorder
             JoinPackagesPatch.Enabled = _joinPackages.Value;
             _joinPackages.SettingChanged += (_, __) => JoinPackagesPatch.Enabled = _joinPackages.Value;
             // This game's own switch, not the server's: Jotunn's answers stay the same, only quicker.
-            _jotunnSync = Config.Bind("Patches", "JotunnConfigSync", true,
+            _jotunnSync = Config.Bind("Patches", "JotunnConfigSync", false,
                 "This game's own switch: when the server's synced settings arrive on joining, Jotunn checks each one with the file's list of keys, which BepInEx copies whole for every " +
                 "setting (seconds for thousands of settings). On, Jotunn gets one copy of each file's keys per sync, which answers every check the same way; the first answers are asked " +
                 "both ways, and Jotunn's own way comes back at a disagreement.");
             JotunnSyncPatch.On = _jotunnSync.Value;
             _jotunnSync.SettingChanged += (_, __) => JotunnSyncPatch.On = _jotunnSync.Value;
-            _chestScroll = Config.Bind("Patches", "ChestGridScroll", true,
+            _chestScroll = Config.Bind("Patches", "ChestGridScroll", false,
                 "This game's own switch: with CycleChests, the mouse wheel switches chests whenever a chest is open, so a chest whose slots are taller than its view cannot be scrolled. " +
                 "On, the wheel over that chest's grid or its scroll bar scrolls it the game's way; anywhere else it cycles chests as before.");
             ChestScrollPatch.On = _chestScroll.Value;
             _chestScroll.SettingChanged += (_, __) => ChestScrollPatch.On = _chestScroll.Value;
-            _containerFit = Config.Bind("Patches", "WideContainerFit", true,
+            _containerFit = Config.Bind("Patches", "WideContainerFit", false,
                 "This game's own switch: the game centres a container's slots in the chest frame and scrolls only up and down, so a container wider than the frame " +
                 "(such as a tombstone ExtraSlots widened for its equipped items) loses both sides. On, such a container is shrunk evenly until every column fits; " +
                 "one that fits keeps its size. Only the drawing changes, never the items or their slots.");
             ContainerFitPatch.On = _containerFit.Value;
             _containerFit.SettingChanged += (_, __) => ContainerFitPatch.On = _containerFit.Value;
-            _relocateFixes = Config.Bind("Patches", "EasyRelocateFixes", true,
+            _relocateFixes = Config.Bind("Patches", "EasyRelocateFixes", false,
                 "This game's own switch: EasyRelocate's first grab of a session searched every mod for two mods that are not installed (about a second), every grab and every end " +
                 "of a move rebuilt six game methods (about 50 ms each way), and while a piece moved its ghost was updated twice a frame. On, the search is skipped, the hooks go in once " +
                 "at the main menu and stay, and the ghost is updated once a frame. A move also always ends: the grab key works while other keys are held, Esc ends it, a text box taking " +
                 "the keys ends it, and an error in EasyRelocate ends it as a relog would.");
             RelocatePatch.FixesOn = _relocateFixes.Value;
             _relocateFixes.SettingChanged += (_, __) => RelocatePatch.FixesOn = _relocateFixes.Value;
-            _relocateSpirit = Config.Bind("Patches", "EasyRelocateSpiritGhost", true,
+            _relocateSpirit = Config.Bind("Patches", "EasyRelocateSpiritGhost", false,
                 "This game's own switch: the piece EasyRelocate moves is drawn as a see-through spirit, " +
                 "pale blue where it can be placed and pale red where not, breathing slowly. Off, it is the solid copy EasyRelocate draws. It changes the next ghost.");
             RelocatePatch.SpiritOn = _relocateSpirit.Value;
             _relocateSpirit.SettingChanged += (_, __) => RelocatePatch.SpiritOn = _relocateSpirit.Value;
-            _buildMenu = Config.Bind("Patches", "BuildMenuFaster", true,
+            _buildMenu = Config.Bind("Patches", "BuildMenuFaster", false,
                 "This game's own switch: opening the build menu rebuilds one button per piece, and sets up the menu's arrow-key and controller navigation while it is still hidden, where that only forces every canvas to update. " +
                 "On, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes.");
             BuildMenuPatch.On = _buildMenu.Value;
             _buildMenu.SettingChanged += (_, __) => BuildMenuPatch.On = _buildMenu.Value;
-            _comfortBadges = Config.Bind("Patches", "ComfortMeBadges", true,
+            _comfortBadges = Config.Bind("Patches", "ComfortMeBadges", false,
                 "This game's own switch: ComfortMe redraws the badge on every piece button of the build menu on every frame the menu is open. " +
                 "On, it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed.");
             ComfortBadgesPatch.On = _comfortBadges.Value;

@@ -25,7 +25,7 @@ namespace Vigil.Recorder
         private const string HarmonyId = "isimp.Vigil.patches.comfortbadges";
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
-        public static bool On = true;
+        public static bool On;
 
         public static bool Found { get; private set; }
         public static string Version { get; private set; }

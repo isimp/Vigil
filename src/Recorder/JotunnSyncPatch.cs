@@ -35,7 +35,7 @@ namespace Vigil.Recorder
         private static bool t_copying;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
-        public static bool On = true;
+        public static bool On;
 
         public static bool Found { get; private set; }
 
