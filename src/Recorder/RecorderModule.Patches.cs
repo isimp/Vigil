@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -71,6 +71,11 @@ namespace Vigil.Recorder
                 "pale blue where it can be placed and pale red where not, breathing slowly. Off, it is the solid copy EasyRelocate draws. It changes the next ghost.");
             RelocatePatch.SpiritOn = _relocateSpirit.Value;
             _relocateSpirit.SettingChanged += (_, __) => RelocatePatch.SpiritOn = _relocateSpirit.Value;
+            _buildMenu = Config.Bind("Patches", "BuildMenuFaster", true,
+                "This game's own switch: opening the build menu rebuilds one button per piece, and sets up the menu's arrow-key and controller navigation while it is still hidden, where that only forces every canvas to update. " +
+                "On, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes.");
+            BuildMenuPatch.On = _buildMenu.Value;
+            _buildMenu.SettingChanged += (_, __) => BuildMenuPatch.On = _buildMenu.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -159,6 +164,8 @@ namespace Vigil.Recorder
             if (ContainerFitPatch.Problem != null) _host.Log.LogWarning("Vigil: the wide container patch stepped aside: " + ContainerFitPatch.Problem);
             if (!_server) RelocatePatch.Hook(line => _host.Log.LogInfo(line));
             if (RelocatePatch.Problem != null) _host.Log.LogWarning("Vigil: the EasyRelocate patches stepped aside: " + RelocatePatch.Problem);
+            if (!_server) BuildMenuPatch.Hook();
+            if (BuildMenuPatch.Problem != null) _host.Log.LogWarning("Vigil: the build menu patch stepped aside: " + BuildMenuPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -188,7 +195,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 11 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 12 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -326,6 +333,10 @@ namespace Vigil.Recorder
             OwnSwitch("EasyRelocate's ghost is a spirit", _relocateSpirit, "EasyRelocateSpiritGhost",
                 "The piece EasyRelocate moves is drawn see-through: pale blue where it can be placed, pale red where not, breathing slowly. Off, it is the solid copy EasyRelocate draws. It changes the next ghost.");
             if (!_server) Ui.Row("On this game", Toned(RelocatePatch.SpiritState, RelocatePatch.Problem != null || RelocatePatch.SpiritProblem != null ? ResultTone.Caution : _relocateSpirit.Value && RelocatePatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("The build menu opens faster", _buildMenu, "BuildMenuFaster",
+                "Opening the build menu rebuilds one button per piece, and sets up the menu's arrow-key and controller navigation while it is still hidden, where that only forces every canvas to update. On, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes. Each open's line in Vigil-events.tsv says whether its buttons were kept.");
+            if (!_server) Ui.Row("On this game", Toned(BuildMenuPatch.State, BuildMenuPatch.Problem != null ? ResultTone.Caution : _buildMenu.Value ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");
             Ui.BeginFormLine("Switch");

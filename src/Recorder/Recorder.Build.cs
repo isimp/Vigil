@@ -24,7 +24,7 @@ namespace Vigil.Recorder
         private MenuOpen _pendingOpen;
         private MenuClose _pendingClose;
         private bool _hammerGuide, _hammerSwitched;
-        private PhaseTimer.Slot _phToggle, _phOpen, _phTags, _phPieces, _phSetup, _phChecks, _phClose, _phPick, _phGhost, _phLayout;
+        private PhaseTimer.Slot _phToggle, _phOpen, _phTags, _phPieces, _phSetup, _phChecks, _phClose, _phPick, _phGhost, _phLayout, _phNav;
         private bool _buildSlotsRead;
 
         /// <summary>
@@ -83,6 +83,7 @@ namespace Vigil.Recorder
             _phPick = _timer.Game("BuildUi.OnSelectPiece");
             _phGhost = _timer.Game("Player.SetupPlacementGhost");
             _phLayout = _timer.Game("UnityEngine.Canvas.SendWillRenderCanvases");
+            _phNav = _timer.Game("BuildUi.ConfigureButtonNavigation");
         }
 
         private static double FrameMs(PhaseTimer.Slot s) => s != null ? PhaseTimer.TicksToMs(s.FrameTicks) : 0;
@@ -98,6 +99,9 @@ namespace Vigil.Recorder
                 {
                     FrameMs = dtMs, ToggleMs = FrameMs(_phToggle), OpenMs = FrameMs(_phOpen), TagsMs = FrameMs(_phTags), PiecesMs = FrameMs(_phPieces),
                     SetupMs = FrameMs(_phSetup), ChecksMs = FrameMs(_phChecks), LayoutMs = FrameMs(_phLayout), Buttons = _phSetup != null ? _phSetup.FrameCalls : 0,
+                    NavigationMs = FrameMs(_phNav),
+                    // The open may fall in the frame before the one whose start reads it.
+                    Kept = BuildMenuPatch.KeptFrame >= UnityEngine.Time.frameCount - 1 ? BuildMenuPatch.KeptButtons : 0,
                 };
                 _pendingClose = null;
             }

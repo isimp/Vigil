@@ -521,6 +521,11 @@ namespace Vigil.Recorder
                         state.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                         : state.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
                         : SelfTestReport.Result.Info, state));
+                string menu = BuildMenuPatch.State;
+                checks.Add(new SelfTestReport.Check(area, "game patch: the build menu opens faster",
+                    menu.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
+                    : menu.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
+                    : SelfTestReport.Result.Info, menu));
                 string fit = ContainerFitPatch.State;
                 checks.Add(new SelfTestReport.Check(area, "game patch: wide containers fit the frame",
                     fit.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass

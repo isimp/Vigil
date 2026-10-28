@@ -130,6 +130,7 @@ namespace Vigil.Recorder
             new[] { "BuildUiPieceButton", "UpdateRequirements", "ph_build_checks", Nested },
             new[] { "BuildUi", "Close", "ph_build_close", Nested },
             new[] { "BuildUi", "OnSelectPiece", "ph_build_pick", Nested },
+            new[] { "BuildUi", "ConfigureButtonNavigation", "ph_build_nav", Nested },
             new[] { "Hud", "UpdateBuild", "ph_hud_build", "Hud.Update" },
             new[] { "Character", "CustomFixedUpdate", "ph_characters", Nested },
             new[] { "Humanoid", "CustomFixedUpdate", "ph_humanoids", Nested },

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.4
+
+A new patch, *The build menu opens faster* (`Patches.BuildMenuFaster`, each player's own switch, on). Opening the build menu rebuilt one button per piece, over a thousand on the *All* tab with the piece mods, and set up the menu's arrow-key and controller navigation while it was still hidden, where that only forced every canvas to update. Now, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes. Each open's line in `Vigil-events.tsv` now says whether its buttons were kept and what the navigation setup took.
+
 ## 0.43.3
 
 *EasyRelocate's ghost is a spirit* now shows. The game's crypt ghost material drew the moving piece invisible; the spirit now uses a plain see-through material, pale blue where the piece can be placed and pale red where not, still breathing. The first spirit of a session notes its shader in the game's log.

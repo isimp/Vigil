@@ -100,8 +100,10 @@ namespace Vigil.Core
     /// </summary>
     public sealed class MenuOpen
     {
-        public double FrameMs, ToggleMs, OpenMs, TagsMs, PiecesMs, SetupMs, ChecksMs, LayoutMs, NextLayoutMs;
+        public double FrameMs, ToggleMs, OpenMs, TagsMs, PiecesMs, SetupMs, ChecksMs, LayoutMs, NextLayoutMs, NavigationMs;
         public int Buttons;
+        /// <summary>Buttons the menu kept as they were instead of setting them up again (the patch "The build menu opens faster"), 0 when rebuilt.</summary>
+        public int Kept;
         /// <summary>Handlers on the game's language change, or -1 when not read.</summary>
         public int Handlers = -1;
 
@@ -111,11 +113,14 @@ namespace Vigil.Core
             double outer = Math.Max(ToggleMs, OpenMs);
             var parts = new List<string>
             {
-                string.Format(ci, "{0:N0} piece buttons {1:0} ms (setting them up {2:0} ms, material checks in that {3:0} ms)", Buttons, PiecesMs, Math.Min(SetupMs, PiecesMs), Math.Min(ChecksMs, Math.Min(SetupMs, PiecesMs))),
+                Kept > 0
+                    ? string.Format(ci, "{0:N0} piece buttons kept as they were, refreshed in {1:0} ms (material checks {2:0} ms)", Kept, PiecesMs, Math.Min(ChecksMs, PiecesMs))
+                    : string.Format(ci, "{0:N0} piece buttons {1:0} ms (setting them up {2:0} ms, material checks in that {3:0} ms)", Buttons, PiecesMs, Math.Min(SetupMs, PiecesMs), Math.Min(ChecksMs, Math.Min(SetupMs, PiecesMs))),
                 string.Format(ci, "tag buttons {0:0} ms", Pos(TagsMs - PiecesMs)),
                 string.Format(ci, "the rest of the open {0:0} ms", Pos(OpenMs - Math.Max(TagsMs, PiecesMs))),
             };
             if (ToggleMs > 0) parts.Add(string.Format(ci, "mods' hooks around the key {0:0} ms", Pos(ToggleMs - OpenMs)));
+            if (NavigationMs > 0) parts.Add(string.Format(ci, "navigation setup {0:0} ms in all", NavigationMs));
             parts.Add(string.Format(ci, "screen layout {0:0} ms", LayoutMs));
             parts.Add(string.Format(ci, "untimed {0:0} ms", Pos(FrameMs - outer - LayoutMs)));
             string s = string.Format(ci, "opened, frame {0:0} ms: ", FrameMs) + string.Join(", ", parts.ToArray()) +
