@@ -515,6 +515,11 @@ namespace Vigil.Recorder
                     chest.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                     : chest.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
                     : SelfTestReport.Result.Info, chest));
+                foreach (var (name, state) in new[] { ("game patch: EasyRelocate quicker, and a move always ends", RelocatePatch.FixesState), ("game patch: EasyRelocate's ghost is a spirit", RelocatePatch.SpiritState) })
+                    checks.Add(new SelfTestReport.Check(area, name,
+                        state.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
+                        : state.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
+                        : SelfTestReport.Result.Info, state));
                 string fit = ContainerFitPatch.State;
                 checks.Add(new SelfTestReport.Check(area, "game patch: wide containers fit the frame",
                     fit.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass

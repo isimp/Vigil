@@ -38,6 +38,19 @@ namespace Vigil.Tests
             Assert.DoesNotMatch(@"BeforeInputStep\([^)]*__instance", code);
         }
 
+        [Fact]
+        public void The_EasyRelocate_patches_take_the_arguments_of_its_static_methods_by_position()
+        {
+            // TryPatch, GhostTint.Apply and GhostBuilder.Create are static: a patch parameter named
+            // __instance would be null there, and one named after their own parameters is a guess at
+            // names an update may change, so their arguments are taken by position.
+            string code = Regex.Replace(File.ReadAllText(Path.Combine(ProjectRoot(), "src", "Recorder", "RelocatePatch.cs")), "//.*", "");
+            Assert.Matches(@"BeforeTypeSearch\(\s*string\s+__1\s*\)", code);
+            Assert.Matches(@"BeforeTint\(\s*GameObject\s+__0\s*,\s*bool\s+__1\s*\)", code);
+            Assert.Matches(@"AfterCreateGhost\(\s*GameObject\s+__result\s*\)", code);
+            Assert.Matches(@"BeforeGhostUpdate\(\s*object\s+__instance\s*,\s*Player\s+__0\s*\)", code);
+        }
+
         private static string ProjectRoot()
         {
             for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
