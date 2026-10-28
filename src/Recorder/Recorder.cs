@@ -20,7 +20,7 @@ namespace Vigil.Recorder
     /// key is pressed, a detailed Vigil-incident-*.txt is written with the minutes leading up
     /// to it. A slow stretch can also start a short deep capture of every mod patch.
     /// </summary>
-    internal sealed class Recorder : IDisposable
+    internal sealed partial class Recorder : IDisposable
     {
         internal sealed class Settings
         {
@@ -217,7 +217,7 @@ namespace Vigil.Recorder
 
         private IEnumerable<string> Columns()
         {
-            var c = new List<string> { "time", "t", "situation", "fps", "frames", "dt_avg_ms", "dt_max_ms", "over_33", "over_50", "over_100", "over_250",
+            var c = new List<string> { "time", "t", "situation", "build", "fps", "frames", "dt_avg_ms", "dt_max_ms", "over_33", "over_50", "over_100", "over_250",
                 "gc", "heap_mb", "fixed_steps", "fixed_max", "physics_ms", "render_ms", "cameras", "cpu_main_ms", "cpu_render_ms", "gpu_ms" };
             if (_engine != null) c.AddRange(_engine.Counters.Select(x => x.Column));
             else c.AddRange(new[] { "alloc_kb_s", "allocs_s", "gc_used_mb", "gc_reserved_mb", "unity_used_mb", "gfx_used_mb", "draw_calls", "batches", "setpass", "tris_k", "shadow_casters", "main_thread_ms" });
@@ -279,7 +279,8 @@ namespace Vigil.Recorder
             _curTopBase = idx * TopPerFrame;
             _topCount = 0;
             for (int i = 0; i < TopPerFrame; i++) { _fTopId[_curTopBase + i] = -1; _fTopMs[_curTopBase + i] = 0; _fTopCalls[_curTopBase + i] = 0; }
-            _timer.EndFrame(Sink);
+            var build = BuildFrame(sit, dtMs);
+            _timer.EndFrame(Sink, build);
             _fTime[idx] = now; _fDt[idx] = dtMs; _fGc[idx] = gc; _fFixed[idx] = fixedSteps; _fSit[idx] = sit;
             _fRender[idx] = _engine != null ? _engine.LastRenderMs : 0f;
             _fPhysics[idx] = physicsMs;
@@ -391,6 +392,7 @@ namespace Vigil.Recorder
             Set("t", Math.Round(now - _startedAt, 1));
             string situation = WorldContext.Situation();
             Set("situation", situation);
+            Set("build", BuildSecond());
             Set("fps", _secFrames / Math.Max(span, 0.001f));
             Set("frames", _secFrames);
             Set("dt_avg_ms", _secFrames > 0 ? _secDtSum / _secFrames : 0f);
@@ -1057,7 +1059,8 @@ namespace Vigil.Recorder
                 _deepRunStarted = now;
                 _deepUntil = now + _deepSeconds;
                 _deepFramesStart = (int)_frameNo;
-                Hud(string.Format(CultureInfo.InvariantCulture, "Vigil: deep capture measuring for {0:0} s", _deepSeconds));
+                OnDeepMeasuring();
+                Hud(DeepMeasuringText(_deepSeconds));
             }
             if (_timer.DeepRunning && !_deepDropDone && now - _deepRunStarted >= 2f)
             {
@@ -1065,7 +1068,9 @@ namespace Vigil.Recorder
                 _timer.DropHotDeepHooks(_frameNo - _deepFramesStart);
                 _deepSplit = _timer.SplitTop(SplitMethods);
                 _deepSplitFrame = _frameNo;
+                OnDeepSplit();
             }
+            GuideHammer(now);
             if (_timer.DeepRunning && _deepUntil > 0 && now >= _deepUntil) FinishDeep();
             if (!_timer.DeepActive)
             {
@@ -1122,6 +1127,8 @@ namespace Vigil.Recorder
             foreach (var row in own) sb.AppendLine(PatchTime.Line(row));
             sb.AppendLine("   Transpilers, timed only inside the game's methods they change: " + PatchTime.TranspilerLine(PhaseTimer.TranspilersByMod()));
             sb.AppendLine();
+            sb.Append(BuildDeepSection());
+            sb.AppendLine();
             sb.AppendLine("== By mod: game methods each mod patches, timed whole (a method patched by several mods counts for each) ==");
             var perMod = new Dictionary<string, double>();
             foreach (var s in patched)
@@ -1143,6 +1150,7 @@ namespace Vigil.Recorder
             sb.AppendFormat(ci, "Timers were put in over {0:0.0} s, a few per frame, before the capture started.\r\n", _deepRunStarted - _deepInstallStarted);
             _timer.StopDeep();
             _deepUntil = -1;
+            _hammerGuide = false;
             string path = Path.Combine(_dir, "Vigil-deep-" + DateTime.Now.ToString("HHmmss") + ".txt");
             _deepReports.Add(Path.GetFileName(path));
             if (ResultStore.Shared.Shown)
@@ -1213,6 +1221,8 @@ namespace Vigil.Recorder
             sb.AppendLine();
             sb.AppendLine("Where frame time went (whole session):");
             sb.Append(TimingTable(25));
+            sb.AppendLine();
+            sb.Append(BuildSummary());
             sb.AppendLine();
             float sessionSeconds = Mathf.Max(1f, Time.realtimeSinceStartup - _startedAt);
             sb.AppendLine("Time handling incoming network messages, by mod and message:");

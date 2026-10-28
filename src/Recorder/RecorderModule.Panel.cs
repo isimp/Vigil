@@ -220,6 +220,7 @@ namespace Vigil.Recorder
             }
             if (_recorder.DeepActive) Ui.Tool("Deep capture", "Timing every game method mods patch; the report follows when it ends", "Running", enabled: false);
             else if (Ui.Tool("Deep capture", "Times every game method mods patch, and which mod adds what", "Start", ref _deepSeconds, 40, "s")) _host.RunShown("deep " + _deepSeconds);
+            if (!_recorder.DeepActive && Ui.Tool("Hammer comparison", "What holding a build tool costs, by mod: 20 s out, then 20 s put away", "Start")) _host.RunShown("hammer");
             ShowResult(ResultStore.Deep);
 
             Ui.Heading("This session's incidents");

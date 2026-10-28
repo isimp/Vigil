@@ -136,6 +136,18 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_hammer_comparison_is_a_recorder_command_whose_help_says_what_to_do_and_what_it_writes()
+        {
+            var lines = ConsoleHelp.Lines("", "F9", "F6", "C:/rec");
+            Assert.Contains("hammer", ConsoleHelp.Commands);
+            Assert.Equal(ConsoleHelp.Recorder, ConsoleHelp.Owner("hammer"));
+            int recorder = lines.FindIndex(l => l == "Recording"), load = lines.FindIndex(l => l == "Load tests");
+            Assert.InRange(lines.FindIndex(l => l.TrimStart().StartsWith("vigil hammer", StringComparison.Ordinal)), recorder, load);
+            string about = About("hammer");
+            foreach (var word in new[] { "20 s", "tool out", "put away", "menu shut", "Vigil-deep-", "Vigil-events.tsv", "session summary" }) Assert.Contains(word, about);
+        }
+
+        [Fact]
         public void The_servers_fog_limit_and_reading_value_names_again_are_explained()
         {
             string weather = About("weather");

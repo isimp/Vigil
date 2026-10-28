@@ -114,6 +114,12 @@ Four routed messages (`Vigil_Hello`, `Vigil_HelloReply`, `Vigil_Admin`, `Vigil_A
 
 The server turns its incidents, shared spawn logs, shared reports and an unclean previous run into alerts, keeps a week of them in `Vigil-state/alerts.tsv`, and an admin's game asks for new ones every 10 s. Falling behind and each player's connection alert at most once in ten minutes, spawns at one base once an hour. Of the reports players share, only those sent by hand (lag and environment reports) alert; what their games share on their own is listed among the server's reports.
 
+## Build tool
+
+Each frame in the world is put away, tool out (`Player.InPlaceMode` with the menu shut) or menu open (`Hud.IsPieceSelectionVisible`); a frame where the menu opens or closes counts as neither, since it carries the open or close itself (`Core/Recorder/BuildTool`). Every timer keeps its time apart for frames put away and tool out, over the session and in a deep capture, and the session summary and every deep report compare the two sides (`BuildCompare`, which leaves out a side with too few frames). Session frames come from wherever the player was, so only `vigil hammer`, a deep capture of 40 s that asks for the tool out and then put away at one spot, compares like with like; its split goes on in the first 2 s, with the tool out, so it picks the methods the tool makes costly.
+
+The menu's steps are timed always: `Hud.TogglePieceSelection` (the key, the mods' hooks on it included), `BuildUi.OpenBuildMenu`, `UpdateTagButtons` with `UpdatePieceButtons` inside it, `BuildUiPieceButton.Setup` with its material check `UpdateRequirements`, `BuildUi.Close`, `BuildUi.OnSelectPiece`, and `Hud.UpdateBuild` every frame. A frame where the menu opened or closed is read before the timers close it, and its line (`MenuOpen`, `MenuClose`) waits one frame for the next frame's layout and length. The open's line also counts the handlers on `Localization.OnLanguageChange`: in game 1.0.20 each `BuildUiPieceButton.Setup` adds one and nothing removes it, so the count shows whether that list grows over a session.
+
 ## Load test and player simulation
 
 `vigil load` sends world-update traffic in rising steps between a player's game and the server, then reports what each direction carried and what held it back. `vigil load players` adds simulated players on the server in doubling steps and reports how many it kept up with. Only admins can start either, and the server refuses while other players are on unless `force` is added.

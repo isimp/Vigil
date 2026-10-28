@@ -13,7 +13,7 @@ namespace Vigil.Core
     /// </summary>
     internal static class ConsoleHelp
     {
-        public const int DeepSeconds = 20, CensusRadius = 60, PlayersDefault = 16, ObjectsDefault = 10, LinkDefault = 256, TraceSeconds = 300;
+        public const int DeepSeconds = 20, HammerSeconds = 20, CensusRadius = 60, PlayersDefault = 16, ObjectsDefault = 10, LinkDefault = 256, TraceSeconds = 300;
         public const int MissingRadius = 64, BusiestRadius = 64, BusiestSeconds = 10;
 
         /// <summary>The areas, named as their switches in the config's Modules section.</summary>
@@ -24,7 +24,7 @@ namespace Vigil.Core
         /// <summary>The first words "vigil" understands, in the order the overview lists them (tab completion offers them).</summary>
         public static readonly string[] Commands =
         {
-            "status", "selftest", "on", "off", "auto", "mark", "deep", "server", "load", "census", "memory", "patches", "startup", "trace", "inspect", "busiest", "weather",
+            "status", "selftest", "on", "off", "auto", "mark", "deep", "hammer", "server", "load", "census", "memory", "patches", "startup", "trace", "inspect", "busiest", "weather",
             "spawned", "spawnable", "leftovers", "spawns", "missing", "help",
         };
 
@@ -85,6 +85,7 @@ namespace Vigil.Core
                 "  vigil on | off | auto        recording switch (auto, the default: while in a world)",
                 "  vigil mark [note]            write a lag report now (key: " + markKey + ")",
                 string.Format(Ci, "  vigil deep [seconds]         time every method mods patch, {0} s by default", DeepSeconds),
+                string.Format(Ci, "  vigil hammer                 what holding a build tool costs, by mod: {0} s out, then {0} s put away", HammerSeconds),
                 "  vigil server on | off | auto | status    the server's recording switch (server admins)",
                 "Load tests",
                 "  vigil load [up|down]         load test against the dedicated server, " + Minutes(LoadPlan.For("both").TotalSeconds),
@@ -157,6 +158,18 @@ namespace Vigil.Core
                         "  how much of it the mods add. Automatic stutter reports pause meanwhile; F9 still works.",
                         "  Putting the timers in and taking them out costs some frame rate for a few seconds at each",
                         "  end. A slow stretch starts one on its own (Deep capture in the config).",
+                    };
+                case "hammer":
+                    return new List<string>
+                    {
+                        "vigil hammer",
+                        string.Format(Ci, "  A deep capture of {0} s that compares holding a build tool with having it put away.", 2 * HammerSeconds),
+                        string.Format(Ci, "  Stand still and hold the tool out with its menu shut for the first {0} s, then put it", HammerSeconds),
+                        "  away when the screen says so. Vigil-deep-<time>.txt then lists the game methods and each",
+                        "  mod's own patch code that cost more with the tool out than put away, per frame.",
+                        "  Without this, Vigil still notes every open and close of the build menu with its steps",
+                        "  in Vigil-events.tsv, and the session summary compares the frames with the tool out",
+                        "  and put away over the whole session (those frames come from different places).",
                     };
                 case "load":
                     return new List<string>

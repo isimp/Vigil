@@ -241,6 +241,7 @@ namespace Vigil.Recorder
                 float.TryParse(rest, NumberStyles.Float, CultureInfo.InvariantCulture, out secs);
                 return "Vigil: " + _recorder.StartDeep(secs > 0 ? secs : ConsoleHelp.DeepSeconds, "started from the console");
             }
+            if (word == "hammer") return "Vigil: " + _recorder.StartHammer();
             if (word == "census") return "Vigil: " + Safe(() => StartCensus(rest, toConsole: true));
             if (word == "memory") return "Vigil: " + Own(() => SceneCensus.WriteMemory(_dir));
             if (word == "patches") return "Vigil: " + Own(() => PatchWatch.WriteMap(_dir));

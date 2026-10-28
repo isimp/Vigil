@@ -44,6 +44,8 @@ namespace Vigil.Recorder
             public long DeepTicks; public long DeepCalls;
             public long DeepMaxFrameTicks;   // the longest single frame during the deep capture
             public bool SpikeQueued;        // split queued because one frame took long
+            // the same, only frames in the world with the build tool put away or out (menu shut)
+            public long RunAwayTicks, RunToolTicks, DeepAwayTicks, DeepToolTicks;
             // bytes allocated on the main thread inside the method, when the runtime can tell
             public long FrameAlloc, SecondAlloc, RunAlloc;
             // deep capture, the methods that took the most time: the stretch between the last prefix
@@ -119,6 +121,16 @@ namespace Vigil.Recorder
             new[] { "InventoryGui", "Show", "ph_inventory_open", Nested },
             new[] { "Hud", "TogglePieceSelection", "ph_build_menu", Nested },
             new[] { "BuildUi", "UpdatePieceButtons", "ph_build_buttons", Nested },
+            // The build menu's steps, for the line each open and close gets: the open, its tag
+            // buttons (the piece buttons are rebuilt inside them), one piece button's setup with its
+            // material check, the close, picking a piece, and the build HUD's update every frame.
+            new[] { "BuildUi", "OpenBuildMenu", "ph_build_open", Nested },
+            new[] { "BuildUi", "UpdateTagButtons", "ph_build_tags", Nested },
+            new[] { "BuildUiPieceButton", "Setup", "ph_build_setup", Nested },
+            new[] { "BuildUiPieceButton", "UpdateRequirements", "ph_build_checks", Nested },
+            new[] { "BuildUi", "Close", "ph_build_close", Nested },
+            new[] { "BuildUi", "OnSelectPiece", "ph_build_pick", Nested },
+            new[] { "Hud", "UpdateBuild", "ph_hud_build", "Hud.Update" },
             new[] { "Character", "CustomFixedUpdate", "ph_characters", Nested },
             new[] { "Humanoid", "CustomFixedUpdate", "ph_humanoids", Nested },
             new[] { "BaseAI", "UpdateAI", "ph_ai", Nested },
@@ -192,6 +204,9 @@ namespace Vigil.Recorder
         }
 
         public IReadOnlyList<Slot> Slots => s_slots;
+
+        /// <summary>The always-on timer of a game method ("BuildUi.OpenBuildMenu"), or null when it is not timed.</summary>
+        public Slot Game(string label) => s_slots.FirstOrDefault(s => !s.Deep && s.Mod == null && !s.Coroutine && s.Label == label);
         public IReadOnlyList<string> Missing => _missing;
         public IReadOnlyList<string> Failed => _failed;
         public int ModHooks => _modHooks;
@@ -419,7 +434,7 @@ namespace Vigil.Recorder
                         if (Hook(_deepHarmony, kv.Key, slot)) _deepMethods.Add(kv.Key);
                     }, elapsed, budgetMs);
                     if (_toHook.Count > 0) return false;
-                    foreach (var s in s_slots) { s.DeepTicks = 0; s.DeepCalls = 0; s.SplitCalls = 0; s.OrigRuns = 0; s.OrigTicks = 0; s.SplitWholeTicks = 0; s.DeepMaxFrameTicks = 0; s.SpikeQueued = false; }
+                    foreach (var s in s_slots) { s.DeepAwayTicks = 0; s.DeepToolTicks = 0; s.DeepTicks = 0; s.DeepCalls = 0; s.SplitCalls = 0; s.OrigRuns = 0; s.OrigTicks = 0; s.SplitWholeTicks = 0; s.DeepMaxFrameTicks = 0; s.SpikeQueued = false; }
                     _spikeSplits = 0;
                     _deep = DeepState.Running;
                     s_deepRunning = true;
@@ -724,7 +739,7 @@ namespace Vigil.Recorder
         /// Closes the frame: hands every slot used in it to <paramref name="sink"/>, folds the
         /// frame into the second and the session, and starts the next frame.
         /// </summary>
-        public void EndFrame(Action<Slot, long> sink)
+        public void EndFrame(Action<Slot, long> sink, BuildState build = BuildState.Change)
         {
             foreach (var s in s_touched)
             {
@@ -732,7 +747,14 @@ namespace Vigil.Recorder
                 s.SecondTicks += s.FrameTicks; s.SecondCalls += s.FrameCalls;
                 s.RunTicks += s.FrameTicks; s.RunCalls += s.FrameCalls;
                 s.SecondAlloc += s.FrameAlloc; s.RunAlloc += s.FrameAlloc;
-                if (s_deepRunning) { s.DeepTicks += s.FrameTicks; s.DeepCalls += s.FrameCalls; Spike(s); }
+                if (build == BuildState.Away) s.RunAwayTicks += s.FrameTicks;
+                else if (build == BuildState.Tool) s.RunToolTicks += s.FrameTicks;
+                if (s_deepRunning)
+                {
+                    s.DeepTicks += s.FrameTicks; s.DeepCalls += s.FrameCalls; Spike(s);
+                    if (build == BuildState.Away) s.DeepAwayTicks += s.FrameTicks;
+                    else if (build == BuildState.Tool) s.DeepToolTicks += s.FrameTicks;
+                }
                 s.FrameTicks = 0; s.FrameCalls = 0; s.FrameAlloc = 0;
             }
             s_touched.Clear();
