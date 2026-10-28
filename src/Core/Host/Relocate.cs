@@ -13,7 +13,7 @@ namespace Vigil.Core
     /// every other mod's patches (about 50 ms each way); while a piece moves, the ghost is updated twice
     /// a frame, by the game's <c>Player.LateUpdate</c> and again by EasyRelocate's Update; and a move
     /// could be left with no way out short of a relog. The ghost itself is a solid copy of the piece;
-    /// the spirit look lays the game's crypt ghost material over it.
+    /// the spirit look draws it see-through.
     /// </summary>
     internal static class Relocate
     {

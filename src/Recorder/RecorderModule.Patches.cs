@@ -67,7 +67,7 @@ namespace Vigil.Recorder
             RelocatePatch.FixesOn = _relocateFixes.Value;
             _relocateFixes.SettingChanged += (_, __) => RelocatePatch.FixesOn = _relocateFixes.Value;
             _relocateSpirit = Config.Bind("Patches", "EasyRelocateSpiritGhost", true,
-                "This game's own switch: the piece EasyRelocate moves is drawn as a see-through spirit with the game's crypt ghost material, keeping the piece's surface relief, " +
+                "This game's own switch: the piece EasyRelocate moves is drawn as a see-through spirit, " +
                 "pale blue where it can be placed and pale red where not, breathing slowly. Off, it is the solid copy EasyRelocate draws. It changes the next ghost.");
             RelocatePatch.SpiritOn = _relocateSpirit.Value;
             _relocateSpirit.SettingChanged += (_, __) => RelocatePatch.SpiritOn = _relocateSpirit.Value;
@@ -324,7 +324,7 @@ namespace Vigil.Recorder
             if (!_server) Ui.Row("On this game", Toned(RelocatePatch.FixesState, RelocatePatch.Problem != null ? ResultTone.Caution : _relocateFixes.Value && RelocatePatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             OwnSwitch("EasyRelocate's ghost is a spirit", _relocateSpirit, "EasyRelocateSpiritGhost",
-                "The piece EasyRelocate moves is drawn see-through with the game's crypt ghost material, keeping its surface relief: pale blue where it can be placed, pale red where not, breathing slowly. Off, it is the solid copy EasyRelocate draws. It changes the next ghost.");
+                "The piece EasyRelocate moves is drawn see-through: pale blue where it can be placed, pale red where not, breathing slowly. Off, it is the solid copy EasyRelocate draws. It changes the next ghost.");
             if (!_server) Ui.Row("On this game", Toned(RelocatePatch.SpiritState, RelocatePatch.Problem != null || RelocatePatch.SpiritProblem != null ? ResultTone.Caution : _relocateSpirit.Value && RelocatePatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");

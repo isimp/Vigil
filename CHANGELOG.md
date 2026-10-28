@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.43.2
+## 0.43.3
 
-*EasyRelocate's ghost is a spirit* now shows: the spirit took its see-through amount from the piece's own texture, whose alpha is mostly empty, so the ghost was drawn invisible. It is now pale blue (pale red where it cannot be placed) on a plain base that keeps the piece's surface relief, and the first spirit of a session notes its material in the game's log.
+*EasyRelocate's ghost is a spirit* now shows. The game's crypt ghost material drew the moving piece invisible; the spirit now uses a plain see-through material, pale blue where the piece can be placed and pale red where not, still breathing. The first spirit of a session notes its shader in the game's log.
 
 ## 0.43.1
 
@@ -10,7 +10,7 @@ Vigil now tracks what a build tool costs. Each second in `Vigil-timeline.tsv` ha
 
 ## 0.43.0
 
-Two new patches for EasyRelocate, each player's own switch, both on. *EasyRelocate: quicker, and a move always ends* (`Patches.EasyRelocateFixes`): the first grab of a session no longer freezes the game for about a second while EasyRelocate searches every mod for two mods that are not installed, a grab and the end of a move no longer cost about 50 ms each, and while a piece moves its ghost is updated once a frame instead of twice, so moving a piece costs what building with the hammer costs. A move now always ends: the grab key works while other keys are held, Esc ends it, a text box taking the keys ends it instead of freezing it, and an error in EasyRelocate ends it as a relog would. Each of these writes a `[Vigil] relocate` line to the game's log, so a ghost that still sticks shows why. *EasyRelocate's ghost is a spirit* (`Patches.EasyRelocateSpiritGhost`): the piece being moved is drawn see-through with the game's crypt ghost material, pale blue where it can be placed, pale red where not, breathing slowly.
+Two new patches for EasyRelocate, each player's own switch, both on. *EasyRelocate: quicker, and a move always ends* (`Patches.EasyRelocateFixes`): the first grab of a session no longer freezes the game for about a second while EasyRelocate searches every mod for two mods that are not installed, a grab and the end of a move no longer cost about 50 ms each, and while a piece moves its ghost is updated once a frame instead of twice, so moving a piece costs what building with the hammer costs. A move now always ends: the grab key works while other keys are held, Esc ends it, a text box taking the keys ends it instead of freezing it, and an error in EasyRelocate ends it as a relog would. Each of these writes a `[Vigil] relocate` line to the game's log, so a ghost that still sticks shows why. *EasyRelocate's ghost is a spirit* (`Patches.EasyRelocateSpiritGhost`): the piece being moved is drawn see-through, pale blue where it can be placed, pale red where not, breathing slowly.
 
 ## 0.42.10
 

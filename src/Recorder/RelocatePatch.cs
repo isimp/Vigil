@@ -17,9 +17,9 @@ namespace Vigil.Recorder
     /// a frame ago, and the ghost's place and status are read from the game's update; the grab key
     /// (with its own modifiers, whatever else is held), Esc, or a text box taking the keys ends a move;
     /// an error out of its Update during a move ends the move as a relog would.</para>
-    /// <para>Spirit: the moving ghost's materials are copies of the game's crypt ghost material
-    /// (<c>Ghost_mat</c>, the creature shader drawn see-through) on a white base with the piece's own normal map,
-    /// tinted pale blue, pale red where it cannot be placed, breathing slowly.</para>
+    /// <para>Spirit: the moving ghost's materials are see-through ones on a white base (Unity's lit
+    /// see-through diffuse where the game ships it, else the sprite shader), tinted pale blue, pale red
+    /// where it cannot be placed, breathing slowly.</para>
     /// </summary>
     internal static class RelocatePatch
     {
@@ -51,7 +51,6 @@ namespace Vigil.Recorder
 
         private static readonly AccessTools.FieldRef<Player, GameObject> Ghost = AccessTools.FieldRefAccess<Player, GameObject>("m_placementGhost");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
-        private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
         private static Relocate.Parts _parts;
         private static Func<bool> _moving;
@@ -60,7 +59,7 @@ namespace Vigil.Recorder
         private static Action<string> _log;
         private static GameObject _updatedGhost;
         private static int _updatedFrame = -10;
-        private static Material _spiritBase;
+        private static Shader _spiritShader;
         private static bool _spiritLooked;
         private static bool _spiritTold;
 
@@ -209,10 +208,10 @@ namespace Vigil.Recorder
         private static void MakeSpirit(GameObject ghost)
         {
             Sweep();
-            var look = SpiritBase();
-            if (look == null)
+            var shader = SpiritShader();
+            if (shader == null)
             {
-                SpiritProblem = "the game's crypt ghost material was not found";
+                SpiritProblem = "no see-through shader was found in this game";
                 return;
             }
             var made = new List<Material>();
@@ -222,12 +221,9 @@ namespace Vigil.Recorder
                 var mats = r.sharedMaterials;
                 for (int i = 0; i < mats.Length; i++)
                 {
-                    var m = new Material(look) { renderQueue = 3000 };
-                    // The crypt ghost material takes its see-through amount from its texture's alpha,
-                    // which a piece's texture mostly leaves empty: a white base lets the tint's alpha decide.
-                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", Texture2D.whiteTexture);
-                    CopyTexture(mats[i], m, "_BumpMap");
-                    if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", Texture2D.whiteTexture);
+                    // A white base: these shaders take the see-through amount from the texture's alpha
+                    // times the tint's, and a piece's texture mostly leaves its alpha empty.
+                    var m = new Material(shader) { renderQueue = 3000, mainTexture = Texture2D.whiteTexture };
                     mats[i] = m;
                     made.Add(m);
                 }
@@ -240,29 +236,32 @@ namespace Vigil.Recorder
             if (!_spiritTold)
             {
                 _spiritTold = true;
-                _log?.Invoke("[Vigil] relocate: spirit ghost for " + ghost.name + ": " + made.Count + " materials, shader " + look.shader.name
-                    + ", queue " + (made.Count > 0 ? made[0].renderQueue : look.renderQueue) + ", keywords " + string.Join(" ", look.shaderKeywords));
+                _log?.Invoke("[Vigil] relocate: spirit ghost for " + ghost.name + ": " + made.Count + " materials, shader " + shader.name + ", " + VertexColours(ghost));
             }
         }
 
-        private static void CopyTexture(Material from, Material to, string name)
+        /// <summary>Whether the ghost's first readable mesh has vertex colours, which the sprite shader multiplies in.</summary>
+        private static string VertexColours(GameObject ghost)
         {
-            if (from == null || !from.HasProperty(name) || !to.HasProperty(name)) return;
-            to.SetTexture(name, from.GetTexture(name));
-            to.SetTextureScale(name, from.GetTextureScale(name));
-            to.SetTextureOffset(name, from.GetTextureOffset(name));
+            var mesh = ghost.GetComponentsInChildren<MeshFilter>(true).Select(f => f.sharedMesh).FirstOrDefault(x => x != null);
+            if (mesh == null) return "no mesh";
+            if (!mesh.isReadable) return "mesh " + mesh.name + " not readable";
+            var colours = mesh.colors;
+            if (colours == null || colours.Length == 0) return "mesh " + mesh.name + " without vertex colours";
+            return "mesh " + mesh.name + " with vertex colours, alpha " + colours.Min(c => c.a).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+                + " to " + colours.Max(c => c.a).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        /// <summary>The game's crypt ghost material: <c>Ghost_mat</c> on the <c>Ghost</c> creature, looked up once.</summary>
-        private static Material SpiritBase()
+        /// <summary>
+        /// The spirit's shader, looked up once: Unity's lit see-through diffuse where the game ships it,
+        /// else the sprite shader EasyRelocate draws its own lines with.
+        /// </summary>
+        private static Shader SpiritShader()
         {
-            if (_spiritLooked) return _spiritBase;
-            var prefab = ZNetScene.instance != null ? ZNetScene.instance.GetPrefab("Ghost") : null;
-            if (prefab == null) return null;
+            if (_spiritLooked) return _spiritShader;
             _spiritLooked = true;
-            _spiritBase = prefab.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
-                .FirstOrDefault(m => m != null && m.name.StartsWith("Ghost_mat", StringComparison.Ordinal));
-            return _spiritBase;
+            _spiritShader = Shader.Find("Legacy Shaders/Transparent/Diffuse") ?? Shader.Find("Sprites/Default");
+            return _spiritShader;
         }
 
         private static Spirit SpiritOf(GameObject ghost)
@@ -284,12 +283,10 @@ namespace Vigil.Recorder
         {
             var t = Relocate.SpiritTint(spirit.Blocked, Time.time);
             var colour = new Color(t.R, t.G, t.B, t.A);
-            var glow = new Color(t.R * 0.6f, t.G * 0.6f, t.B * 0.6f, 1f);
             foreach (var m in spirit.Materials)
             {
                 if (m == null) continue;
                 m.SetColor(ColorId, colour);
-                m.SetColor(EmissionId, glow);
             }
         }
 

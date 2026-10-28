@@ -124,7 +124,7 @@ namespace Vigil.Tests
                 Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 2, spared: 340));
             Assert.Equal("off: this game's switch (Patches.EasyRelocateSpiritGhost)", Relocate.SpiritLine(on: false, found: true, problem: null));
             Assert.Equal("not needed: EasyRelocate is not installed", Relocate.SpiritLine(on: true, found: false, problem: null));
-            Assert.Equal("stepped aside: the game's crypt ghost material was not found", Relocate.SpiritLine(on: true, found: true, problem: "the game's crypt ghost material was not found"));
+            Assert.Equal("stepped aside: no see-through shader was found in this game", Relocate.SpiritLine(on: true, found: true, problem: "no see-through shader was found in this game"));
             Assert.Equal("working · the moving ghost is a see-through spirit", Relocate.SpiritLine(on: true, found: true, problem: null));
         }
 
