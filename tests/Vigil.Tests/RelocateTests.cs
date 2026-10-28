@@ -34,28 +34,50 @@ namespace Vigil.Tests
         public void The_grab_key_ends_a_move_even_while_another_key_is_held()
         {
             // BepInEx's shortcut check fails while any other key is held, so U alone did nothing while walking.
-            Assert.Equal("the grab key", Relocate.CancelReason(on: true, moving: true, grabKeyDown: true, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false));
+            Assert.Equal("the grab key", Relocate.CancelReason(on: true, moving: true, grabKeyDown: true, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false, toolInHand: false));
         }
 
         [Fact]
         public void Escape_ends_a_move()
         {
-            Assert.Equal("Esc", Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: true, textFieldFocused: false));
+            Assert.Equal("Esc", Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: true, textFieldFocused: false, toolInHand: false));
         }
 
         [Fact]
         public void A_text_box_taking_the_keys_ends_a_move_instead_of_freezing_it()
         {
-            Assert.Equal("a text box took the keys", Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: true));
+            Assert.Equal("a text box took the keys", Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: true, toolInHand: false));
         }
 
         [Fact]
         public void Nothing_is_ended_outside_a_move_with_the_switch_off_or_without_the_grab_keys_own_modifiers()
         {
-            Assert.Null(Relocate.CancelReason(on: true, moving: false, grabKeyDown: true, grabModifiersHeld: true, escapeDown: true, textFieldFocused: true));
-            Assert.Null(Relocate.CancelReason(on: false, moving: true, grabKeyDown: true, grabModifiersHeld: true, escapeDown: true, textFieldFocused: true));
-            Assert.Null(Relocate.CancelReason(on: true, moving: true, grabKeyDown: true, grabModifiersHeld: false, escapeDown: false, textFieldFocused: false));
-            Assert.Null(Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false));
+            Assert.Null(Relocate.CancelReason(on: true, moving: false, grabKeyDown: true, grabModifiersHeld: true, escapeDown: true, textFieldFocused: true, toolInHand: false));
+            Assert.Null(Relocate.CancelReason(on: false, moving: true, grabKeyDown: true, grabModifiersHeld: true, escapeDown: true, textFieldFocused: true, toolInHand: false));
+            Assert.Null(Relocate.CancelReason(on: true, moving: true, grabKeyDown: true, grabModifiersHeld: false, escapeDown: false, textFieldFocused: false, toolInHand: false));
+            Assert.Null(Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false, toolInHand: false));
+        }
+
+        [Fact]
+        public void Taking_a_build_tool_in_hand_ends_a_move()
+        {
+            // Equipping the hammer, hoe or cultivator hands the game its piece table in place of EasyRelocate's.
+            Assert.Equal("a build tool was taken in hand", Relocate.CancelReason(on: true, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false, toolInHand: true));
+            Assert.Null(Relocate.CancelReason(on: false, moving: true, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false, toolInHand: true));
+            Assert.Null(Relocate.CancelReason(on: true, moving: false, grabKeyDown: false, grabModifiersHeld: true, escapeDown: false, textFieldFocused: false, toolInHand: true));
+        }
+
+        [Fact]
+        public void A_piece_cannot_be_grabbed_with_a_build_tool_in_hand_and_no_grab_is_offered()
+        {
+            Assert.True(Relocate.BlocksGrab(on: true, toolInHand: true));
+        }
+
+        [Fact]
+        public void A_piece_can_be_grabbed_with_no_build_tool_in_hand_or_the_switch_off()
+        {
+            Assert.False(Relocate.BlocksGrab(on: true, toolInHand: false));
+            Assert.False(Relocate.BlocksGrab(on: false, toolInHand: true));
         }
 
         [Fact]
@@ -142,6 +164,8 @@ namespace Vigil.Tests
             Assert.Equal("Create", parts.CreateGhost.Name);
             Assert.Equal("Apply", parts.Tint.Name);
             Assert.Equal("_placementValid", parts.PlacementValid.Name);
+            Assert.Equal("TryBeginRelocate", parts.TryBegin.Name);
+            Assert.Equal("LateUpdate", parts.HoverHint.Name);
         }
 
         [Fact]
@@ -162,6 +186,7 @@ namespace Vigil.Tests
                 case Relocate.UtilsType: return typeof(RelocateUtils);
                 case Relocate.GhostBuilderType: return typeof(GhostBuilder);
                 case Relocate.GhostTintType: return typeof(GhostTint);
+                case Relocate.HoverHintType: return typeof(RelocateHoverHint);
                 default: return null;
             }
         }
@@ -185,6 +210,7 @@ namespace Vigil.Tests
             private bool _placementValid;
             internal static bool IsMoving { get; private set; }
             private void Update() { }
+            private void TryBeginRelocate(Player player) { }
             private void UpdateGhostFromVanilla(Player player) { }
             private void CancelRelocate() { }
             private void AbortRelocate() { }
@@ -222,6 +248,11 @@ namespace Vigil.Tests
         private static class GhostTint
         {
             private static void Apply(GameObject ghost, bool invalid) { }
+        }
+
+        private sealed class RelocateHoverHint
+        {
+            private void LateUpdate() { }
         }
 
         // The controller with its ghost update renamed, as an update might.

@@ -15,7 +15,8 @@ namespace Vigil.Recorder
     /// type; the six hooks it puts in for a move go in once at the main menu and stay; while a piece
     /// moves, its own ghost update is left out when the game updated that ghost in <c>Player.LateUpdate</c>
     /// a frame ago, and the ghost's place and status are read from the game's update; the grab key
-    /// (with its own modifiers, whatever else is held), Esc, or a text box taking the keys ends a move;
+    /// (with its own modifiers, whatever else is held), Esc, a text box taking the keys, or a build tool
+    /// taken in hand ends a move, and with a build tool in hand no piece is grabbed or offered;
     /// an error out of its Update during a move ends the move as a relog would.</para>
     /// <para>Spirit: the moving ghost's materials are see-through ones on a white base (Unity's lit
     /// see-through diffuse where the game ships it, else the sprite shader), tinted pale blue, pale red
@@ -50,6 +51,7 @@ namespace Vigil.Recorder
         public static string SpiritState => Relocate.SpiritLine(SpiritOn, Found, Problem ?? SpiritProblem);
 
         private static readonly AccessTools.FieldRef<Player, GameObject> Ghost = AccessTools.FieldRefAccess<Player, GameObject>("m_placementGhost");
+        private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> RightItem = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_rightItem");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private static Relocate.Parts _parts;
@@ -95,6 +97,8 @@ namespace Vigil.Recorder
                 h.Patch(_parts.TryPatch, prefix: Hm(nameof(BeforeTypeSearch)));
                 h.Patch(_parts.RemoveHooks, prefix: Hm(nameof(BeforeRemoveHooks)));
                 h.Patch(_parts.Update, prefix: Hm(nameof(BeforeUpdate)), finalizer: Hm(nameof(AfterUpdate)));
+                h.Patch(_parts.TryBegin, prefix: Hm(nameof(BeforeTryBegin)));
+                h.Patch(_parts.HoverHint, prefix: Hm(nameof(BeforeHoverHint)));
                 h.Patch(_parts.UpdateGhost, prefix: Hm(nameof(BeforeGhostUpdate)));
                 h.Patch(AccessTools.Method(typeof(Player), "LateUpdate"), postfix: Hm(nameof(AfterPlayerLateUpdate)));
                 h.Patch(_parts.CreateGhost, postfix: Hm(nameof(AfterCreateGhost)));
@@ -128,11 +132,24 @@ namespace Vigil.Recorder
             var key = _grabKey?.BoxedValue is KeyboardShortcut k ? k : KeyboardShortcut.Empty;
             bool grab = key.MainKey != KeyCode.None && Input.GetKeyDown(key.MainKey);
             bool modifiers = key.Modifiers.All(Input.GetKey);
-            string reason = Relocate.CancelReason(true, true, grab, modifiers, Input.GetKeyDown(KeyCode.Escape), _textField());
+            string reason = Relocate.CancelReason(true, true, grab, modifiers, Input.GetKeyDown(KeyCode.Escape), _textField(), ToolInHand(Player.m_localPlayer));
             // EasyRelocate ends a move on its grab key itself when nothing else is held.
             if (reason == null || (grab && modifiers && key.IsDown())) return true;
             End(__instance, reason);
             return false;
+        }
+
+        // TryBeginRelocate(Player player): EasyRelocate's grab, looked at every frame no piece moves.
+        private static bool BeforeTryBegin(Player __0) => !Relocate.BlocksGrab(FixesOn, ToolInHand(__0));
+
+        private static bool BeforeHoverHint() => !Relocate.BlocksGrab(FixesOn, ToolInHand(Player.m_localPlayer));
+
+        /// <summary>Whether the right hand holds an item with a piece table (hammer, hoe, cultivator), the game's own test for build mode.</summary>
+        private static bool ToolInHand(Player player)
+        {
+            if (player == null) return false;
+            var item = RightItem(player);
+            return item?.m_shared != null && item.m_shared.m_buildPieces != null;
         }
 
         private static Exception AfterUpdate(object __instance, Exception __exception)

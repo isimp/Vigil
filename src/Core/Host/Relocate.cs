@@ -26,6 +26,7 @@ namespace Vigil.Core
         public const string UtilsType = "EasyRelocate.RelocateUtils";
         public const string GhostBuilderType = "EasyRelocate.GhostBuilder";
         public const string GhostTintType = "EasyRelocate.GhostTint";
+        public const string HoverHintType = "EasyRelocate.RelocateHoverHint";
 
         /// <summary>The seconds of one breath of the spirit ghost.</summary>
         public const float PulseSeconds = 2.4f;
@@ -41,16 +42,22 @@ namespace Vigil.Core
         /// <summary>
         /// Why a move ends this frame, or null. The grab key counts with its own modifiers held whatever
         /// else is held (BepInEx's shortcut check fails while any other key is down); Esc ends it too; a
-        /// text box taking the keys ends it, where EasyRelocate would stop following input and freeze it.
+        /// text box taking the keys ends it, where EasyRelocate would stop following input and freeze it;
+        /// a build tool taken in hand ends it, since equipping one hands the game the tool's piece table in
+        /// place of the one EasyRelocate moves with.
         /// </summary>
-        public static string CancelReason(bool on, bool moving, bool grabKeyDown, bool grabModifiersHeld, bool escapeDown, bool textFieldFocused)
+        public static string CancelReason(bool on, bool moving, bool grabKeyDown, bool grabModifiersHeld, bool escapeDown, bool textFieldFocused, bool toolInHand)
         {
             if (!on || !moving) return null;
             if (grabKeyDown && grabModifiersHeld) return "the grab key";
             if (escapeDown) return "Esc";
             if (textFieldFocused) return "a text box took the keys";
+            if (toolInHand) return "a build tool was taken in hand";
             return null;
         }
+
+        /// <summary>Whether a grab is refused, and its hover hint left out, because a build tool (hammer, hoe, cultivator) is in hand.</summary>
+        public static bool BlocksGrab(bool on, bool toolInHand) => on && toolInHand;
 
         /// <summary>Whether an error out of EasyRelocate's Update ends the move, as a relog would.</summary>
         public static bool EndsAfterError(bool on, bool moving, bool failed) => on && moving && failed;
@@ -104,7 +111,7 @@ namespace Vigil.Core
         /// <summary>EasyRelocate's members the patches use, found by name and shape.</summary>
         public sealed class Parts
         {
-            public MethodInfo Update, UpdateGhost, Cancel, Abort, ForceReset, SourceValid, IsMoving;
+            public MethodInfo Update, TryBegin, UpdateGhost, Cancel, Abort, ForceReset, SourceValid, IsMoving, HoverHint;
             public FieldInfo GhostPosition, GhostRotation, PlacementValid, GrabKey;
             public MethodInfo TryPatch, ApplyHooks, RemoveHooks, HarmonyInstance, TextFieldFocused, CreateGhost, Tint;
         }
@@ -119,10 +126,13 @@ namespace Vigil.Core
             var utils = type(UtilsType);
             var builder = type(GhostBuilderType);
             var tint = type(GhostTintType);
-            if (controller == null || compat == null || hooks == null || plugin == null || utils == null || builder == null || tint == null) return null;
+            var hint = type(HoverHintType);
+            if (controller == null || compat == null || hooks == null || plugin == null || utils == null || builder == null || tint == null || hint == null) return null;
             var p = new Parts
             {
                 Update = Method(controller, "Update", 0, typeof(void)),
+                TryBegin = Method(controller, "TryBeginRelocate", 1, typeof(void), "Player"),
+                HoverHint = Method(hint, "LateUpdate", 0, typeof(void)),
                 UpdateGhost = Method(controller, "UpdateGhostFromVanilla", 1, typeof(void), "Player"),
                 Cancel = Method(controller, "CancelRelocate", 0, typeof(void)),
                 Abort = Method(controller, "AbortRelocate", 0, typeof(void)),
@@ -141,7 +151,7 @@ namespace Vigil.Core
                 CreateGhost = Method(builder, "Create", 2, null, "Piece", "GameObject"),
                 Tint = Method(tint, "Apply", 2, typeof(void), "GameObject", "Boolean"),
             };
-            bool whole = p.Update != null && p.UpdateGhost != null && p.Cancel != null && p.Abort != null && p.ForceReset != null && p.SourceValid != null
+            bool whole = p.Update != null && p.TryBegin != null && p.HoverHint != null && p.UpdateGhost != null && p.Cancel != null && p.Abort != null && p.ForceReset != null && p.SourceValid != null
                 && p.IsMoving != null && p.IsMoving.ReturnType == typeof(bool) && p.GhostPosition != null && p.GhostRotation != null && p.PlacementValid != null
                 && p.GrabKey != null && p.TryPatch != null && p.ApplyHooks != null && p.RemoveHooks != null && p.HarmonyInstance != null
                 && p.TextFieldFocused != null && p.CreateGhost != null && p.CreateGhost.ReturnType.Name == "GameObject" && p.Tint != null;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.11
+
+*EasyRelocate: quicker, and a move always ends* also ends a move when a hammer, hoe, cultivator or any other build tool is taken in hand, and with one in hand no piece is grabbed and the hover line offering the grab is left out. Equipping such a tool during a move handed the game the tool's build pieces in place of the moving piece.
+
 ## 0.43.10
 
 With mods that add repair tools of their own, the build menu's repair corner keeps the game's own repair hammer (`piece_repair`) instead of the last repair tool the game happened to pick, and the game treats it as its repair button. The mods' repair tools then have no button in the menu. Without the game's own repair piece in the list, the last one stays, as the game does it.

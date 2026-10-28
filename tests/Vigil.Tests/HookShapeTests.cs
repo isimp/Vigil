@@ -49,6 +49,7 @@ namespace Vigil.Tests
             Assert.Matches(@"BeforeTint\(\s*GameObject\s+__0\s*,\s*bool\s+__1\s*\)", code);
             Assert.Matches(@"AfterCreateGhost\(\s*GameObject\s+__result\s*\)", code);
             Assert.Matches(@"BeforeGhostUpdate\(\s*object\s+__instance\s*,\s*Player\s+__0\s*\)", code);
+            Assert.Matches(@"BeforeTryBegin\(\s*Player\s+__0\s*\)", code);
         }
 
         private static string ProjectRoot()
