@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.5
+
+A new patch for ComfortMe, *ComfortMe redraws its badges only on a change* (`Patches.ComfortMeBadges`, each player's own switch, on). ComfortMe redrew the comfort badge on every piece button of the build menu on every frame the menu was open, over a thousand on the *All* tab. Now it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed. The badges look the same. The *Patches* tab and the self-test say how many redraws were skipped and what one costs when it runs.
+
 ## 0.43.4
 
 A new patch, *The build menu opens faster* (`Patches.BuildMenuFaster`, each player's own switch, on). Opening the build menu rebuilt one button per piece, over a thousand on the *All* tab with the piece mods, and set up the menu's arrow-key and controller navigation while it was still hidden, where that only forced every canvas to update. Now, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes. Each open's line in `Vigil-events.tsv` now says whether its buttons were kept and what the navigation setup took.

@@ -11,7 +11,7 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _comfortBadges, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -76,6 +76,11 @@ namespace Vigil.Recorder
                 "On, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes.");
             BuildMenuPatch.On = _buildMenu.Value;
             _buildMenu.SettingChanged += (_, __) => BuildMenuPatch.On = _buildMenu.Value;
+            _comfortBadges = Config.Bind("Patches", "ComfortMeBadges", true,
+                "This game's own switch: ComfortMe redraws the badge on every piece button of the build menu on every frame the menu is open. " +
+                "On, it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed.");
+            ComfortBadgesPatch.On = _comfortBadges.Value;
+            _comfortBadges.SettingChanged += (_, __) => ComfortBadgesPatch.On = _comfortBadges.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -166,6 +171,8 @@ namespace Vigil.Recorder
             if (RelocatePatch.Problem != null) _host.Log.LogWarning("Vigil: the EasyRelocate patches stepped aside: " + RelocatePatch.Problem);
             if (!_server) BuildMenuPatch.Hook();
             if (BuildMenuPatch.Problem != null) _host.Log.LogWarning("Vigil: the build menu patch stepped aside: " + BuildMenuPatch.Problem);
+            if (!_server) ComfortBadgesPatch.Hook();
+            if (ComfortBadgesPatch.Problem != null) _host.Log.LogWarning("Vigil: the ComfortMe badge patch stepped aside: " + ComfortBadgesPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -195,7 +202,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 12 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 13 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -337,6 +344,10 @@ namespace Vigil.Recorder
             OwnSwitch("The build menu opens faster", _buildMenu, "BuildMenuFaster",
                 "Opening the build menu rebuilds one button per piece, and sets up the menu's arrow-key and controller navigation while it is still hidden, where that only forces every canvas to update. On, when the menu would show the same pieces in the same order, its buttons stay and only their material colours and favourite stars are refreshed, and the navigation is set up once the menu is shown. Nothing in the menu changes. Each open's line in Vigil-events.tsv says whether its buttons were kept.");
             if (!_server) Ui.Row("On this game", Toned(BuildMenuPatch.State, BuildMenuPatch.Problem != null ? ResultTone.Caution : _buildMenu.Value ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("ComfortMe redraws its badges only on a change", _comfortBadges, "ComfortMeBadges",
+                "ComfortMe redraws the badge on every piece button of the build menu on every frame the menu is open, over a thousand on the All tab. On, it redraws them only when what they show can have changed: a new comfort snapshot (ComfortMe makes one at least every 0.2 s, and when you move), another player, the menu opening or closing, its buttons rebuilt, or one of ComfortMe's settings changed. Badges look the same; one that follows your materials follows them within 0.2 s, as ComfortMe's comfort does.");
+            if (!_server) Ui.Row("On this game", Toned(ComfortBadgesPatch.State, ComfortBadgesPatch.Problem != null ? ResultTone.Caution : _comfortBadges.Value && ComfortBadgesPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");
             Ui.BeginFormLine("Switch");

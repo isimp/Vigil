@@ -521,6 +521,11 @@ namespace Vigil.Recorder
                         state.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                         : state.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
                         : SelfTestReport.Result.Info, state));
+                string comfort = ComfortBadgesPatch.State;
+                checks.Add(new SelfTestReport.Check(area, "game patch: ComfortMe redraws its badges only on a change",
+                    comfort.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
+                    : comfort.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
+                    : SelfTestReport.Result.Info, comfort));
                 string menu = BuildMenuPatch.State;
                 checks.Add(new SelfTestReport.Check(area, "game patch: the build menu opens faster",
                     menu.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
