@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.10
+
+With mods that add repair tools of their own, the build menu's repair corner keeps the game's own repair hammer (`piece_repair`) instead of the last repair tool the game happened to pick, and the game treats it as its repair button. The mods' repair tools then have no button in the menu. Without the game's own repair piece in the list, the last one stays, as the game does it.
+
 ## 0.43.9
 
 *The build menu opens faster* also clears the stray repair buttons. The game makes a repair button for every repair or remove piece but keeps, and later removes, only the last one, so with mods that add their own repair tools two or more were left behind on every rebuild of the menu and piled up over a session. After each refresh of the buttons every repair button but the game's own is removed; the *Patches* tab counts them.

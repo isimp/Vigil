@@ -15,6 +15,9 @@ namespace Vigil.Core
     internal static class MenuReuse
     {
         /// <summary>Whether the buttons can stay, and if not, why.</summary>
+        /// <summary>The game's own repair piece, the hammer's repair tool.</summary>
+        public const string GameRepairPiece = "piece_repair";
+
         public enum Diff { Same, NotShown, Empty, MorePieces, FewerPieces, OtherPiece, RepairChanged }
 
         /// <param name="wanted">The pieces the game would show now, in its order, repair pieces among them.</param>
@@ -24,20 +27,24 @@ namespace Vigil.Core
         /// <param name="shownSpecial">The repair button's piece, or null when there is none.</param>
         /// <param name="allShown">Every button still exists and is shown.</param>
         /// <param name="at">The button where another piece stands, or -1.</param>
-        public static Diff Compare<T>(IList<T> wanted, IList<T> shown, Func<T, bool> special, bool showTags, T shownSpecial, bool allShown, out int at) where T : class
+        /// <param name="preferred">The game's own repair piece, which the patch keeps as the repair button whenever it is in the list; null for none.</param>
+        public static Diff Compare<T>(IList<T> wanted, IList<T> shown, Func<T, bool> special, bool showTags, T shownSpecial, bool allShown, out int at, Func<T, bool> preferred = null) where T : class
         {
             at = -1;
             if (!allShown) return Diff.NotShown;
             if (wanted.Count == 0) return Diff.Empty;
             // The game makes a button for every repair or remove piece and keeps the last as its
-            // repair button, so with several the last one is the one to compare.
+            // repair button; the patch keeps the game's own repair piece instead when it is there.
             T expectedSpecial = null;
+            bool preferredFound = false;
             int next = 0;
             foreach (var piece in wanted)
             {
                 if (special(piece))
                 {
-                    if (showTags) expectedSpecial = piece;
+                    if (!showTags || preferredFound) continue;
+                    expectedSpecial = piece;
+                    preferredFound = preferred != null && preferred(piece);
                     continue;
                 }
                 if (next >= shown.Count) return Diff.MorePieces;
@@ -54,6 +61,17 @@ namespace Vigil.Core
 
         public static bool Reuse<T>(IList<T> wanted, IList<T> shown, Func<T, bool> special, bool showTags, T shownSpecial, bool allShown) where T : class =>
             Compare(wanted, shown, special, showTags, shownSpecial, allShown, out _) == Diff.Same;
+
+        /// <summary>
+        /// The repair button the corner keeps: the first (newest, as the game puts each new one
+        /// first) for the game's own repair piece, else the one the game picked.
+        /// </summary>
+        public static T PickRepair<T>(IEnumerable<T> buttons, Func<T, bool> preferred, T gameOwn) where T : class
+        {
+            foreach (var b in buttons)
+                if (preferred(b)) return b;
+            return gameOwn;
+        }
 
         public static string Words(Diff diff)
         {

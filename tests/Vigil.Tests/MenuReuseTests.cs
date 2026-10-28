@@ -126,6 +126,42 @@ namespace Vigil.Tests
             Assert.Equal("working · buttons kept on 3 of 7 opens", MenuReuse.StateLine(true, null, 3, 4, MenuReuse.Diff.Same));
         }
 
+        // ---- the game's own repair piece is the repair button whenever it is in the list
+
+        [Fact]
+        public void The_games_own_repair_piece_is_the_repair_button_when_mods_add_their_own()
+        {
+            var scroll = new P("GB_Repair_Scroll", special: true);
+            var hammer = new P("OP_Repair_Hammer", special: true);
+            var wanted = new[] { Repair, Wall, scroll, hammer };
+            Assert.Equal(MenuReuse.Diff.Same, MenuReuse.Compare(wanted, new[] { Wall }, p => p.Special, true, Repair, true, out _, p => p == Repair));
+            Assert.Equal(MenuReuse.Diff.RepairChanged, MenuReuse.Compare(wanted, new[] { Wall }, p => p.Special, true, hammer, true, out _, p => p == Repair));
+        }
+
+        [Fact]
+        public void Without_the_games_own_repair_piece_the_last_one_stays_the_repair_button()
+        {
+            var scroll = new P("GB_Repair_Scroll", special: true);
+            var hammer = new P("OP_Repair_Hammer", special: true);
+            Assert.Equal(MenuReuse.Diff.Same, MenuReuse.Compare(new[] { Wall, scroll, hammer }, new[] { Wall }, p => p.Special, true, hammer, true, out _, p => p == Repair));
+        }
+
+        [Fact]
+        public void The_corner_keeps_the_games_own_repair_button_over_the_one_the_game_picked()
+        {
+            var own = new P("piece_repair"); var hammer = new P("OP_Repair_Hammer"); var scroll = new P("GB_Repair_Scroll");
+            Assert.Same(own, MenuReuse.PickRepair(new[] { hammer, scroll, own }, b => b == own, gameOwn: hammer));
+            Assert.Same(hammer, MenuReuse.PickRepair(new[] { hammer, scroll }, b => b == own, gameOwn: hammer));
+        }
+
+        [Fact]
+        public void Of_several_buttons_for_the_games_own_repair_piece_the_newest_stays()
+        {
+            // The game puts each new repair button first in the corner.
+            var newer = new P("piece_repair"); var older = new P("piece_repair");
+            Assert.Same(newer, MenuReuse.PickRepair(new[] { newer, older }, b => b.Name == "piece_repair", gameOwn: null));
+        }
+
         // ---- stray repair buttons: the game makes one per repair piece and removes only its own
 
         [Fact]

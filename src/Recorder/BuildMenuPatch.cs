@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
@@ -116,7 +117,7 @@ namespace Vigil.Recorder
                     if (b == null || !b.gameObject.activeSelf) { allShown = false; break; }
                     s_shown.Add(b.Piece);
                 }
-                var diff = MenuReuse.Compare(s_wanted, s_shown, IsSpecial, list.ShowTags, special != null ? special.Piece : null, allShown, out int at);
+                var diff = MenuReuse.Compare(s_wanted, s_shown, IsSpecial, list.ShowTags, special != null ? special.Piece : null, allShown, out int at, IsGameRepair);
                 LastDiff = diff;
                 if (diff != MenuReuse.Diff.Same)
                 {
@@ -169,7 +170,11 @@ namespace Vigil.Recorder
                     var b = corner.GetChild(i).GetComponent<BuildUiPieceButton>();
                     if (b != null) s_cornerButtons.Add(b);
                 }
-                foreach (var stray in MenuReuse.Strays(s_cornerButtons, s_special(__instance), b => b.gameObject.activeSelf && !ReferenceEquals(b, s_gameRemoves)))
+                Func<BuildUiPieceButton, bool> live = b => b.gameObject.activeSelf && !ReferenceEquals(b, s_gameRemoves);
+                // The game's own repair piece stays the repair button when mods add repair tools of their own.
+                var own = MenuReuse.PickRepair(s_cornerButtons.Where(live), b => IsGameRepair(b.Piece), s_special(__instance));
+                if (own != null && !ReferenceEquals(own, s_special(__instance))) s_special(__instance) = own;
+                foreach (var stray in MenuReuse.Strays(s_cornerButtons, own, live))
                 {
                     stray.gameObject.SetActive(false);
                     UnityEngine.Object.Destroy(stray.gameObject);
@@ -184,6 +189,8 @@ namespace Vigil.Recorder
         }
 
         private static bool IsSpecial(Piece p) => p == null || p.m_repairPiece || p.m_removePiece;
+
+        private static bool IsGameRepair(Piece p) => p != null && p.m_repairPiece && p.gameObject.name == MenuReuse.GameRepairPiece;
 
         private static string Name(Piece p) => p != null ? p.gameObject.name : "none";
 
