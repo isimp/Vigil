@@ -39,7 +39,10 @@ namespace Vigil.Recorder
 
         public static MenuReuse.Diff LastDiff { get; private set; }
 
-        public static string State => MenuReuse.StateLine(On, Problem, Kept, Rebuilt, LastDiff);
+        /// <summary>Stray repair buttons removed since the start.</summary>
+        public static long Strays { get; private set; }
+
+        public static string State => MenuReuse.StateLine(On, Problem, Kept, Rebuilt, LastDiff, Strays);
 
         private static Action<string> s_log;
         private static readonly HashSet<MenuReuse.Diff> s_logged = new HashSet<MenuReuse.Diff>();
@@ -49,6 +52,9 @@ namespace Vigil.Recorder
         private static AccessTools.FieldRef<BuildUi, int> s_list, s_tag, s_count;
         private static AccessTools.FieldRef<BuildUi, List<BuildUiPieceButton>> s_buttons;
         private static AccessTools.FieldRef<BuildUi, BuildUiPieceButton> s_special;
+        private static AccessTools.FieldRef<BuildUi, RectTransform> s_corner;
+        private static readonly List<BuildUiPieceButton> s_cornerButtons = new List<BuildUiPieceButton>();
+        private static BuildUiPieceButton s_gameRemoves;
         private static Func<BuildUi, Navigation> s_specialNavigation;
         private static readonly List<Piece> s_wanted = new List<Piece>();
         private static readonly List<Piece> s_shown = new List<Piece>();
@@ -61,7 +67,7 @@ namespace Vigil.Recorder
                 var update = AccessTools.DeclaredMethod(typeof(BuildUi), "UpdatePieceButtons");
                 var navigation = AccessTools.DeclaredMethod(typeof(BuildUi), "ConfigureButtonNavigation");
                 var specialNavigation = AccessTools.DeclaredMethod(typeof(BuildUi), "GetSpecialButtonNavigation");
-                string[] fields = { "m_currentBuildTool", "m_pieceLists", "m_currentPieceList", "m_currentTagId", "m_availablePieceCount", "m_pieceButtons", "m_specialPieceButton" };
+                string[] fields = { "m_currentBuildTool", "m_pieceLists", "m_currentPieceList", "m_currentTagId", "m_availablePieceCount", "m_pieceButtons", "m_specialPieceButton", "m_specialButtonsContainer" };
                 if (update == null || navigation == null || specialNavigation == null || specialNavigation.ReturnType != typeof(Navigation) ||
                     Array.Exists(fields, f => AccessTools.Field(typeof(BuildUi), f) == null))
                 {
@@ -75,9 +81,10 @@ namespace Vigil.Recorder
                 s_count = AccessTools.FieldRefAccess<BuildUi, int>("m_availablePieceCount");
                 s_buttons = AccessTools.FieldRefAccess<BuildUi, List<BuildUiPieceButton>>("m_pieceButtons");
                 s_special = AccessTools.FieldRefAccess<BuildUi, BuildUiPieceButton>("m_specialPieceButton");
+                s_corner = AccessTools.FieldRefAccess<BuildUi, RectTransform>("m_specialButtonsContainer");
                 s_specialNavigation = AccessTools.MethodDelegate<Func<BuildUi, Navigation>>(specialNavigation);
                 var harmony = new Harmony(HarmonyId);
-                harmony.Patch(update, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeUpdatePieceButtons)));
+                harmony.Patch(update, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeUpdatePieceButtons)), postfix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(AfterUpdatePieceButtons)));
                 harmony.Patch(navigation, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeNavigation)));
             }
             catch (Exception e)
@@ -88,6 +95,8 @@ namespace Vigil.Recorder
 
         private static bool BeforeUpdatePieceButtons(BuildUi __instance)
         {
+            // The game removes this one itself when it rebuilds, at the frame's end.
+            try { s_gameRemoves = s_special != null ? s_special(__instance) : null; } catch (Exception) { s_gameRemoves = null; }
             if (!On || Problem != null || __instance.gameObject.activeSelf) return true;
             try
             {
@@ -141,6 +150,36 @@ namespace Vigil.Recorder
                 // Left to the game from here on; it rebuilds the buttons as it always did.
                 Problem = "the build menu refresh failed: " + e.GetType().Name + " " + e.Message;
                 return true;
+            }
+        }
+
+        // After the buttons are rebuilt or kept: the repair buttons the game made for all but the last
+        // repair piece and never removes. A removed one is hidden at once, as Destroy waits for the
+        // frame's end and the buttons can be refreshed twice in a frame.
+        private static void AfterUpdatePieceButtons(BuildUi __instance)
+        {
+            if (!On || Problem != null) return;
+            try
+            {
+                var corner = s_corner(__instance);
+                if (corner == null) return;
+                s_cornerButtons.Clear();
+                for (int i = 0; i < corner.childCount; i++)
+                {
+                    var b = corner.GetChild(i).GetComponent<BuildUiPieceButton>();
+                    if (b != null) s_cornerButtons.Add(b);
+                }
+                foreach (var stray in MenuReuse.Strays(s_cornerButtons, s_special(__instance), b => b.gameObject.activeSelf && !ReferenceEquals(b, s_gameRemoves)))
+                {
+                    stray.gameObject.SetActive(false);
+                    UnityEngine.Object.Destroy(stray.gameObject);
+                    Strays++;
+                }
+                s_cornerButtons.Clear();
+            }
+            catch (Exception e)
+            {
+                Problem = "the repair corner clean-up failed: " + e.GetType().Name + " " + e.Message;
             }
         }
 

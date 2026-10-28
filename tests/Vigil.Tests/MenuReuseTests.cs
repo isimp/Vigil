@@ -126,6 +126,35 @@ namespace Vigil.Tests
             Assert.Equal("working · buttons kept on 3 of 7 opens", MenuReuse.StateLine(true, null, 3, 4, MenuReuse.Diff.Same));
         }
 
+        // ---- stray repair buttons: the game makes one per repair piece and removes only its own
+
+        [Fact]
+        public void Every_repair_button_but_the_games_own_is_a_stray()
+        {
+            var own = new P("own"); var stray1 = new P("stray1"); var stray2 = new P("stray2");
+            Assert.Equal(new[] { stray1, stray2 }, MenuReuse.Strays(new[] { stray1, own, stray2 }, own, c => true));
+        }
+
+        [Fact]
+        public void Anything_in_the_corner_that_is_no_repair_button_stays()
+        {
+            var own = new P("own"); var other = new P("a mod's label");
+            Assert.Empty(MenuReuse.Strays(new[] { own, other }, own, c => c != other));
+        }
+
+        [Fact]
+        public void Without_a_repair_button_of_the_game_every_repair_button_is_a_stray()
+        {
+            var a = new P("a");
+            Assert.Equal(new[] { a }, MenuReuse.Strays(new[] { a }, null, c => true));
+        }
+
+        [Fact]
+        public void The_state_line_counts_the_strays_removed()
+        {
+            Assert.Equal("working · buttons kept on 3 of 7 opens · 26 stray repair buttons removed", MenuReuse.StateLine(true, null, 3, 4, MenuReuse.Diff.Same, 26));
+        }
+
         [Fact]
         public void Navigation_is_set_up_only_while_the_menu_is_shown()
         {

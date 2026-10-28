@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.9
+
+*The build menu opens faster* also clears the stray repair buttons. The game makes a repair button for every repair or remove piece but keeps, and later removes, only the last one, so with mods that add their own repair tools two or more were left behind on every rebuild of the menu and piled up over a session. After each refresh of the buttons every repair button but the game's own is removed; the *Patches* tab counts them.
+
 ## 0.43.8
 
 *The build menu opens faster* keeps the buttons when the list holds several repair or remove pieces, as with mods that add their own repair tools: the game makes a repair button for each and keeps the last as its repair button, and that one is now compared. Before, such a list rebuilt the buttons on every open.

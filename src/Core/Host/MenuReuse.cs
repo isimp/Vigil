@@ -72,14 +72,30 @@ namespace Vigil.Core
         public static bool SkipNavigation(bool on, bool menuShown) => on && !menuShown;
 
         /// <summary>What the patch does on this game, in words, with why the last rebuild happened.</summary>
-        public static string StateLine(bool on, string problem, long kept, long rebuilt, Diff last = Diff.Same)
+        public static string StateLine(bool on, string problem, long kept, long rebuilt, Diff last = Diff.Same, long strays = 0)
         {
             if (!on) return "off: this game's switch (Patches.BuildMenuFaster)";
             if (problem != null) return "stepped aside: " + problem;
             long opens = kept + rebuilt;
             if (opens == 0) return "working · no open yet";
             string line = string.Format(CultureInfo.InvariantCulture, "working · buttons kept on {0} of {1} opens", kept, opens);
-            return last == Diff.Same ? line : line + " · last rebuild: " + Words(last);
+            if (last != Diff.Same) line += " · last rebuild: " + Words(last);
+            if (strays > 0) line += string.Format(CultureInfo.InvariantCulture, " · {0} stray repair buttons removed", strays);
+            return line;
+        }
+
+        /// <summary>
+        /// The repair buttons to remove from the menu's repair corner: the game makes one for every
+        /// repair or remove piece but keeps, and later removes, only the last, so with several the
+        /// others pile up with every rebuild. Every repair button but the game's own goes; anything
+        /// else in the corner stays.
+        /// </summary>
+        public static List<T> Strays<T>(IEnumerable<T> children, T own, Func<T, bool> isRepairButton) where T : class
+        {
+            var strays = new List<T>();
+            foreach (var c in children)
+                if (!ReferenceEquals(c, own) && isRepairButton(c)) strays.Add(c);
+            return strays;
         }
     }
 }
