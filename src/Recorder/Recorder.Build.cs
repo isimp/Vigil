@@ -33,7 +33,9 @@ namespace Vigil.Recorder
         /// </summary>
         private BuildState BuildFrame(byte situation, float dtMs)
         {
-            FinishMenuLine(dtMs);
+            // What the screen layout rebuilt in the frame just ended, when it was counted.
+            var ui = UiRebuildProbe.Take();
+            FinishMenuLine(dtMs, ui);
             if (situation != 0)
             {
                 _menuWasOpen = false;
@@ -50,8 +52,10 @@ namespace Vigil.Recorder
             var state = BuildTool.StateOf(place, menu, _menuWasOpen);
             if (menu || _menuWasOpen) _secMenuFrames++;
             else if (place) _secToolFrames++;
-            if (state == BuildState.Change) StartMenuLine(opened: menu, dtMs);
+            if (state == BuildState.Change) StartMenuLine(opened: menu, dtMs, ui);
             _menuWasOpen = menu;
+            // Counted while the menu is open (a close's own frame) and in the frame after a close.
+            if (menu || _pendingClose != null) UiRebuildProbe.Arm();
 
             float render = _engine != null ? _engine.LastRenderMs : 0f;
             Count(_buildRun, state, dtMs, render);
@@ -90,7 +94,7 @@ namespace Vigil.Recorder
 
         // The frame's steps are read now, before the timers close it; the line waits one frame for
         // the next frame's layout and length.
-        private void StartMenuLine(bool opened, float dtMs)
+        private void StartMenuLine(bool opened, float dtMs, UiRebuild ui)
         {
             ReadBuildSlots();
             if (opened)
@@ -113,12 +117,15 @@ namespace Vigil.Recorder
                     PickMs = FrameMs(_phPick), GhostMs = FrameMs(_phGhost), LayoutMs = FrameMs(_phLayout),
                 };
                 _pendingClose.GhostKept = _pendingClose.Picked && (_phGhost == null || _phGhost.FrameCalls == 0);
+                // The game's click handling can run before Vigil's frame start: then the pick fell in
+                // the frame now starting, and this frame's layout ran before it.
+                _pendingClose.PickRanNext = _pendingClose.Picked && UiRebuildProbe.PickFrame == UnityEngine.Time.frameCount;
+                if (!_pendingClose.PickRanNext) _pendingClose.Ui = ui;
                 _pendingOpen = null;
-                UiRebuildProbe.Arm();
             }
         }
 
-        private void FinishMenuLine(float dtMs)
+        private void FinishMenuLine(float dtMs, UiRebuild ui)
         {
             if (_pendingOpen != null)
             {
@@ -134,7 +141,7 @@ namespace Vigil.Recorder
                 var close = _pendingClose;
                 _pendingClose = null;
                 close.NextFrameMs = dtMs;
-                close.NextUi = UiRebuildProbe.Take();
+                close.NextUi = ui;
                 _closeAwaitingRecord = close;
             }
         }

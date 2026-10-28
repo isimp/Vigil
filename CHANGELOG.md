@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.14
+
+A close line in `Vigil-events.tsv` that came from picking a piece says when the game handled the click at the start of the next frame, before Vigil's frame starts, and counts the pick's time in that frame, where it ran. The rebuilt parts are named by type and by whether they are hidden, nine names deep, and a close's own frame says what its screen layout rebuilt too.
+
 ## 0.43.13
 
 Each close of the build menu in `Vigil-events.tsv` also splits the frame after it: its largest timed work, drawing, the physics engine and the untimed rest, and what its screen layout rebuilt, timed for Unity's UI and for TextMeshPro, with the rebuilt parts counted by where they sit. A pick of the piece already selected says the game kept its placement ghost. That frame often takes twice an ordinary one after a pick, and the line shows what fills it.

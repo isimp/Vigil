@@ -201,8 +201,43 @@ namespace Vigil.Tests
             ui.Add("GUI/PixelFix/IngameGui/Minimap", text: false);
             var close = new MenuClose { FrameMs = 50, CloseMs = 20, Picked = true, PickMs = 30, GhostMs = 2, LayoutMs = 5, NextFrameMs = 120, NextUi = ui };
             Assert.Equal("closed by picking a piece, frame 50 ms: picking it 30 ms (the placement ghost 2 ms), closing 20.0 ms, screen layout 5 ms; next frame 120 ms; " +
-                "its screen layout 30 ms in 2 passes (Unity UI 4 ms, TextMeshPro 26 ms), 49 parts rebuilt, 4 of them texts: " +
+                "the next frame's screen layout 30 ms in 2 passes (Unity UI 4 ms, TextMeshPro 26 ms), 49 parts rebuilt, 4 of them texts: " +
                 "GUI/PixelFix/IngameGui/HUD/hudroot 40, ComfortMeCatalog 8, GUI/PixelFix/IngameGui/Minimap 1",
+                close.Describe());
+        }
+
+        [Fact]
+        public void The_close_line_also_says_what_the_close_frame_s_own_screen_layout_rebuilt()
+        {
+            var own = new UiRebuild { Passes = 1, UnityMs = 26 };
+            for (int i = 0; i < 3; i++) own.Add("HUD/hudroot/BuildUi", text: false, kind: "LayoutRebuilder", hidden: true);
+            var close = new MenuClose { FrameMs = 120, CloseMs = 45, LayoutMs = 26, NextFrameMs = 67, Ui = own };
+            Assert.Equal("closed by the key or another way, frame 120 ms: closing 45.0 ms, screen layout 26 ms; next frame 67 ms; " +
+                "the close frame's screen layout 26 ms in 1 pass (Unity UI 26 ms, TextMeshPro 0 ms), 3 parts rebuilt, 0 of them texts: HUD/hudroot/BuildUi (LayoutRebuilder, hidden) 3",
+                close.Describe());
+        }
+
+        [Fact]
+        public void Parts_of_one_place_are_told_apart_by_their_kind_and_whether_they_are_hidden()
+        {
+            var ui = new UiRebuild { Passes = 1, UnityMs = 30 };
+            for (int i = 0; i < 4; i++) ui.Add("HUD/BuildUi/Grid", text: false, kind: "Image", hidden: true);
+            for (int i = 0; i < 2; i++) ui.Add("HUD/BuildUi/Grid", text: false, kind: "Image", hidden: false);
+            ui.Add("HUD/BuildUi/Grid", text: true, kind: "TextMeshProUGUI", hidden: false);
+            Assert.Equal("30 ms in 1 pass (Unity UI 30 ms, TextMeshPro 0 ms), 7 parts rebuilt, 1 of them texts: " +
+                "HUD/BuildUi/Grid (Image, hidden) 4, HUD/BuildUi/Grid (Image) 2, HUD/BuildUi/Grid (TextMeshProUGUI) 1", ui.Describe());
+        }
+
+        [Fact]
+        public void A_pick_handled_before_the_frame_start_is_named_so_and_counted_in_the_next_frame()
+        {
+            var next = new FrameBreakdown { DtMs = 177 };
+            next.Phases.Add(new Timed("UnityEngine.Canvas.SendWillRenderCanvases", 44f));
+            var close = new MenuClose { FrameMs = 54, CloseMs = 44, Picked = true, PickMs = 54, GhostMs = 5, LayoutMs = 5, NextFrameMs = 177, PickRanNext = true, Next = next };
+            // untimed: 177 - 44 layout - 54 the pick now counted in this frame = 79
+            Assert.Equal("closed by picking a piece, its click handled at the start of the next frame, so the pick's time is that frame's; frame before it 54 ms: " +
+                "picking it 54 ms (the placement ghost 5 ms), closing 44.0 ms, its screen layout 5 ms; " +
+                "next frame 177 ms: BuildUi.OnSelectPiece 54 ms, UnityEngine.Canvas.SendWillRenderCanvases 44 ms, untimed 79 ms",
                 close.Describe());
         }
 

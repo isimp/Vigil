@@ -18,7 +18,7 @@ namespace Vigil.Recorder
     /// </summary>
     internal static class UiRebuildProbe
     {
-        private const int PlaceDepth = 5;
+        private const int PlaceDepth = 9;
 
         // Frames an armed count may stay open, in case the frame that takes it never comes (recording paused).
         private const int ArmedFrames = 2;
@@ -32,6 +32,9 @@ namespace Vigil.Recorder
         private static readonly Stopwatch s_watch = new Stopwatch();
         private static readonly List<string> s_names = new List<string>();
 
+        /// <summary>The frame in which the build menu last picked a piece, to tell whether the click ran before Vigil's frame start.</summary>
+        public static int PickFrame { get; private set; } = -1;
+
         public static void Hook(Harmony harmony)
         {
             var me = typeof(UiRebuildProbe);
@@ -39,7 +42,11 @@ namespace Vigil.Recorder
                 prefix: Patching.M(me, nameof(UnityPrefix)), postfix: Patching.M(me, nameof(UnityPostfix)));
             Patching.Apply(harmony, AccessTools.Method(typeof(TMP_UpdateManager), "DoRebuilds"), "what the screen layout rebuilds after the build menu closes (TextMeshPro)",
                 prefix: Patching.M(me, nameof(TextPrefix)), postfix: Patching.M(me, nameof(TextPostfix)));
+            Patching.Apply(harmony, AccessTools.Method(typeof(BuildUi), nameof(BuildUi.OnSelectPiece)), "the frame a build menu pick runs in",
+                postfix: Patching.M(me, nameof(PickPostfix)));
         }
+
+        private static void PickPostfix() => PickFrame = Time.frameCount;
 
         /// <summary>Starts counting the rebuilds of the frame now under way.</summary>
         public static void Arm()
@@ -135,7 +142,8 @@ namespace Vigil.Recorder
                 var e = queue[i];
                 Transform t = null;
                 try { t = e?.transform; } catch (Exception) { }
-                s_current.Add(UiRebuild.Place(Names(t), PlaceDepth), e is TMP_Text || e is Text);
+                bool hidden = t && !t.gameObject.activeInHierarchy;
+                s_current.Add(UiRebuild.Place(Names(t), PlaceDepth), e is TMP_Text || e is Text, e?.GetType().Name ?? "null", hidden);
             }
         }
 
@@ -145,7 +153,7 @@ namespace Vigil.Recorder
             for (int i = 0; i < queue.Count; i++)
             {
                 var c = queue[i];
-                s_current.Add(UiRebuild.Place(Names(c ? c.transform : null), PlaceDepth), text: true);
+                s_current.Add(UiRebuild.Place(Names(c ? c.transform : null), PlaceDepth), true, c ? c.GetType().Name : "null", c && !c.gameObject.activeInHierarchy);
             }
         }
 

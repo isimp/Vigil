@@ -146,28 +146,48 @@ namespace Vigil.Core
         public bool Picked;
         /// <summary>The picked piece was the one already selected, so the game kept its placement ghost.</summary>
         public bool GhostKept;
+        /// <summary>
+        /// The click that picked the piece was handled at the start of the frame after this one,
+        /// before Vigil's frame start, so its time belongs to that frame and is counted there.
+        /// </summary>
+        public bool PickRanNext;
         /// <summary>The frame after the close, or null when it was not read.</summary>
         public FrameBreakdown Next;
-        /// <summary>What the screen layout rebuilt in the frame after the close, or null when it was not read.</summary>
-        public UiRebuild NextUi;
+        /// <summary>What the screen layout rebuilt in the close's frame and in the frame after it, or null when not read.</summary>
+        public UiRebuild Ui, NextUi;
 
         public string Describe()
         {
             var ci = CultureInfo.InvariantCulture;
+            bool pickNext = Picked && PickRanNext;
+            string ghost = GhostKept
+                ? string.Format(ci, "picking it {0:0} ms (the piece already selected, its placement ghost kept), ", PickMs)
+                : string.Format(ci, "picking it {0:0} ms (the placement ghost {1:0} ms), ", PickMs, Math.Min(GhostMs, PickMs));
             string s = !Picked
                 ? string.Format(ci, "closed by the key or another way, frame {0:0} ms: ", FrameMs)
-                : GhostKept
-                    ? string.Format(ci, "closed by picking a piece, frame {0:0} ms: picking it {1:0} ms (the piece already selected, its placement ghost kept), ", FrameMs, PickMs)
-                    : string.Format(ci, "closed by picking a piece, frame {0:0} ms: picking it {1:0} ms (the placement ghost {2:0} ms), ", FrameMs, PickMs, Math.Min(GhostMs, PickMs));
-            s += string.Format(ci, "closing {0:0.0} ms, screen layout {1:0} ms; next frame {2:0} ms", CloseMs, LayoutMs, NextFrameMs);
-            if (Next != null) s += ": " + string.Join(", ", NextParts(Next).ToArray());
-            if (NextUi != null) s += "; its screen layout " + NextUi.Describe();
+                : pickNext
+                    ? string.Format(ci, "closed by picking a piece, its click handled at the start of the next frame, so the pick's time is that frame's; frame before it {0:0} ms: ", FrameMs) + ghost
+                    : string.Format(ci, "closed by picking a piece, frame {0:0} ms: ", FrameMs) + ghost;
+            s += string.Format(ci, pickNext ? "closing {0:0.0} ms, its screen layout {1:0} ms; next frame {2:0} ms" : "closing {0:0.0} ms, screen layout {1:0} ms; next frame {2:0} ms",
+                CloseMs, LayoutMs, NextFrameMs);
+            if (Next != null) s += ": " + string.Join(", ", NextParts(Next, pickNext ? PickMs : 0).ToArray());
+            if (NextUi != null) s += "; the next frame's screen layout " + NextUi.Describe();
+            if (Ui != null) s += "; the close frame's screen layout " + Ui.Describe();
             return s;
         }
 
-        private static List<string> NextParts(FrameBreakdown f)
+        // pickMs: a pick handled at this frame's start, counted here as top-level timed work.
+        private static List<string> NextParts(FrameBreakdown f, double pickMs)
         {
             var ci = CultureInfo.InvariantCulture;
+            if (pickMs > 0)
+            {
+                var g = new FrameBreakdown { DtMs = f.DtMs, GcCollections = f.GcCollections, FixedSteps = f.FixedSteps, RenderMs = f.RenderMs, OwnMs = f.OwnMs, PhysicsTimed = f.PhysicsTimed, PhysicsMs = f.PhysicsMs };
+                g.Phases.Add(new Timed("BuildUi.OnSelectPiece", (float)pickMs));
+                g.Phases.AddRange(f.Phases);
+                g.Mods.AddRange(f.Mods);
+                f = g;
+            }
             var parts = f.Phases.Concat(f.Mods).Where(t => t.Ms >= NextItemMinMs).OrderByDescending(t => t.Ms).Take(NextItems)
                 .Select(t => string.Format(ci, "{0} {1:0} ms{2}{3}", t.Name, t.Ms, t.Calls > 1 ? string.Format(ci, " in {0} calls", t.Calls) : "",
                     t.Parent != null ? " inside " + t.Parent : ""))
@@ -193,10 +213,12 @@ namespace Vigil.Core
         private readonly Dictionary<string, int> _byPlace = new Dictionary<string, int>(StringComparer.Ordinal);
         private int _parts, _texts;
 
-        public void Add(string place, bool text)
+        /// <summary>Counts one part; <paramref name="kind"/> (its type) and <paramref name="hidden"/> (not shown on screen) tell parts of one place apart.</summary>
+        public void Add(string place, bool text, string kind = null, bool hidden = false)
         {
-            _byPlace.TryGetValue(place, out int n);
-            _byPlace[place] = n + 1;
+            string key = kind == null ? place : place + " (" + kind + (hidden ? ", hidden" : "") + ")";
+            _byPlace.TryGetValue(key, out int n);
+            _byPlace[key] = n + 1;
             _parts++;
             if (text) _texts++;
         }
