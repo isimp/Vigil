@@ -59,6 +59,13 @@ namespace Vigil.Core
         /// <summary>Whether a grab is refused, and its hover hint left out, because a build tool (hammer, hoe, cultivator) is in hand.</summary>
         public static bool BlocksGrab(bool on, bool toolInHand) => on && toolInHand;
 
+        /// <summary>What a refused grab shows when the grab key is pressed outside a menu, naming the tool in hand; null otherwise.</summary>
+        public static string RefusedGrabLine(bool blocked, bool grabPressed, bool takesInput, string tool)
+        {
+            if (!blocked || !grabPressed || !takesInput) return null;
+            return "Relocate: put the " + (string.IsNullOrEmpty(tool) ? "tool" : tool) + " away first";
+        }
+
         /// <summary>Whether an error out of EasyRelocate's Update ends the move, as a relog would.</summary>
         public static bool EndsAfterError(bool on, bool moving, bool failed) => on && moving && failed;
 

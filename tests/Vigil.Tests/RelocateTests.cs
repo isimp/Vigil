@@ -74,6 +74,27 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void The_grab_key_with_a_build_tool_in_hand_says_to_put_that_tool_away()
+        {
+            Assert.Equal("Relocate: put the Hammer away first", Relocate.RefusedGrabLine(blocked: true, grabPressed: true, takesInput: true, tool: "Hammer"));
+        }
+
+        [Fact]
+        public void No_refusal_is_shown_without_the_grab_key_in_a_menu_or_when_the_grab_is_allowed()
+        {
+            Assert.Null(Relocate.RefusedGrabLine(blocked: true, grabPressed: false, takesInput: true, tool: "Hammer"));
+            Assert.Null(Relocate.RefusedGrabLine(blocked: true, grabPressed: true, takesInput: false, tool: "Hammer"));
+            Assert.Null(Relocate.RefusedGrabLine(blocked: false, grabPressed: true, takesInput: true, tool: "Hammer"));
+        }
+
+        [Fact]
+        public void A_tool_without_a_name_is_called_the_tool()
+        {
+            Assert.Equal("Relocate: put the tool away first", Relocate.RefusedGrabLine(blocked: true, grabPressed: true, takesInput: true, tool: ""));
+            Assert.Equal("Relocate: put the tool away first", Relocate.RefusedGrabLine(blocked: true, grabPressed: true, takesInput: true, tool: null));
+        }
+
+        [Fact]
         public void A_piece_can_be_grabbed_with_no_build_tool_in_hand_or_the_switch_off()
         {
             Assert.False(Relocate.BlocksGrab(on: true, toolInHand: false));

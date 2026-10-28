@@ -52,6 +52,7 @@ namespace Vigil.Recorder
 
         private static readonly AccessTools.FieldRef<Player, GameObject> Ghost = AccessTools.FieldRefAccess<Player, GameObject>("m_placementGhost");
         private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> RightItem = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_rightItem");
+        private static readonly Func<Player, bool> TakesInput = AccessTools.MethodDelegate<Func<Player, bool>>(AccessTools.Method(typeof(Player), "TakeInput"));
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private static Relocate.Parts _parts;
@@ -140,7 +141,24 @@ namespace Vigil.Recorder
         }
 
         // TryBeginRelocate(Player player): EasyRelocate's grab, looked at every frame no piece moves.
-        private static bool BeforeTryBegin(Player __0) => !Relocate.BlocksGrab(FixesOn, ToolInHand(__0));
+        private static bool BeforeTryBegin(Player __0)
+        {
+            if (!Relocate.BlocksGrab(FixesOn, ToolInHand(__0))) return true;
+            var key = _grabKey?.BoxedValue is KeyboardShortcut k ? k : KeyboardShortcut.Empty;
+            bool pressed = key.MainKey != KeyCode.None && Input.GetKeyDown(key.MainKey) && key.Modifiers.All(Input.GetKey);
+            if (pressed)
+            {
+                string line = Relocate.RefusedGrabLine(true, true, TakesInput(__0) && !_textField(), ToolName(__0));
+                if (line != null) MessageHud.instance?.ShowMessage(MessageHud.MessageType.Center, line);
+            }
+            return false;
+        }
+
+        private static string ToolName(Player player)
+        {
+            string name = RightItem(player)?.m_shared?.m_name;
+            return string.IsNullOrEmpty(name) || Localization.instance == null ? name : Localization.instance.Localize(name);
+        }
 
         private static bool BeforeHoverHint() => !Relocate.BlocksGrab(FixesOn, ToolInHand(Player.m_localPlayer));
 

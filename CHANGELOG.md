@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.12
+
+Pressing EasyRelocate's grab key with a build tool in hand shows a short message naming the tool, such as "Relocate: put the Hammer away first", instead of doing nothing.
+
 ## 0.43.11
 
 *EasyRelocate: quicker, and a move always ends* also ends a move when a hammer, hoe, cultivator or any other build tool is taken in hand, and with one in hand no piece is grabbed and the hover line offering the grab is left out. Equipping such a tool during a move handed the game the tool's build pieces in place of the moving piece.
