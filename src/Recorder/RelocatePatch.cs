@@ -18,7 +18,7 @@ namespace Vigil.Recorder
     /// (with its own modifiers, whatever else is held), Esc, or a text box taking the keys ends a move;
     /// an error out of its Update during a move ends the move as a relog would.</para>
     /// <para>Spirit: the moving ghost's materials are copies of the game's crypt ghost material
-    /// (<c>Ghost_mat</c>, the creature shader drawn see-through) with the piece's own textures,
+    /// (<c>Ghost_mat</c>, the creature shader drawn see-through) on a white base with the piece's own normal map,
     /// tinted pale blue, pale red where it cannot be placed, breathing slowly.</para>
     /// </summary>
     internal static class RelocatePatch
@@ -62,6 +62,7 @@ namespace Vigil.Recorder
         private static int _updatedFrame = -10;
         private static Material _spiritBase;
         private static bool _spiritLooked;
+        private static bool _spiritTold;
 
         // Every spirit ghost made, with its own materials and whether it shows a blocked spot.
         private sealed class Spirit
@@ -222,7 +223,9 @@ namespace Vigil.Recorder
                 for (int i = 0; i < mats.Length; i++)
                 {
                     var m = new Material(look) { renderQueue = 3000 };
-                    CopyTexture(mats[i], m, "_MainTex");
+                    // The crypt ghost material takes its see-through amount from its texture's alpha,
+                    // which a piece's texture mostly leaves empty: a white base lets the tint's alpha decide.
+                    if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", Texture2D.whiteTexture);
                     CopyTexture(mats[i], m, "_BumpMap");
                     if (m.HasProperty("_EmissionMap")) m.SetTexture("_EmissionMap", Texture2D.whiteTexture);
                     mats[i] = m;
@@ -234,6 +237,12 @@ namespace Vigil.Recorder
             Spirits.Add(spirit);
             Tint(spirit);
             SpiritProblem = null;
+            if (!_spiritTold)
+            {
+                _spiritTold = true;
+                _log?.Invoke("[Vigil] relocate: spirit ghost for " + ghost.name + ": " + made.Count + " materials, shader " + look.shader.name
+                    + ", queue " + (made.Count > 0 ? made[0].renderQueue : look.renderQueue) + ", keywords " + string.Join(" ", look.shaderKeywords));
+            }
         }
 
         private static void CopyTexture(Material from, Material to, string name)
