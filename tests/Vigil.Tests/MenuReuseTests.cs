@@ -65,10 +65,13 @@ namespace Vigil.Tests
         }
 
         [Fact]
-        public void Two_repair_pieces_always_rebuild()
+        public void With_several_repair_pieces_the_last_one_is_the_repair_button_as_in_the_game()
         {
-            var remove = new P("remove", special: true);
-            Assert.False(Reuse(new[] { Repair, remove, Wall }, new[] { Wall }, remove));
+            // The game makes a repair button for each and keeps only the last as its repair button.
+            var scroll = new P("GB_Repair_Scroll", special: true);
+            var hammer = new P("OP_Repair_Hammer", special: true);
+            Assert.True(Reuse(new[] { Repair, Wall, scroll, hammer }, new[] { Wall }, hammer));
+            Assert.False(Reuse(new[] { Repair, Wall, scroll, hammer }, new[] { Wall }, Repair));
         }
 
         [Fact]
@@ -98,7 +101,6 @@ namespace Vigil.Tests
             Assert.Equal(MenuReuse.Diff.FewerPieces, Why(new[] { Repair, Wall }, new[] { Wall, Floor }, Repair));
             Assert.Equal(MenuReuse.Diff.OtherPiece, Why(new[] { Repair, Door }, new[] { Wall }, Repair));
             Assert.Equal(MenuReuse.Diff.RepairChanged, Why(new[] { Wall }, new[] { Wall }, Repair));
-            Assert.Equal(MenuReuse.Diff.TwoRepairs, Why(new[] { Repair, new P("remove", special: true), Wall }, new[] { Wall }, Repair));
         }
 
         [Fact]
@@ -111,7 +113,7 @@ namespace Vigil.Tests
         [Fact]
         public void Each_reason_reads_as_words()
         {
-            Assert.Equal("two repair or remove pieces in the list", MenuReuse.Words(MenuReuse.Diff.TwoRepairs));
+            Assert.Equal("the repair button came, went or changed", MenuReuse.Words(MenuReuse.Diff.RepairChanged));
             Assert.Equal("another piece in a button's place", MenuReuse.Words(MenuReuse.Diff.OtherPiece));
             Assert.Equal("a button hidden or gone", MenuReuse.Words(MenuReuse.Diff.NotShown));
         }
@@ -119,8 +121,8 @@ namespace Vigil.Tests
         [Fact]
         public void The_state_line_names_the_last_reason_for_a_rebuild()
         {
-            Assert.Equal("working · buttons kept on 0 of 13 opens · last rebuild: two repair or remove pieces in the list",
-                MenuReuse.StateLine(true, null, 0, 13, MenuReuse.Diff.TwoRepairs));
+            Assert.Equal("working · buttons kept on 0 of 13 opens · last rebuild: more pieces than buttons",
+                MenuReuse.StateLine(true, null, 0, 13, MenuReuse.Diff.MorePieces));
             Assert.Equal("working · buttons kept on 3 of 7 opens", MenuReuse.StateLine(true, null, 3, 4, MenuReuse.Diff.Same));
         }
 

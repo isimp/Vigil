@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.8
+
+*The build menu opens faster* keeps the buttons when the list holds several repair or remove pieces, as with mods that add their own repair tools: the game makes a repair button for each and keeps the last as its repair button, and that one is now compared. Before, such a list rebuilt the buttons on every open.
+
 ## 0.43.7
 
 *The build menu opens faster* now says why it rebuilt the buttons: its line in the *Patches* tab names the last reason, and the game's log gets each reason once a session with what differed, such as the piece at a button or the repair pieces in the list.

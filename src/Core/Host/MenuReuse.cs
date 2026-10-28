@@ -15,7 +15,7 @@ namespace Vigil.Core
     internal static class MenuReuse
     {
         /// <summary>Whether the buttons can stay, and if not, why.</summary>
-        public enum Diff { Same, NotShown, Empty, MorePieces, FewerPieces, OtherPiece, RepairChanged, TwoRepairs }
+        public enum Diff { Same, NotShown, Empty, MorePieces, FewerPieces, OtherPiece, RepairChanged }
 
         /// <param name="wanted">The pieces the game would show now, in its order, repair pieces among them.</param>
         /// <param name="shown">The pieces on the buttons now, in their order, without the repair button.</param>
@@ -29,15 +29,15 @@ namespace Vigil.Core
             at = -1;
             if (!allShown) return Diff.NotShown;
             if (wanted.Count == 0) return Diff.Empty;
+            // The game makes a button for every repair or remove piece and keeps the last as its
+            // repair button, so with several the last one is the one to compare.
             T expectedSpecial = null;
-            int specials = 0, next = 0;
+            int next = 0;
             foreach (var piece in wanted)
             {
                 if (special(piece))
                 {
-                    if (!showTags) continue;
-                    specials++;
-                    expectedSpecial = piece;
+                    if (showTags) expectedSpecial = piece;
                     continue;
                 }
                 if (next >= shown.Count) return Diff.MorePieces;
@@ -49,7 +49,6 @@ namespace Vigil.Core
                 next++;
             }
             if (next != shown.Count) return Diff.FewerPieces;
-            if (specials > 1) return Diff.TwoRepairs;
             return ReferenceEquals(expectedSpecial, shownSpecial) ? Diff.Same : Diff.RepairChanged;
         }
 
@@ -66,8 +65,7 @@ namespace Vigil.Core
                 case Diff.MorePieces: return "more pieces than buttons";
                 case Diff.FewerPieces: return "fewer pieces than buttons";
                 case Diff.OtherPiece: return "another piece in a button's place";
-                case Diff.RepairChanged: return "the repair button came, went or changed";
-                default: return "two repair or remove pieces in the list";
+                default: return "the repair button came, went or changed";
             }
         }
 

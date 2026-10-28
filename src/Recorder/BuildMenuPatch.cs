@@ -164,7 +164,6 @@ namespace Vigil.Recorder
                 case MenuReuse.Diff.MorePieces:
                 case MenuReuse.Diff.FewerPieces:
                     return " (" + wanted + " pieces, " + s_shown.Count + " buttons)";
-                case MenuReuse.Diff.TwoRepairs:
                 case MenuReuse.Diff.RepairChanged:
                     return " (repair pieces: " + (repairs.Count == 0 ? "none" : string.Join(", ", repairs.ToArray())) + "; repair button: " + Name(special != null ? special.Piece : null) + ")";
                 default:
