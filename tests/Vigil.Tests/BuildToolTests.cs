@@ -145,6 +145,85 @@ namespace Vigil.Tests
             Assert.Equal("closed by the key or another way, frame 18 ms: closing 0.3 ms, screen layout 1 ms; next frame 17 ms", close.Describe());
         }
 
+        // ---- the frame after a close
+
+        private static FrameBreakdown AfterAPick()
+        {
+            var f = new FrameBreakdown { DtMs = 167, RenderMs = 19, PhysicsTimed = true, PhysicsMs = 17, FixedSteps = 8 };
+            f.Phases.Add(new Timed("UnityEngine.Canvas.SendWillRenderCanvases", 30.3f, null, 2));
+            f.Phases.Add(new Timed("Player.LateUpdate", 20.9f));
+            f.Phases.Add(new Timed("MonoUpdaters.FixedUpdate", 8.9f, null, 8));
+            f.Phases.Add(new Timed("Humanoid.CustomFixedUpdate", 4.2f, PhaseTimerNested, 64));
+            f.Phases.Add(new Timed("Hud.Update", 6.7f));
+            f.Phases.Add(new Timed("Hud.UpdateBuild", 0.7f, "Hud.Update"));
+            f.Mods.Add(new Timed("Scry :: Plugin.Update", 3.6f));
+            return f;
+        }
+
+        private const string PhaseTimerNested = "other timed work";
+
+        [Fact]
+        public void The_close_line_splits_the_frame_after_it_into_its_largest_timed_work_drawing_physics_and_the_untimed_rest()
+        {
+            var close = new MenuClose { FrameMs = 82, CloseMs = 24.6, Picked = true, PickMs = 32, GhostMs = 2, LayoutMs = 5, NextFrameMs = 167, Next = AfterAPick() };
+            // untimed: 167 - (30.3 + 20.9 + 8.9 + 6.7 + 3.6 top-level) - 19 drawing - 17 physics = 60.6
+            Assert.Equal("closed by picking a piece, frame 82 ms: picking it 32 ms (the placement ghost 2 ms), closing 24.6 ms, screen layout 5 ms; " +
+                "next frame 167 ms: UnityEngine.Canvas.SendWillRenderCanvases 30 ms in 2 calls, Player.LateUpdate 21 ms, MonoUpdaters.FixedUpdate 9 ms in 8 calls, " +
+                "Hud.Update 7 ms, Humanoid.CustomFixedUpdate 4 ms in 64 calls inside other timed work, drawing 19 ms, physics engine 17 ms in 8 steps, untimed 61 ms",
+                close.Describe());
+        }
+
+        [Fact]
+        public void The_frame_after_names_a_garbage_collection_and_leaves_out_what_took_under_a_millisecond()
+        {
+            var f = new FrameBreakdown { DtMs = 40, GcCollections = 1 };
+            f.Phases.Add(new Timed("Hud.Update", 12f));
+            f.Phases.Add(new Timed("ZNet.Update", 0.6f));
+            var close = new MenuClose { FrameMs = 20, CloseMs = 1, LayoutMs = 1, NextFrameMs = 40, Next = f };
+            Assert.Equal("closed by the key or another way, frame 20 ms: closing 1.0 ms, screen layout 1 ms; " +
+                "next frame 40 ms: Hud.Update 12 ms, untimed 27 ms, a garbage collection", close.Describe());
+        }
+
+        [Fact]
+        public void Picking_the_piece_already_selected_says_the_ghost_was_kept()
+        {
+            var close = new MenuClose { FrameMs = 30, CloseMs = 20, Picked = true, PickMs = 21, GhostKept = true, LayoutMs = 2, NextFrameMs = 40 };
+            Assert.Equal("closed by picking a piece, frame 30 ms: picking it 21 ms (the piece already selected, its placement ghost kept), closing 20.0 ms, screen layout 2 ms; next frame 40 ms",
+                close.Describe());
+        }
+
+        [Fact]
+        public void The_close_line_ends_with_what_the_screen_layout_rebuilt_in_the_frame_after()
+        {
+            var ui = new UiRebuild { Passes = 2, UnityMs = 4.2, TextMs = 25.8 };
+            for (int i = 0; i < 40; i++) ui.Add("GUI/PixelFix/IngameGui/HUD/hudroot", text: i < 3);
+            for (int i = 0; i < 8; i++) ui.Add("ComfortMeCatalog", text: i == 0);
+            ui.Add("GUI/PixelFix/IngameGui/Minimap", text: false);
+            var close = new MenuClose { FrameMs = 50, CloseMs = 20, Picked = true, PickMs = 30, GhostMs = 2, LayoutMs = 5, NextFrameMs = 120, NextUi = ui };
+            Assert.Equal("closed by picking a piece, frame 50 ms: picking it 30 ms (the placement ghost 2 ms), closing 20.0 ms, screen layout 5 ms; next frame 120 ms; " +
+                "its screen layout 30 ms in 2 passes (Unity UI 4 ms, TextMeshPro 26 ms), 49 parts rebuilt, 4 of them texts: " +
+                "GUI/PixelFix/IngameGui/HUD/hudroot 40, ComfortMeCatalog 8, GUI/PixelFix/IngameGui/Minimap 1",
+                close.Describe());
+        }
+
+        [Fact]
+        public void The_rebuilt_parts_show_the_four_busiest_places_and_count_the_rest_together()
+        {
+            var ui = new UiRebuild { Passes = 1, UnityMs = 1, TextMs = 0 };
+            foreach (var (place, n) in new[] { ("a", 5), ("b", 4), ("c", 3), ("d", 2), ("e", 1), ("f", 1) })
+                for (int i = 0; i < n; i++) ui.Add(place, text: false);
+            Assert.Equal("1 ms in 1 pass (Unity UI 1 ms, TextMeshPro 0 ms), 16 parts rebuilt, 0 of them texts: a 5, b 4, c 3, d 2, 2 elsewhere", ui.Describe());
+            Assert.Equal("0 ms in 0 passes (Unity UI 0 ms, TextMeshPro 0 ms), nothing rebuilt", new UiRebuild().Describe());
+        }
+
+        [Fact]
+        public void A_part_is_placed_by_the_first_names_of_its_path_from_the_scene_root()
+        {
+            Assert.Equal("GUI/PixelFix/IngameGui/HUD/hudroot", UiRebuild.Place(new[] { "GUI", "PixelFix", "IngameGui", "HUD", "hudroot", "BuildHud", "SelectedInfo" }, 5));
+            Assert.Equal("ComfortMeCatalog/Panel", UiRebuild.Place(new[] { "ComfortMeCatalog", "Panel" }, 5));
+            Assert.Equal("(no object)", UiRebuild.Place(new string[0], 5));
+        }
+
         // ---- opens over the session
 
         [Fact]

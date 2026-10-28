@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.13
+
+Each close of the build menu in `Vigil-events.tsv` also splits the frame after it: its largest timed work, drawing, the physics engine and the untimed rest, and what its screen layout rebuilt, timed for Unity's UI and for TextMeshPro, with the rebuilt parts counted by where they sit. A pick of the piece already selected says the game kept its placement ghost. That frame often takes twice an ordinary one after a pick, and the line shows what fills it.
+
 ## 0.43.12
 
 Pressing EasyRelocate's grab key with a build tool in hand shows a short message naming the tool, such as "Relocate: put the Hammer away first", instead of doing nothing.

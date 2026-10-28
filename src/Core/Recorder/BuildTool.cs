@@ -132,19 +132,93 @@ namespace Vigil.Core
         internal static double Pos(double v) => v > 0 ? v : 0;
     }
 
-    /// <summary>One close of the build menu: by picking a piece (which sets up its placement ghost) or by the key or anything else.</summary>
+    /// <summary>
+    /// One close of the build menu: by picking a piece (which sets up its placement ghost, unless
+    /// the piece was already selected) or by the key or anything else, and what the frame after
+    /// it spent its time on.
+    /// </summary>
     public sealed class MenuClose
     {
+        private const double NextItemMinMs = 1;
+        private const int NextItems = 5;
+
         public double FrameMs, CloseMs, PickMs, GhostMs, LayoutMs, NextFrameMs;
         public bool Picked;
+        /// <summary>The picked piece was the one already selected, so the game kept its placement ghost.</summary>
+        public bool GhostKept;
+        /// <summary>The frame after the close, or null when it was not read.</summary>
+        public FrameBreakdown Next;
+        /// <summary>What the screen layout rebuilt in the frame after the close, or null when it was not read.</summary>
+        public UiRebuild NextUi;
 
         public string Describe()
         {
             var ci = CultureInfo.InvariantCulture;
-            string s = Picked
-                ? string.Format(ci, "closed by picking a piece, frame {0:0} ms: picking it {1:0} ms (the placement ghost {2:0} ms), ", FrameMs, PickMs, Math.Min(GhostMs, PickMs))
-                : string.Format(ci, "closed by the key or another way, frame {0:0} ms: ", FrameMs);
-            return s + string.Format(ci, "closing {0:0.0} ms, screen layout {1:0} ms; next frame {2:0} ms", CloseMs, LayoutMs, NextFrameMs);
+            string s = !Picked
+                ? string.Format(ci, "closed by the key or another way, frame {0:0} ms: ", FrameMs)
+                : GhostKept
+                    ? string.Format(ci, "closed by picking a piece, frame {0:0} ms: picking it {1:0} ms (the piece already selected, its placement ghost kept), ", FrameMs, PickMs)
+                    : string.Format(ci, "closed by picking a piece, frame {0:0} ms: picking it {1:0} ms (the placement ghost {2:0} ms), ", FrameMs, PickMs, Math.Min(GhostMs, PickMs));
+            s += string.Format(ci, "closing {0:0.0} ms, screen layout {1:0} ms; next frame {2:0} ms", CloseMs, LayoutMs, NextFrameMs);
+            if (Next != null) s += ": " + string.Join(", ", NextParts(Next).ToArray());
+            if (NextUi != null) s += "; its screen layout " + NextUi.Describe();
+            return s;
+        }
+
+        private static List<string> NextParts(FrameBreakdown f)
+        {
+            var ci = CultureInfo.InvariantCulture;
+            var parts = f.Phases.Concat(f.Mods).Where(t => t.Ms >= NextItemMinMs).OrderByDescending(t => t.Ms).Take(NextItems)
+                .Select(t => string.Format(ci, "{0} {1:0} ms{2}{3}", t.Name, t.Ms, t.Calls > 1 ? string.Format(ci, " in {0} calls", t.Calls) : "",
+                    t.Parent != null ? " inside " + t.Parent : ""))
+                .ToList();
+            if (f.RenderMs >= NextItemMinMs) parts.Add(string.Format(ci, "drawing {0:0} ms", f.RenderMs));
+            if (f.PhysicsTimed && f.PhysicsMs >= NextItemMinMs) parts.Add(string.Format(ci, "physics engine {0:0} ms in {1} steps", f.PhysicsMs, f.FixedSteps));
+            parts.Add(string.Format(ci, "untimed {0:0} ms", HitchAnalysis.Untimed(f)));
+            if (f.GcCollections > 0) parts.Add(f.GcCollections == 1 ? "a garbage collection" : string.Format(ci, "{0} garbage collections", f.GcCollections));
+            return parts;
+        }
+    }
+
+    /// <summary>
+    /// What the screen layout rebuilt in one frame: its time in Unity's UI and in TextMeshPro, the
+    /// parts it rebuilt, and where they sit, given by the first names of their path from the scene root.
+    /// </summary>
+    public sealed class UiRebuild
+    {
+        private const int Places = 4;
+
+        public int Passes;
+        public double UnityMs, TextMs;
+        private readonly Dictionary<string, int> _byPlace = new Dictionary<string, int>(StringComparer.Ordinal);
+        private int _parts, _texts;
+
+        public void Add(string place, bool text)
+        {
+            _byPlace.TryGetValue(place, out int n);
+            _byPlace[place] = n + 1;
+            _parts++;
+            if (text) _texts++;
+        }
+
+        public string Describe()
+        {
+            var ci = CultureInfo.InvariantCulture;
+            string s = string.Format(ci, "{0:0} ms in {1} pass{2} (Unity UI {3:0} ms, TextMeshPro {4:0} ms), ",
+                UnityMs + TextMs, Passes, Passes == 1 ? "" : "es", UnityMs, TextMs);
+            if (_parts == 0) return s + "nothing rebuilt";
+            var top = _byPlace.OrderByDescending(p => p.Value).ThenBy(p => p.Key, StringComparer.Ordinal).ToList();
+            var shown = top.Take(Places).Select(p => p.Key + " " + p.Value.ToString(ci)).ToList();
+            int rest = top.Skip(Places).Sum(p => p.Value);
+            if (rest > 0) shown.Add(rest.ToString(ci) + " elsewhere");
+            return s + string.Format(ci, "{0:N0} parts rebuilt, {1:N0} of them texts: ", _parts, _texts) + string.Join(", ", shown.ToArray());
+        }
+
+        /// <summary>Where a part sits: the first <paramref name="depth"/> names of its path from the scene root.</summary>
+        public static string Place(IList<string> namesFromRoot, int depth)
+        {
+            if (namesFromRoot == null || namesFromRoot.Count == 0) return "(no object)";
+            return string.Join("/", namesFromRoot.Take(depth).ToArray());
         }
     }
 

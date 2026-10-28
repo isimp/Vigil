@@ -291,6 +291,7 @@ namespace Vigil.Recorder
             _fOwn[idx] = ownMs;
             _ownMs = 0;
             _frameNo++;
+            FinishCloseLine(idx);
 
             _secFrames++; _secDtSum += dtMs; if (dtMs > _secDtMax) _secDtMax = dtMs;
             if (dtMs > 33) _secOver33++;

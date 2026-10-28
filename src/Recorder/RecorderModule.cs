@@ -196,6 +196,7 @@ namespace Vigil.Recorder
             StartSteps.Lap("recorder: sharing, startup timeline");
             BindFireSounds();
             if (!_server) FireSoundsPatch.Hook(harmony);
+            if (!_server) UiRebuildProbe.Hook(harmony);
             StartSteps.Lap("recorder: fire sounds");
             BindOwnership();
             BindWeather();

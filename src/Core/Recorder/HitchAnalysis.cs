@@ -60,6 +60,16 @@ namespace Vigil.Core
         private const float PagingPerSec = 30000f;
         private const int CatchUpSteps = 3;
 
+        /// <summary>The part of the frame no timer covered: its length less the top-level timed work, drawing, Vigil's own time and timed physics.</summary>
+        public static float Untimed(FrameBreakdown f)
+        {
+            float physics = f.PhysicsTimed ? Math.Max(0, f.PhysicsMs) : 0;
+            float timed = f.Phases.Where(p => p.Parent == null).Sum(p => p.Ms)
+                        + f.Mods.Where(m => m.Parent == null).Sum(m => m.Ms)
+                        + f.RenderMs + f.OwnMs + physics;
+            return Math.Max(0, f.DtMs - timed);
+        }
+
         public static HitchExplanation Explain(FrameBreakdown f)
         {
             var ci = CultureInfo.InvariantCulture;
@@ -84,10 +94,7 @@ namespace Vigil.Core
                 items.Add(new KeyValuePair<float, string>(physics, string.Format(ci, "the physics engine: {0:0} ms in {1} steps ({2:0}% of the frame), Unity's own step after the scripts' FixedUpdate",
                     physics, f.FixedSteps, physics / dt * 100)));
 
-            float timed = f.Phases.Where(p => p.Parent == null).Sum(p => p.Ms)
-                        + f.Mods.Where(m => m.Parent == null).Sum(m => m.Ms)
-                        + f.RenderMs + f.OwnMs + physics;
-            float untimed = Math.Max(0, f.DtMs - timed);
+            float untimed = Untimed(f);
             if (untimed >= dt * UntimedShare)
                 items.Add(new KeyValuePair<float, string>(untimed, string.Format(ci,
                     f.PhysicsTimed

@@ -22,7 +22,7 @@ namespace Vigil.Recorder
         private BuildCompare.Frames _buildDeep = new BuildCompare.Frames(), _buildSplit = new BuildCompare.Frames();
         private readonly MenuTally _menuOpens = new MenuTally();
         private MenuOpen _pendingOpen;
-        private MenuClose _pendingClose;
+        private MenuClose _pendingClose, _closeAwaitingRecord;
         private bool _hammerGuide, _hammerSwitched;
         private PhaseTimer.Slot _phToggle, _phOpen, _phTags, _phPieces, _phSetup, _phChecks, _phClose, _phPick, _phGhost, _phLayout, _phNav;
         private bool _buildSlotsRead;
@@ -112,7 +112,9 @@ namespace Vigil.Recorder
                     FrameMs = dtMs, CloseMs = FrameMs(_phClose), Picked = _phPick != null && _phPick.FrameCalls > 0,
                     PickMs = FrameMs(_phPick), GhostMs = FrameMs(_phGhost), LayoutMs = FrameMs(_phLayout),
                 };
+                _pendingClose.GhostKept = _pendingClose.Picked && (_phGhost == null || _phGhost.FrameCalls == 0);
                 _pendingOpen = null;
+                UiRebuildProbe.Arm();
             }
         }
 
@@ -132,8 +134,19 @@ namespace Vigil.Recorder
                 var close = _pendingClose;
                 _pendingClose = null;
                 close.NextFrameMs = dtMs;
-                EventLog.Write("build menu", "", close.Describe());
+                close.NextUi = UiRebuildProbe.Take();
+                _closeAwaitingRecord = close;
             }
+        }
+
+        // The frame after a close is recorded once its timers are closed; its line goes out then.
+        private void FinishCloseLine(int frameIdx)
+        {
+            var close = _closeAwaitingRecord;
+            if (close == null) return;
+            _closeAwaitingRecord = null;
+            close.Next = Breakdown(frameIdx);
+            EventLog.Write("build menu", "", close.Describe());
         }
 
         // Each piece button the menu sets up adds itself to the game's language change and nothing
