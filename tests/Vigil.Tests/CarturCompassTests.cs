@@ -4,42 +4,17 @@ using Xunit;
 namespace Vigil.Tests
 {
     /// <summary>
-    /// The player wants one pin per cart or boat and a compass that shows what the map shows. Cartur's
-    /// Map Pins and HUDCompass both pin carts and boats: Cartur follows the ones you built and keeps
-    /// them where you last saw them, HUDCompass pins everyone's by its own rules, so your own cart has
-    /// two pins that come and go apart. HUDCompass's compass also draws pins Cartur hides on the map,
-    /// all in one colour. With the patches on, HUDCompass leaves a cart or boat to Cartur wherever
-    /// Cartur draws a pin for it, and the compass leaves out what Cartur hides and takes its colours.
+    /// The player wants a compass that shows what the map shows. HUDCompass's compass draws pins
+    /// Cartur's Map Pins hides on the map, all in one colour. With the patch on, the compass leaves
+    /// out what Cartur hides and takes its colours.
     /// </summary>
     public sealed class CarturCompassTests
     {
-        private const int Ship = 0, Cart = 1, Portal = 2, ActivePortal = 3;
         private const int PinNone = 8;
 
         private static readonly Relocate.Rgba White = new Relocate.Rgba(1f, 1f, 1f, 1f);
         private static readonly Relocate.Rgba Red = new Relocate.Rgba(0.85f, 0.2f, 0.18f, 0.6f);
         private static readonly Relocate.Rgba OreTint = new Relocate.Rgba(0.8f, 0.5f, 0.2f, 1f);
-
-        [Fact]
-        public void Your_cart_that_Cartur_pins_loses_HUDCompass_s_second_pin()
-        {
-            Assert.True(CarturPinRules.LeftToCartur(Cart, carturDraws: true));
-            Assert.True(CarturPinRules.LeftToCartur(Ship, carturDraws: true));
-        }
-
-        [Fact]
-        public void A_friend_s_cart_Cartur_does_not_pin_keeps_HUDCompass_s_pin()
-        {
-            Assert.False(CarturPinRules.LeftToCartur(Cart, carturDraws: false));
-            Assert.False(CarturPinRules.LeftToCartur(Ship, carturDraws: false));
-        }
-
-        [Fact]
-        public void Portals_are_never_left_to_Cartur_s_trackers()
-        {
-            Assert.False(CarturPinRules.LeftToCartur(Portal, carturDraws: true));
-            Assert.False(CarturPinRules.LeftToCartur(ActivePortal, carturDraws: true));
-        }
 
         [Fact]
         public void A_map_pin_Cartur_hides_by_name_or_with_its_hide_key_is_left_off_the_compass()
@@ -99,16 +74,6 @@ namespace Vigil.Tests
             Assert.True(CarturPinRules.Looted(lootedType: 140, pinType: 140, none: PinNone));
             Assert.False(CarturPinRules.Looted(lootedType: 140, pinType: 141, none: PinNone));
             Assert.False(CarturPinRules.Looted(lootedType: PinNone, pinType: PinNone, none: PinNone));
-        }
-
-        [Fact]
-        public void The_own_vehicles_state_line_says_what_the_patch_does_on_this_game()
-        {
-            Assert.Equal("off: this game's switch (Patches.HudCompassOwnVehicles)", CarturPinRules.VehiclesLine(false, true, null, 0));
-            Assert.Equal("not needed: HUDCompass or Cartur's Map Pins is not installed", CarturPinRules.VehiclesLine(true, false, null, 0));
-            Assert.Equal("stepped aside: Cartur's tracker code changed (an update)", CarturPinRules.VehiclesLine(true, true, "Cartur's tracker code changed (an update)", 0));
-            Assert.Equal("working · no cart or boat Cartur pins in sight of HUDCompass yet", CarturPinRules.VehiclesLine(true, true, null, 0));
-            Assert.Equal("working · 3 carts and boats left to Cartur's pins", CarturPinRules.VehiclesLine(true, true, null, 3));
         }
 
         [Fact]

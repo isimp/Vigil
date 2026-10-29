@@ -33,6 +33,7 @@ namespace Vigil.Recorder
     {
         private const string HarmonyId = "isimp.Vigil.patches.hudcompass";
         public const string Guid = "neobotics.valheim_mod.hudcompass";
+        public const string CarturGuid = "com.jekkle.valheim.carturmappins";
 
         /// <summary>The IL of the compass postfix and the pin rules in HUDCompass 1.2.1.</summary>
         private const ulong KnownCode = 0x31CF98BBE3A684B3UL;
@@ -211,7 +212,7 @@ namespace Vigil.Recorder
         /// <summary>Finds Cartur's answers for hiding and colouring a map pin.</summary>
         private static void HookCartur()
         {
-            var info = Chainloader.PluginInfos.Values.FirstOrDefault(p => p.Metadata.GUID == CarturVehiclesPatch.CarturGuid);
+            var info = Chainloader.PluginInfos.Values.FirstOrDefault(p => p.Metadata.GUID == CarturGuid);
             s_carturFound = info?.Instance != null;
             if (!s_carturFound) return;
             try

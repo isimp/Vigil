@@ -1,8 +1,14 @@
 # Changelog
 
+## 0.43.19
+
+New patch, set on the server, off until switched on: *Carts, ships and portals where they really are* (`Patches.VehiclePinsFromServer`). A player's game hears only of objects near it and keeps a far one at the spot it last saw, so HUDCompass's pins for far carts, ships and portals that were moved or built after joining were missing or in their old place. On, the server's Vigil keeps every cart, ship and portal of the world, tells each player the whole list on joining and every 5 seconds what was added, moved, renamed or removed. Each player's Vigil adds and removes HUDCompass's pins by it and draws a far one at the server's place, a loaded one where the game has it. It needs Vigil on the server and works with HUDCompass 1.2.1. The *Patches* tab says how many objects the server keeps and how many far ones were drawn at its place.
+
+The patch *HUDCompass leaves your carts and boats to Cartur* from 0.43.18 is gone: Cartur's pins for carts and boats are kept only for what you have been near, so they are not the ones to keep.
+
 ## 0.43.18
 
-Two new patches for HUDCompass with Cartur's Map Pins, off until switched on. *HUDCompass leaves your carts and boats to Cartur* (`Patches.HudCompassOwnVehicles`): both mods pin carts and boats, Cartur the ones you built, kept where you last saw them, HUDCompass everyone's by its own rules, so your own cart had two pins that came and went apart. On, HUDCompass draws no pin, on the map or the compass, for a cart or boat Cartur draws a pin for; other players' carts and boats keep HUDCompass's. *The compass follows Cartur's map* (`Patches.HudCompassFollowsCartur`, needs `HudCompassPins` on): the compass leaves out the pins Cartur hides on the map, by its hidden names or its hide key, and gives pins Cartur's colours: the colour set in its editor, its ore and berry tints, looted chests at half strength. Both work with HUDCompass 1.2.1 and Cartur's Map Pins 2.0.0 and leave other versions alone. The *Patches* tab says what each did.
+New patch for HUDCompass with Cartur's Map Pins, off until switched on: *The compass follows Cartur's map* (`Patches.HudCompassFollowsCartur`, needs `HudCompassPins` on). The compass leaves out the pins Cartur hides on the map, by its hidden names or its hide key, and gives pins Cartur's colours: the colour set in its editor, its ore and berry tints, looted chests at half strength. It works with Cartur's Map Pins 2.0.0 and leaves other versions alone. The *Patches* tab says what it did.
 
 ## 0.43.17
 
