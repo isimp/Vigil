@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.18
+
+Two new patches for HUDCompass with Cartur's Map Pins, off until switched on. *HUDCompass leaves your carts and boats to Cartur* (`Patches.HudCompassOwnVehicles`): both mods pin carts and boats, Cartur the ones you built, kept where you last saw them, HUDCompass everyone's by its own rules, so your own cart had two pins that came and went apart. On, HUDCompass draws no pin, on the map or the compass, for a cart or boat Cartur draws a pin for; other players' carts and boats keep HUDCompass's. *The compass follows Cartur's map* (`Patches.HudCompassFollowsCartur`, needs `HudCompassPins` on): the compass leaves out the pins Cartur hides on the map, by its hidden names or its hide key, and gives pins Cartur's colours: the colour set in its editor, its ore and berry tints, looted chests at half strength. Both work with HUDCompass 1.2.1 and Cartur's Map Pins 2.0.0 and leave other versions alone. The *Patches* tab says what each did.
+
 ## 0.43.17
 
 New patch, off until switched on: *HUDCompass keeps its pin icons* (`Patches.HudCompassPins`). Every frame HUDCompass puts the map's pins on its compass and, to find each pin's icon, writes the pin's position out as text, looks the icon up by that name and crosses the name off a list, for every pin of a shown type on the whole map, near or far, so each pin costs more the more pins there are. A pin that moves gets a new icon each time. On, Vigil does that frame's work by HUDCompass's own rules: each icon stays with its position without any text, and an icon whose pin is gone is kept aside for the next new one. The compass looks the same. It works with HUDCompass 1.2.1 and leaves any other version alone. The *Patches* tab shows what a frame of pins costs, and with the switch off what HUDCompass's own takes.

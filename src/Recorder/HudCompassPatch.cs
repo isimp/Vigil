@@ -24,6 +24,10 @@ namespace Vigil.Recorder
     /// needs is missing it leaves the frame to HUDCompass. Its code is compared with the code this
     /// was written against (1.2.1), and any change makes the patch step aside. Off, HUDCompass's
     /// postfix is timed for the state line. The switch is this game's own.
+    /// A second switch, "the compass follows Cartur's map", works inside this frame when Cartur's Map
+    /// Pins is installed: the map pins Cartur hides (its hidden names, its hide key) are left off the
+    /// compass, and pins take the colour Cartur gives them on the map (<see cref="CarturPinRules"/>).
+    /// Cartur's colouring code is compared with 2.0.0's, and any change makes that part step aside.
     /// </summary>
     internal static class HudCompassPatch
     {
@@ -45,6 +49,30 @@ namespace Vigil.Recorder
         private static int s_pins;
 
         public static string State => CompassPinRules.StateLine(On, Found, Version, Problem, s_frames, Ms(s_ticks), s_pins, s_made, s_reused, s_theirFrames, Ms(s_theirTicks));
+
+        /// <summary>Cartur 2.0.0's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins.</summary>
+        private const ulong KnownCarturColours = 0xA506A78BD2002009UL;
+
+        /// <summary>This game's switch for following Cartur's map, kept current by the config entry.</summary>
+        public static bool FollowCartur;
+
+        /// <summary>Why following Cartur stepped aside; null while it is in.</summary>
+        public static string FollowProblem { get; private set; }
+
+        private static bool s_carturFound;
+        private static int s_hiddenLast, s_colouredLast, s_frameHidden, s_frameColoured;
+
+        public static string FollowState => CarturPinRules.FollowLine(FollowCartur, Found && s_carturFound, On && Problem == null, FollowProblem, s_hiddenLast, s_colouredLast);
+
+        private delegate bool TintFn(Minimap.PinType type, out Color colour);
+
+        // Cartur's own answers.
+        private static Func<Minimap.PinData, bool> s_carturHidden, s_carturKeyHides;
+        private static Func<Vector3, Color?> s_carturStyle;
+        private static TintFn s_carturTint;
+        private static Func<Minimap.PinType> s_carturLooted;
+        private static bool s_frameFollow;
+        private static Minimap.PinType s_frameLooted;
 
         private static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
@@ -176,6 +204,48 @@ namespace Vigil.Recorder
             catch (Exception e)
             {
                 Problem = "HUDCompass could not be hooked: " + e.GetType().Name + " " + e.Message;
+            }
+            HookCartur();
+        }
+
+        /// <summary>Finds Cartur's answers for hiding and colouring a map pin.</summary>
+        private static void HookCartur()
+        {
+            var info = Chainloader.PluginInfos.Values.FirstOrDefault(p => p.Metadata.GUID == CarturVehiclesPatch.CarturGuid);
+            s_carturFound = info?.Instance != null;
+            if (!s_carturFound) return;
+            try
+            {
+                const BindingFlags any = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+                var asm = info.Instance.GetType().Assembly;
+                var colours = asm.GetType("CarturMapPins.Patch_Minimap_UpdatePins")?.GetMethod("Postfix", any);
+                var hiding = asm.GetType("CarturMapPins.PinHiding");
+                var styles = asm.GetType("CarturMapPins.PinStyles");
+                var placer = asm.GetType("CarturMapPins.PinPlacer");
+                var isHidden = hiding?.GetMethod("IsHidden", any);
+                var keyHides = hiding?.GetMethod("CycleHides", any);
+                var styleFor = styles?.GetMethod("For", any);
+                var colourFor = styles?.GetMethod("ColourFor", any);
+                var tintFor = styles?.GetMethod("TintFor", any);
+                var looted = placer?.GetMethod("LootedChestType", any);
+                if (colours == null || isHidden == null || keyHides == null || styleFor == null || colourFor == null || tintFor == null || looted == null
+                    || colourFor.ReturnType != typeof(Color?) || CodeHash(new[] { colours }) != KnownCarturColours)
+                {
+                    FollowProblem = "Cartur's colour code changed (an update)";
+                    return;
+                }
+                s_carturHidden = AccessTools.MethodDelegate<Func<Minimap.PinData, bool>>(isHidden);
+                s_carturKeyHides = AccessTools.MethodDelegate<Func<Minimap.PinData, bool>>(keyHides);
+                s_carturTint = AccessTools.MethodDelegate<TintFn>(tintFor);
+                s_carturLooted = AccessTools.MethodDelegate<Func<Minimap.PinType>>(looted);
+                // PinStyles.For returns Cartur's own Style, which only its ColourFor reads.
+                var pos = System.Linq.Expressions.Expression.Parameter(typeof(Vector3), "pos");
+                s_carturStyle = System.Linq.Expressions.Expression.Lambda<Func<Vector3, Color?>>(
+                    System.Linq.Expressions.Expression.Call(colourFor, System.Linq.Expressions.Expression.Call(styleFor, pos)), pos).Compile();
+            }
+            catch (Exception e)
+            {
+                FollowProblem = "Cartur could not be hooked: " + e.GetType().Name + " " + e.Message;
             }
         }
 
@@ -361,14 +431,20 @@ namespace Vigil.Recorder
             s_frameLocalId = s_localPlayerId();
             s_frameChecked = s_checkedSprite(s_dmm);
             s_framePins = 0;
+            s_frameFollow = FollowCartur && s_carturFound && FollowProblem == null;
+            s_frameHidden = 0;
+            s_frameColoured = 0;
+            if (s_frameFollow) s_frameLooted = s_carturLooted();
 
             s_book.BeginFrame();
-            foreach (var pin in s_mapPins(map)) Visit(pin);
-            foreach (var pin in s_locationPins(map).Values) Visit(pin);
-            if (s_playerPinMode != PlayerPinForceOff) foreach (var pin in s_playerPins(map)) Visit(pin);
+            foreach (var pin in s_mapPins(map)) Visit(pin, true);
+            foreach (var pin in s_locationPins(map).Values) Visit(pin, false);
+            if (s_playerPinMode != PlayerPinForceOff) foreach (var pin in s_playerPins(map)) Visit(pin, false);
             var death = s_deathPin(map);
-            if (death != null) Visit(death);
-            if (s_dynamicOnCompass.Value) foreach (var pin in s_dynamicPins) Visit(pin);
+            if (death != null) Visit(death, false);
+            if (s_dynamicOnCompass.Value) foreach (var pin in s_dynamicPins) Visit(pin, false);
+            s_hiddenLast = s_frameHidden;
+            s_colouredLast = s_frameColoured;
             s_released.Clear();
             s_destroy.Clear();
             s_book.EndFrame(s_released, s_destroy);
@@ -423,7 +499,7 @@ namespace Vigil.Recorder
             return s_loadingScaler;
         }
 
-        private static void Visit(Minimap.PinData pin)
+        private static void Visit(Minimap.PinData pin, bool fromMapPins)
         {
             if (!s_frameVisible[(int)pin.m_type]) return;
             s_framePins++;
@@ -436,6 +512,11 @@ namespace Vigil.Recorder
             bool ignoredType = CompassPinRules.TypeMatches(s_ignoredTypes, iconName, typeName, s_typeAlias);
             bool ignoredName = CompassPinRules.NameIgnored(s_ignoredNames, s_ignoredPrefixes, s_ignoredSuffixes, pin.m_name);
             bool shown = !ignoredType && !ignoredName && (always || CompassPinRules.InBounds(distance, s_frameMin, s_frameMax));
+            if (shown && s_frameFollow && fromMapPins && CarturHides(pin))
+            {
+                shown = false;
+                s_frameHidden++;
+            }
             if (have && icon.Go.activeSelf != shown) icon.Go.SetActive(shown);
             if (!shown) return;
 
@@ -464,11 +545,56 @@ namespace Vigil.Recorder
                     case "ActivePortal": color = s_activePortalColor.Value; break;
                 }
             }
+            if (s_frameFollow && fromMapPins) color = CarturColour(pin, color);
             if (pin.m_ownerID != 0L && pin.m_ownerID != s_frameLocalId) color = new Color(color.r * 0.7f, color.g * 0.7f, color.b * 0.7f, color.a * 0.8f);
             icon.Img.color = color;
             icon.Img.sprite = pin.m_icon;
             icon.Rt.localPosition = Vector3.right * s_frameHalfWidth * angle / (Mathf.PI * 2f);
             if (s_frameChecked != null) s_setChecked(icon.Go, Color.red, pin.m_checked, color.a);
+        }
+
+        /// <summary>Whether Cartur leaves this map pin off its map; a failure there ends following Cartur for the session.</summary>
+        private static bool CarturHides(Minimap.PinData pin)
+        {
+            try
+            {
+                return CarturPinRules.HiddenOnCompass(true, s_carturHidden(pin), s_carturKeyHides(pin));
+            }
+            catch (Exception e)
+            {
+                StepAsideFromCartur("its hiding check failed: " + e.GetType().Name + " " + e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>The colour Cartur gives this map pin, from the compass's own.</summary>
+        private static Color CarturColour(Minimap.PinData pin, Color compass)
+        {
+            try
+            {
+                Color? style = s_carturStyle(pin.m_pos);
+                Relocate.Rgba? tint = null;
+                if (s_carturTint(pin.m_type, out var t)) tint = Rgba(t);
+                bool looted = CarturPinRules.Looted((int)s_frameLooted, (int)pin.m_type, (int)Minimap.PinType.None);
+                var c = CarturPinRules.Colour(Rgba(compass), style.HasValue ? Rgba(style.Value) : (Relocate.Rgba?)null, tint, pin.m_checked, looted);
+                var result = new Color(c.R, c.G, c.B, c.A);
+                if (result != compass) s_frameColoured++;
+                return result;
+            }
+            catch (Exception e)
+            {
+                StepAsideFromCartur("its colour check failed: " + e.GetType().Name + " " + e.Message);
+                return compass;
+            }
+        }
+
+        private static Relocate.Rgba Rgba(Color c) => new Relocate.Rgba(c.r, c.g, c.b, c.a);
+
+        private static void StepAsideFromCartur(string why)
+        {
+            FollowProblem = why;
+            s_frameFollow = false;
+            s_log?.Invoke("Vigil: the compass stopped following Cartur's map: " + why);
         }
 
         private static Icon MakeIcon()

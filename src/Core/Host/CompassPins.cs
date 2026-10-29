@@ -173,4 +173,63 @@ namespace Vigil.Core
             return line + string.Format(CultureInfo.InvariantCulture, " · {0:0.00} ms a frame for {1} pins · {2} icons made, {3} reused", ms / frames, pins, made, reused);
         }
     }
+
+    /// <summary>
+    /// How HUDCompass's pins and Cartur's Map Pins are made to agree. Both pin carts and boats; a
+    /// cart or boat Cartur draws a pin for is left to that pin. The compass leaves out the map pins
+    /// Cartur hides and colours pins the way Cartur colours them on the map (Cartur 2.0.0's rules).
+    /// </summary>
+    internal static class CarturPinRules
+    {
+        // HUDCompass's MarkerGroup.
+        private const int Ship = 0, Cart = 1;
+
+        /// <summary>Whether HUDCompass's own pin for this ship, cart or portal gives way to Cartur's pin for the same object.</summary>
+        public static bool LeftToCartur(int group, bool carturDraws) => carturDraws && (group == Ship || group == Cart);
+
+        /// <summary>Cartur hides pins of the map's own list only: by its list of hidden names, or with its hide key.</summary>
+        public static bool HiddenOnCompass(bool fromMapPins, bool hiddenByName, bool hiddenByKey) => fromMapPins && (hiddenByName || hiddenByKey);
+
+        /// <summary>A looted chest is a pin of Cartur's looted icon, when it has one.</summary>
+        public static bool Looted(int lootedType, int pinType, int none) => lootedType != none && pinType == lootedType;
+
+        /// <summary>
+        /// The colour Cartur gives a pin on the map, starting from the compass's own: the colour set
+        /// in its editor, else its ore or berry tint, both only while the pin is not crossed off; a
+        /// looted chest at half strength.
+        /// </summary>
+        public static Relocate.Rgba Colour(Relocate.Rgba compass, Relocate.Rgba? style, Relocate.Rgba? tint, bool crossedOff, bool looted)
+        {
+            var c = compass;
+            if (!crossedOff)
+            {
+                if (style.HasValue) c = style.Value;
+                else if (tint.HasValue) c = tint.Value;
+            }
+            if (looted) c.A *= 0.5f;
+            return c;
+        }
+
+        private const string Missing = "not needed: HUDCompass or Cartur's Map Pins is not installed";
+
+        /// <summary>What "HUDCompass leaves your carts and boats to Cartur" does on this game, in words.</summary>
+        public static string VehiclesLine(bool on, bool found, string problem, int leftLastFrame)
+        {
+            if (!on) return "off: this game's switch (Patches.HudCompassOwnVehicles)";
+            if (!found) return Missing;
+            if (problem != null) return "stepped aside: " + problem;
+            if (leftLastFrame == 0) return "working · no cart or boat Cartur pins in sight of HUDCompass yet";
+            return "working · " + leftLastFrame.ToString(CultureInfo.InvariantCulture) + " carts and boats left to Cartur's pins";
+        }
+
+        /// <summary>What "the compass follows Cartur's map" does on this game, in words.</summary>
+        public static string FollowLine(bool on, bool found, bool compassPatchOn, string problem, int hidden, int coloured)
+        {
+            if (!on) return "off: this game's switch (Patches.HudCompassFollowsCartur)";
+            if (!found) return Missing;
+            if (!compassPatchOn) return "waiting: it works inside HudCompassPins, which is off";
+            if (problem != null) return "stepped aside: " + problem;
+            return string.Format(CultureInfo.InvariantCulture, "working · last frame {0} pins hidden as on the map, {1} in Cartur's colours", hidden, coloured);
+        }
+    }
 }
