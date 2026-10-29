@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.17
+
+New patch, off until switched on: *HUDCompass keeps its pin icons* (`Patches.HudCompassPins`). Every frame HUDCompass puts the map's pins on its compass and, to find each pin's icon, writes the pin's position out as text, looks the icon up by that name and crosses the name off a list, for every pin of a shown type on the whole map, near or far, so each pin costs more the more pins there are. A pin that moves gets a new icon each time. On, Vigil does that frame's work by HUDCompass's own rules: each icon stays with its position without any text, and an icon whose pin is gone is kept aside for the next new one. The compass looks the same. It works with HUDCompass 1.2.1 and leaves any other version alone. The *Patches* tab shows what a frame of pins costs, and with the switch off what HUDCompass's own takes.
+
 ## 0.43.16
 
 New patch, off until switched on: *ComfortMe clears its hover highlight only when one is lit* (`Patches.ComfortMeHighlight`). Outside its comfort tab ComfortMe switches off the hover highlight on every piece button of the build menu on every frame, hammer out or not, looking each button's highlight up again each time. On, it does that only after a highlight was lit or the menu's buttons were rebuilt; with nothing lit there is nothing to switch off. The highlight looks the same. The *Patches* tab counts the clearings skipped and what one costs when it runs.
