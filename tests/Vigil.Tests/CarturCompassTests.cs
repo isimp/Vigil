@@ -85,5 +85,58 @@ namespace Vigil.Tests
             Assert.Equal("stepped aside: Cartur's colour code changed (an update)", CarturPinRules.FollowLine(true, true, true, "Cartur's colour code changed (an update)", 0, 0));
             Assert.Equal("working · last frame 4 pins hidden as on the map, 12 in Cartur's colours", CarturPinRules.FollowLine(true, true, true, null, 4, 12));
         }
+
+        // Cartur's map search: while text is typed, a map pin whose name does not hold it is drawn at
+        // 15 % and loses its label. Cartur's hide key steps through all shown, all hidden and auto pins
+        // hidden. HUDCompass's cart, ship and portal pins are not map pins and stayed as they were;
+        // with the patch on they follow both. They are made by a mod, not by hand, so "auto pins
+        // hidden" hides them too.
+        private const int AllShown = 0, AllHidden = 1, AutoHidden = 2;
+
+        [Fact]
+        public void While_searching_a_cart_ship_or_portal_pin_that_does_not_match_fades_like_Cartur_s_pins()
+        {
+            Assert.Equal(0.15f, CarturPinRules.MapIconAlpha(AllShown, searching: true, matches: false), 3);
+            Assert.Equal(0f, CarturPinRules.MapLabelAlpha(AllShown, searching: true, matches: false), 3);
+        }
+
+        [Fact]
+        public void While_searching_a_matching_portal_stays_fully_shown_with_its_name()
+        {
+            Assert.Equal(1f, CarturPinRules.MapIconAlpha(AllShown, searching: true, matches: true), 3);
+            Assert.Equal(1f, CarturPinRules.MapLabelAlpha(AllShown, searching: true, matches: true), 3);
+        }
+
+        [Fact]
+        public void Without_a_search_or_hiding_every_pin_is_shown_as_HUDCompass_draws_it()
+        {
+            Assert.Equal(1f, CarturPinRules.MapIconAlpha(AllShown, searching: false, matches: false), 3);
+            Assert.Equal(1f, CarturPinRules.MapLabelAlpha(AllShown, searching: false, matches: false), 3);
+        }
+
+        [Fact]
+        public void The_hide_key_hides_portals_carts_and_ships_with_all_pins_and_with_auto_pins()
+        {
+            foreach (int step in new[] { AllHidden, AutoHidden })
+            {
+                Assert.Equal(0f, CarturPinRules.MapIconAlpha(step, searching: false, matches: true), 3);
+                Assert.Equal(0f, CarturPinRules.MapLabelAlpha(step, searching: false, matches: true), 3);
+                // A search, matching or not, does not bring a hidden pin back, not even faded.
+                Assert.Equal(0f, CarturPinRules.MapIconAlpha(step, searching: true, matches: true), 3);
+                Assert.Equal(0f, CarturPinRules.MapIconAlpha(step, searching: true, matches: false), 3);
+            }
+        }
+
+        [Fact]
+        public void The_map_state_line_says_what_the_patch_does_on_this_game()
+        {
+            Assert.Equal("off: this game's switch (Patches.HudCompassCarturMap)", CarturPinRules.MapLine(false, true, null, AllShown, false, 0, 0));
+            Assert.Equal("not needed: HUDCompass or Cartur's Map Pins is not installed", CarturPinRules.MapLine(true, false, null, AllShown, false, 0, 0));
+            Assert.Equal("stepped aside: x", CarturPinRules.MapLine(true, true, "x", AllShown, false, 0, 0));
+            Assert.Equal("working · no search, pins shown", CarturPinRules.MapLine(true, true, null, AllShown, false, 0, 0));
+            Assert.Equal("working · searching: 2 of 30 carts, ships and portals match", CarturPinRules.MapLine(true, true, null, AllShown, true, 2, 30));
+            Assert.Equal("working · hidden with the hide key: 30 carts, ships and portals", CarturPinRules.MapLine(true, true, null, AllHidden, false, 0, 30));
+            Assert.Equal("working · hidden with the hide key: 30 carts, ships and portals", CarturPinRules.MapLine(true, true, null, AutoHidden, true, 0, 30));
+        }
     }
 }

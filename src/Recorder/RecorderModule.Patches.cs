@@ -11,10 +11,11 @@ namespace Vigil.Recorder
     internal sealed partial class RecorderModule
     {
         private static readonly string[] OnOffWords = { "On", "Off" };
-        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _buildNavLater, _comfortBadges, _comfortPlates, _compassPins, _vehiclePins, _compassFollow, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
+        private ConfigEntry<bool> _odinVolume, _skipWinter, _joinPackages, _jotunnSync, _chestScroll, _containerFit, _relocateFixes, _relocateSpirit, _buildMenu, _buildNavLater, _comfortBadges, _comfortPlates, _compassPins, _vehiclePins, _compassFollow, _compassMap, _awaySleep, _wardNetwork, _wardAuto, _wardPasswordSet;
         private const string CompassPinsNote = "Every frame HUDCompass puts the map's pins on its compass and, to find each pin's icon, writes the pin's position out as text, looks the icon up by that name and crosses the name off a list, for every pin of a shown type on the whole map, near or far, so each pin on the map costs more the more pins there are. A pin that moves gets a new icon each time. On, Vigil does that frame's work by HUDCompass's own rules: each icon stays with its position without any text, and an icon whose pin is gone is kept aside for the next new one. The compass looks the same. A HUDCompass whose compass code differs from 1.2.1 is left alone.";
         private const string VehiclePinsNote = "A player's game hears only of objects near it and keeps a far one at the spot it last saw, and HUDCompass pins the carts, ships and portals it knows from the server's list at joining and from the game after that, so a far one moved or built later was missing or in its old place. On, the server's Vigil keeps every cart, ship and portal of the world and tells each player the whole list on joining and every 5 s what was added, moved, renamed or removed; the player's Vigil adds and removes HUDCompass's pins by it and draws a far one at the server's place, a loaded one where the game has it. Destroyed ones go everywhere at once. Needs Vigil on the server and HUDCompass 1.2.1 on the player's game; a HUDCompass whose map pin code differs is left alone.";
         private const string CompassFollowNote = "HUDCompass's compass draws every map pin in range in one colour, also those Cartur's Map Pins hides on the map. On, and with HudCompassPins on, the compass leaves out the pins Cartur hides (its list of hidden names and its hide key) and gives pins the colour Cartur gives them on the map: the colour set in its editor, else its ore or berry tint, a looted chest at half strength. Hiding by zoom, by distance and Cartur's map search stay on the map only. A change to Cartur's colouring code makes it step aside.";
+        private const string CompassMapNote = "Cartur's Map Pins fades every map pin whose name does not hold the text typed into its search on the large map and hides its label, and its hide key steps through all pins shown, all hidden and auto pins hidden. HUDCompass draws its cart, ship and portal pins itself, so both passed them by. On, those pins follow the same rules: while the hide key hides all pins or auto pins they are hidden (they are made by a mod, not by hand), and while a search runs one whose name (a portal's tag, a cart's or ship's name or type) does not match is faded and loses its label. Needs both mods; a change to either mod's code makes it step aside.";
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -102,6 +103,9 @@ namespace Vigil.Recorder
             _compassFollow = Config.Bind("Patches", "HudCompassFollowsCartur", false, "This game's own switch: " + CompassFollowNote);
             HudCompassPatch.FollowCartur = _compassFollow.Value;
             _compassFollow.SettingChanged += (_, __) => HudCompassPatch.FollowCartur = _compassFollow.Value;
+            _compassMap = Config.Bind("Patches", "HudCompassCarturMap", false, "This game's own switch: " + CompassMapNote);
+            CarturMapPatch.On = _compassMap.Value;
+            _compassMap.SettingChanged += (_, __) => CarturMapPatch.On = _compassMap.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -201,6 +205,8 @@ namespace Vigil.Recorder
             if (HudCompassPatch.Problem != null) _host.Log.LogWarning("Vigil: the HUDCompass pin patch stepped aside: " + HudCompassPatch.Problem);
             if (HudCompassPatch.FollowProblem != null) _host.Log.LogWarning("Vigil: the compass does not follow Cartur's map: " + HudCompassPatch.FollowProblem);
             VehiclePinsPatch.Hook(_server, line => _host.Log.LogInfo(line));
+            if (!_server) CarturMapPatch.Hook(line => _host.Log.LogWarning(line));
+            if (CarturMapPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for Cartur's map search and hide key on HUDCompass's pins stepped aside: " + CarturMapPatch.Problem);
             if (VehiclePinsPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for carts, ships and portals where they really are stepped aside: " + VehiclePinsPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
@@ -231,7 +237,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 18 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0)) + " of 19 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -390,6 +396,9 @@ namespace Vigil.Recorder
 
             OwnSwitch("The compass follows Cartur's map", _compassFollow, "HudCompassFollowsCartur", CompassFollowNote);
             if (!_server) Ui.Row("On this game", Toned(HudCompassPatch.FollowState, HudCompassPatch.FollowProblem != null ? ResultTone.Caution : _compassFollow.Value && _compassPins.Value && HudCompassPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("Cartur's map search and hide key cover HUDCompass's pins", _compassMap, "HudCompassCarturMap", CompassMapNote);
+            if (!_server) Ui.Row("On this game", Toned(CarturMapPatch.State, CarturMapPatch.Problem != null ? ResultTone.Caution : _compassMap.Value && CarturMapPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Carts, ships and portals where they really are");
             Ui.BeginFormLine("Switch");

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.20
+
+New patch, off until switched on: *Cartur's map search and hide key cover HUDCompass's pins* (`Patches.HudCompassCarturMap`). Cartur's Map Pins fades the map pins that do not match its search and steps its pins through shown, all hidden and auto pins hidden with its hide key, but HUDCompass draws its cart, ship and portal pins itself, so they stayed shown. On, those pins follow both: while the hide key hides all pins or auto pins they are hidden too (a mod makes them, not a hand), and while a search runs, one whose name does not match (a portal's tag, a cart's or ship's name or type) is faded and loses its label. It works with HUDCompass 1.2.1 and Cartur's Map Pins 2.0.0 and leaves other versions alone.
+
 ## 0.43.19
 
 New patch, set on the server, off until switched on: *Carts, ships and portals where they really are* (`Patches.VehiclePinsFromServer`). A player's game hears only of objects near it and keeps a far one at the spot it last saw, so HUDCompass's pins for far carts, ships and portals that were moved or built after joining were missing or in their old place. On, the server's Vigil keeps every cart, ship and portal of the world, tells each player the whole list on joining and every 5 seconds what was added, moved, renamed or removed. Each player's Vigil adds and removes HUDCompass's pins by it and draws a far one at the server's place, a loaded one where the game has it. It needs Vigil on the server and works with HUDCompass 1.2.1. The *Patches* tab says how many objects the server keeps and how many far ones were drawn at its place.

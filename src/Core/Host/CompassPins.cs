@@ -205,6 +205,32 @@ namespace Vigil.Core
 
         private const string Missing = "not needed: HUDCompass or Cartur's Map Pins is not installed";
 
+        /// <summary>Cartur's strength for a pin its map search leaves out (its own pins' icon alpha).</summary>
+        public const float SearchFaded = 0.15f;
+
+        /// <summary>
+        /// Cartur's hide key step (its PinHiding.Shown): 0 all shown, 1 all hidden, 2 auto pins hidden.
+        /// HUDCompass's pins are made by a mod, not by hand, so both hiding steps hide them.
+        /// </summary>
+        public static bool KeyHides(int step) => step != 0;
+
+        /// <summary>A HUDCompass map pin's strength: gone while the hide key hides pins, else as Cartur's search draws a pin that does not match.</summary>
+        public static float MapIconAlpha(int step, bool searching, bool matches) => KeyHides(step) ? 0f : searching && !matches ? SearchFaded : 1f;
+
+        /// <summary>A HUDCompass map pin's label: gone while the hide key hides pins or the search leaves the pin out, as Cartur hides its labels.</summary>
+        public static float MapLabelAlpha(int step, bool searching, bool matches) => KeyHides(step) || searching && !matches ? 0f : 1f;
+
+        /// <summary>What "Cartur's map search and hide key cover HUDCompass's pins" does on this game, in words.</summary>
+        public static string MapLine(bool on, bool found, string problem, int step, bool searching, int matching, int pins)
+        {
+            if (!on) return "off: this game's switch (Patches.HudCompassCarturMap)";
+            if (!found) return Missing;
+            if (problem != null) return "stepped aside: " + problem;
+            if (KeyHides(step)) return string.Format(CultureInfo.InvariantCulture, "working · hidden with the hide key: {0} carts, ships and portals", pins);
+            if (!searching) return "working · no search, pins shown";
+            return string.Format(CultureInfo.InvariantCulture, "working · searching: {0} of {1} carts, ships and portals match", matching, pins);
+        }
+
         /// <summary>What "the compass follows Cartur's map" does on this game, in words.</summary>
         public static string FollowLine(bool on, bool found, bool compassPatchOn, string problem, int hidden, int coloured)
         {
