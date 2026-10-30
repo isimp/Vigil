@@ -118,6 +118,18 @@ namespace Vigil.Core
                 if (!full.Contains(id)) drop.Add(id);
         }
 
+        /// <summary>
+        /// The changed portals, which the server sends whole to every player: a player's game hears of a
+        /// far portal only when it is built or the player joins, so mods reading the game's copy
+        /// (TargetPortal's list and its teleport target) kept its old place and name. Carts and ships
+        /// move all the time and are left to the list.
+        /// </summary>
+        public static void PortalsToSend(List<KeyValuePair<VehicleId, VehicleState>> changed, Func<int, bool> isPortal, List<VehicleId> into)
+        {
+            foreach (var pair in changed)
+                if (isPortal(pair.Value.Prefab)) into.Add(pair.Key);
+        }
+
         private const string Off = "off: the server's switch (Patches.VehiclePinsFromServer)";
         private const string Missing = "not needed: HUDCompass is not installed";
 

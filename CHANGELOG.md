@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.43.21
+
+Two new patches, off until switched on.
+
+*HUDCompass's pins follow their portal, cart or ship* (`Patches.HudCompassPinsFollow`). The game redraws its map pins only when something asks for it, such as walking or zooming the map, and HUDCompass writes a pin's name and colour only when it makes the pin. So a portal moved, renamed or linked while you stood near kept its old place, name and colour on the map until the pins were hidden once, as entering a portal with TargetPortal does. On, the pins are compared with their portal, cart or ship four times a second, a redraw is asked for when one differs, and a pin with an old name or colour is made again. It works with HUDCompass 1.2.1 and leaves other versions alone.
+
+*TargetPortal's pins follow their portal* (`Patches.TargetPortalPinsFollow`). TargetPortal names its portal pins once, so a renamed portal kept its old name on the map and in the favourites list, and it keeps favourites by the place a portal had, so a moved portal lost its favourite. On, the pins take the portal's current name and favourites move with their portal. It works with TargetPortal 1.2.7 and leaves other versions alone.
+
+*Carts, ships and portals where they really are* now also sends a changed portal whole to every player. A player's game otherwise hears of a far portal only when it is built or on joining, so TargetPortal listed a far portal under its old name and teleported to the place it had before it was moved. This needs the server on 0.43.21 with the switch on.
+
 ## 0.43.20
 
 New patch, off until switched on: *Cartur's map search and hide key cover HUDCompass's pins* (`Patches.HudCompassCarturMap`). Cartur's Map Pins fades the map pins that do not match its search and steps its pins through shown, all hidden and auto pins hidden with its hide key, but HUDCompass draws its cart, ship and portal pins itself, so they stayed shown. On, those pins follow both: while the hide key hides all pins or auto pins they are hidden too (a mod makes them, not a hand), and while a search runs, one whose name does not match (a portal's tag, a cart's or ship's name or type) is faded and loses its label. It works with HUDCompass 1.2.1 and Cartur's Map Pins 2.0.0 and leaves other versions alone.

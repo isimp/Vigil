@@ -22,7 +22,8 @@ namespace Vigil.Recorder
     /// so a far object moved or built later is missing or in its old place. On, the server's Vigil
     /// keeps every cart, ship and portal of the world (found once by a look over all objects, then
     /// among the newly made ones), sends a joining player the whole list and every
-    /// <see cref="VehiclePinRules.RefreshSeconds"/> s what was added, moved, renamed or removed.
+    /// <see cref="VehiclePinRules.RefreshSeconds"/> s what was added, moved, renamed or removed;
+    /// a changed portal is also sent whole, so every mod reading the game's copy sees it.
     /// The player's Vigil adds and removes HUDCompass's pins by it and draws HUDCompass's pins
     /// itself, by HUDCompass's rules, with a far object at the server's place and a loaded one at
     /// the game's own. HUDCompass's code is compared with the code this was written against (1.2.1),
@@ -60,6 +61,7 @@ namespace Vigil.Recorder
         private static readonly List<ZDOID> s_lost = new List<ZDOID>();
         private static readonly List<KeyValuePair<VehicleId, VehicleState>> s_changed = new List<KeyValuePair<VehicleId, VehicleState>>();
         private static readonly List<VehicleId> s_gone = new List<VehicleId>();
+        private static readonly List<VehicleId> s_whole = new List<VehicleId>();
         /// <summary>Prefab to kind: true for a portal, false for a cart or ship.</summary>
         private static Dictionary<int, bool> s_kinds;
         private static bool s_scanned;
@@ -250,7 +252,11 @@ namespace Vigil.Recorder
                 {
                     Refresh();
                     s_lastChanges = s_changed.Count + s_gone.Count;
-                    if (s_lastChanges > 0 && ZNet.instance.GetPeers().Count > 0) rpc.InvokeRoutedRPC(ZRoutedRpc.Everybody, RpcList, Pack(false, s_changed, s_gone));
+                    if (s_lastChanges > 0 && ZNet.instance.GetPeers().Count > 0)
+                    {
+                        rpc.InvokeRoutedRPC(ZRoutedRpc.Everybody, RpcList, Pack(false, s_changed, s_gone));
+                        SendWholePortals();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -339,6 +345,15 @@ namespace Vigil.Recorder
             s_changed.Clear();
             s_gone.Clear();
             s_book.End(s_changed, s_gone);
+        }
+
+        /// <summary>Sends each changed portal whole to every player, so the game's own copy (which TargetPortal reads) has its new place, name and link.</summary>
+        private static void SendWholePortals()
+        {
+            var kinds = Kinds();
+            s_whole.Clear();
+            VehiclePinRules.PortalsToSend(s_changed, prefab => kinds.TryGetValue(prefab, out bool portal) && portal, s_whole);
+            foreach (var id in s_whole) ZDOMan.instance.ForceSendZDO(Uid(id));
         }
 
         private static void OnAsk(long sender, int format)
@@ -443,6 +458,18 @@ namespace Vigil.Recorder
             {
                 StepAside("a list from the server could not be read: " + e.GetType().Name + " " + e.Message);
             }
+        }
+
+        /// <summary>
+        /// Whether this game's map draws the object at the server's place and name, as the map pin
+        /// loop below decides: while the list is in use, for an object this game has not loaded.
+        /// </summary>
+        public static bool ServerPlace(ZDOID uid, ZDO zdo, out VehicleState told)
+        {
+            told = default;
+            if (s_server || !On || !s_heard || Problem != null) return false;
+            bool loaded = zdo != null && ZNetScene.instance != null && ZNetScene.instance.FindInstance(zdo) != null;
+            return VehiclePinRules.UseServer(zdo != null, loaded, s_fromServer.TryGetValue(uid, out told));
         }
 
         /// <summary>HUDCompass's map pin postfix, by its rules, with far objects at the server's place; HUDCompass's own runs until the server's list arrives.</summary>
