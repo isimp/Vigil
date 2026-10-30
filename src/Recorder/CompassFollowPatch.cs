@@ -30,7 +30,7 @@ namespace Vigil.Recorder
         private const string HarmonyId = "isimp.Vigil.patches.compassfollow";
 
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
-        private const ulong KnownCode = 0xF60025B2D0CB66DFUL;
+        private const ulong KnownCode = 0x0F71C38696676BFDUL;
 
         private const float CheckSeconds = 0.25f;
 

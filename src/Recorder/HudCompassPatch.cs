@@ -36,7 +36,7 @@ namespace Vigil.Recorder
         public const string CarturGuid = "com.jekkle.valheim.carturmappins";
 
         /// <summary>The code (<see cref="CodeShape"/>) of the compass postfix and the pin rules in HUDCompass 1.2.1.</summary>
-        private const ulong KnownCode = 0xB3167DD1F16EEE79UL;
+        private const ulong KnownCode = 0xF05DC4F58EEEE0F6UL;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -52,7 +52,7 @@ namespace Vigil.Recorder
         public static string State => CompassPinRules.StateLine(On, Found, Version, Problem, s_frames, Ms(s_ticks), s_pins, s_made, s_reused, s_theirFrames, Ms(s_theirTicks));
 
         /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins, as in 2.0.0 and 2.0.1.</summary>
-        private const ulong KnownCarturColours = 0x68AFBF848CEE8CB2UL;
+        private const ulong KnownCarturColours = 0xF94096760D5D5494UL;
 
         /// <summary>This game's switch for following Cartur's map, kept current by the config entry.</summary>
         public static bool FollowCartur;

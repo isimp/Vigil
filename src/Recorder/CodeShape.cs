@@ -84,8 +84,21 @@ namespace Vigil.Recorder
                 case VariableDefinition v: return "v:" + v.Index.ToString(CultureInfo.InvariantCulture);
                 case ParameterDefinition p: return "p:" + p.Index.ToString(CultureInfo.InvariantCulture);
                 case CallSite _: return "c:";
-                case float x: return "r:" + x.ToString("R", CultureInfo.InvariantCulture);
-                case double x: return "d:" + x.ToString("R", CultureInfo.InvariantCulture);
+                default: return Number(operand);
+            }
+        }
+
+        /// <summary>
+        /// A number operand as text that reads the same on every runtime: a float or double by its
+        /// bits (the text "R" gives differs between Mono or .NET Framework and later .NET), a whole
+        /// number in invariant digits.
+        /// </summary>
+        internal static string Number(object operand)
+        {
+            switch (operand)
+            {
+                case float x: return "r:" + BitConverter.ToInt32(BitConverter.GetBytes(x), 0).ToString("X8", CultureInfo.InvariantCulture);
+                case double x: return "d:" + BitConverter.DoubleToInt64Bits(x).ToString("X16", CultureInfo.InvariantCulture);
                 case IFormattable n: return "n:" + n.ToString(null, CultureInfo.InvariantCulture);
                 default: return "?:" + operand.GetType().Name;
             }

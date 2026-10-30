@@ -29,7 +29,7 @@ namespace Vigil.Recorder
         private const string FavouritesKey = "TargetPortal Favorites";
 
         /// <summary>TargetPortal 1.2.7's Map.AddPortalPins, Map.FillFavorites and Map.ToggleFavoritePortal.</summary>
-        private const ulong KnownCode = 0xC3723D54C26C89E5UL;
+        private const ulong KnownCode = 0x2F355436A2B111ABUL;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;

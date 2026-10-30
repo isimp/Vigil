@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.1
+
+*HUDCompass keeps its pin icons* stepped aside on 0.44.0 although HUDCompass had not changed: the new code check wrote decimal numbers as text, and the game's runtime writes some of them differently. Numbers are now compared by their exact value, the same on every runtime.
+
 ## 0.44.0
 
 The patches on HUDCompass, Cartur's Map Pins and TargetPortal check the other mod's code in a new way. They compared its compiled bytes, which change whenever the mod gains new parts anywhere, even in code that stays the same, so Cartur's 2.0.1 update switched two patches off for nothing. They now compare what the code does: each step, and the names of what it calls, reads and writes. An update that leaves that code alone keeps the patches working; one that changes it still makes them step aside. Nothing else changes.

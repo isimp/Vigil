@@ -36,7 +36,7 @@ namespace Vigil.Recorder
         private const int Format = 1;
 
         /// <summary>HUDCompass 1.2.1's map pin postfix, DrawMarker, MarkerToPinData, AddMarkerFromServer, RemoveMarker, IsAttachedToPlayer, IsPortalType.</summary>
-        private const ulong KnownCode = 0x486932119744CBDAUL;
+        private const ulong KnownCode = 0x382E2A1AA7B92A74UL;
 
         /// <summary>The server's switch, passed on by ServerSync.</summary>
         public static bool On;

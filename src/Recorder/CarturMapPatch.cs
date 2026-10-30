@@ -29,10 +29,10 @@ namespace Vigil.Recorder
         private const string HarmonyId = "isimp.Vigil.patches.carturmap";
 
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
-        private const ulong KnownCompassCode = 0xF60025B2D0CB66DFUL;
+        private const ulong KnownCompassCode = 0x0F71C38696676BFDUL;
 
         /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key), as in 2.0.0 and 2.0.1.</summary>
-        private const ulong KnownCarturCode = 0x4772ADD9366B4242UL;
+        private const ulong KnownCarturCode = 0xDC9C8AF80AB28234UL;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;

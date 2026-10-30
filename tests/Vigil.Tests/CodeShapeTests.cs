@@ -97,6 +97,16 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_decimal_number_reads_the_same_on_the_game_s_runtime_as_here()
+        {
+            // Its exact bits: the text "R" gives differs between .NET Framework or Mono and later .NET.
+            Assert.Equal("r:3DCCCCCD", CodeShape.Number(0.1f));
+            Assert.Equal("d:3FB999999999999A", CodeShape.Number(0.1));
+            Assert.Equal("n:-7", CodeShape.Number(-7));
+            Assert.Equal("n:1099511628211", CodeShape.Number(1099511628211L));
+        }
+
+        [Fact]
         public void Another_text_counts_as_changed()
         {
             Assert.NotEqual(HashOf(Build(new Shape())), HashOf(Build(new Shape { Text = "y" })));
