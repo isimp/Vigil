@@ -22,7 +22,7 @@ namespace Vigil.Recorder
     /// tag, a cart's or ship's name or type), through Cartur's own matching; its label shown or gone
     /// alike. A CanvasGroup on the pin carries it, so HUDCompass's colours stay as they are. Both
     /// mods' code is compared with the code this was written against (HUDCompass 1.2.1, Cartur
-    /// 2.0.0), and any change makes the patch step aside. The switch is this game's own.
+    /// 2.0.0 and 2.0.1), and any change makes the patch step aside. The switch is this game's own.
     /// </summary>
     internal static class CarturMapPatch
     {
@@ -31,8 +31,8 @@ namespace Vigil.Recorder
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
         private const ulong KnownCompassCode = 0xA2263FC08E9D9063UL;
 
-        /// <summary>Cartur 2.0.0's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key).</summary>
-        private const ulong KnownCarturCode = 0xA1F97E6C8BB2DBB2UL;
+        /// <summary>Cartur 2.0.0's and 2.0.1's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key); 2.0.1 added members, which renumbers the tokens in the same code.</summary>
+        private static readonly ulong[] KnownCarturCode = { 0xA1F97E6C8BB2DBB2UL, 0xF877CCE3BE6131BBUL };
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -88,7 +88,7 @@ namespace Vigil.Recorder
                 var step = hiding?.GetMethod("Step", any);
                 var cycle = hiding?.GetProperty("Cycle", any)?.GetGetMethod(true);
                 if (fade == null || active == null || matches == null || cycleHides == null || step == null || cycle == null || !cycle.ReturnType.IsEnum
-                    || CodeHash(new[] { fade, cycleHides, step }) != KnownCarturCode)
+                    || Array.IndexOf(KnownCarturCode, CodeHash(new[] { fade, cycleHides, step })) < 0)
                 {
                     Problem = "Cartur's search or hiding code changed (an update)";
                     return;

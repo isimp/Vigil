@@ -27,7 +27,7 @@ namespace Vigil.Recorder
     /// A second switch, "the compass follows Cartur's map", works inside this frame when Cartur's Map
     /// Pins is installed: the map pins Cartur hides (its hidden names, its hide key) are left off the
     /// compass, and pins take the colour Cartur gives them on the map (<see cref="CarturPinRules"/>).
-    /// Cartur's colouring code is compared with 2.0.0's, and any change makes that part step aside.
+    /// Cartur's colouring code is compared with 2.0.0's and 2.0.1's, and any change makes that part step aside.
     /// </summary>
     internal static class HudCompassPatch
     {
@@ -51,8 +51,8 @@ namespace Vigil.Recorder
 
         public static string State => CompassPinRules.StateLine(On, Found, Version, Problem, s_frames, Ms(s_ticks), s_pins, s_made, s_reused, s_theirFrames, Ms(s_theirTicks));
 
-        /// <summary>Cartur 2.0.0's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins.</summary>
-        private const ulong KnownCarturColours = 0xA506A78BD2002009UL;
+        /// <summary>Cartur 2.0.0's and 2.0.1's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins (2.0.1 added members, which renumbers the tokens in the same code).</summary>
+        private static readonly ulong[] KnownCarturColours = { 0xA506A78BD2002009UL, 0x5CF581481F99782FUL };
 
         /// <summary>This game's switch for following Cartur's map, kept current by the config entry.</summary>
         public static bool FollowCartur;
@@ -230,7 +230,7 @@ namespace Vigil.Recorder
                 var tintFor = styles?.GetMethod("TintFor", any);
                 var looted = placer?.GetMethod("LootedChestType", any);
                 if (colours == null || isHidden == null || keyHides == null || styleFor == null || colourFor == null || tintFor == null || looted == null
-                    || colourFor.ReturnType != typeof(Color?) || CodeHash(new[] { colours }) != KnownCarturColours)
+                    || colourFor.ReturnType != typeof(Color?) || Array.IndexOf(KnownCarturColours, CodeHash(new[] { colours })) < 0)
                 {
                     FollowProblem = "Cartur's colour code changed (an update)";
                     return;

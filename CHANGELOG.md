@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.23
+
+*The compass follows Cartur's map* and *Cartur's map search and hide key cover HUDCompass's pins* work with Cartur's Map Pins 2.0.1 as well. Both stepped aside after its update because the compiled code they check differed. The code of what they use is the same as in 2.0.0; 2.0.1 added new parts, which renumbers references inside the old code. Cartur's new default opacity per kind is part of a pin's colour, so the compass shows it too.
+
 ## 0.43.22
 
 *TargetPortal's pins follow their portal* now keeps a favourite with its portal also when the portal is moved while TargetPortal shows no pins, which is most of the time: it drops its pins on leaving a portal unless its icons are shown. Vigil remembers each favourite portal by the portal's id in the world, which a move does not change, in its own entry of the character's data, and once a second rewrites the favourite of a portal that stands somewhere else. TargetPortal's own favourites keep their form, so switching the patch off leaves them as they are.
