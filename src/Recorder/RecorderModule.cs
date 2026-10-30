@@ -519,6 +519,7 @@ namespace Vigil.Recorder
             try { if (!_server) WardRepairPatch.Update(); } catch (Exception) { }
             try { if (_patchesHooked) VehiclePinsPatch.Update(); } catch (Exception) { }
             try { if (_patchesHooked && !_server) CompassFollowPatch.Update(); } catch (Exception) { }
+            try { if (_patchesHooked && !_server) TargetPortalPatch.Update(); } catch (Exception) { }
             try { RemoveWardTestLeftovers(); } catch (Exception) { }
             try { UpdateOwnCost(); } catch (Exception) { }
             NetAttribution.InWorld = _server ? ZNet.instance != null : Player.m_localPlayer != null;

@@ -125,6 +125,74 @@ namespace Vigil.Tests
             Assert.Equal("(1.00, 2.00, 3.00)", PinFollowRules.FavouritesMoved(saved, "(5.00, 6.00, 7.00)", "(1.00, 2.00, 3.00)"));
         }
 
+        private static readonly VehicleId Home = new VehicleId(-42, 7), Mine = new VehicleId(99, 8);
+
+        [Fact]
+        public void A_favourite_follows_its_portal_moved_while_no_TargetPortal_pins_were_shown()
+        {
+            var book = new Dictionary<VehicleId, string>();
+            string favs = "(1.00, 2.00, 3.00)";
+            // Seen once where it was marked, then moved: no pin of its old place is needed.
+            favs = PinFollowRules.FavouritesResync(favs, new Dictionary<VehicleId, string> { [Home] = "(1.00, 2.00, 3.00)" }, book, out int moved);
+            Assert.Equal(0, moved);
+            favs = PinFollowRules.FavouritesResync(favs, new Dictionary<VehicleId, string> { [Home] = "(8.00, 2.00, 3.00)" }, book, out moved);
+            Assert.Equal("(8.00, 2.00, 3.00)", favs);
+            Assert.Equal(1, moved);
+        }
+
+        [Fact]
+        public void A_favourite_whose_portal_this_game_does_not_know_right_now_is_kept()
+        {
+            var book = new Dictionary<VehicleId, string> { [Home] = "(1.00, 2.00, 3.00)" };
+            string favs = PinFollowRules.FavouritesResync("(1.00, 2.00, 3.00)", new Dictionary<VehicleId, string>(), book, out int moved);
+            Assert.Equal("(1.00, 2.00, 3.00)", favs);
+            Assert.Equal(0, moved);
+            Assert.True(book.ContainsKey(Home));
+        }
+
+        [Fact]
+        public void A_portal_taken_off_the_favourites_is_forgotten_and_its_moves_change_nothing()
+        {
+            var book = new Dictionary<VehicleId, string> { [Home] = "(1.00, 2.00, 3.00)" };
+            string favs = PinFollowRules.FavouritesResync("", new Dictionary<VehicleId, string> { [Home] = "(8.00, 2.00, 3.00)" }, book, out int moved);
+            Assert.Equal("", favs);
+            Assert.Equal(0, moved);
+            Assert.Empty(book);
+        }
+
+        [Fact]
+        public void Of_two_favourites_only_the_moved_one_changes()
+        {
+            var book = new Dictionary<VehicleId, string>();
+            string favs = "(1.00, 2.00, 3.00)|(5.00, 6.00, 7.00)";
+            var now = new Dictionary<VehicleId, string> { [Home] = "(1.00, 2.00, 3.00)", [Mine] = "(5.00, 6.00, 7.00)" };
+            favs = PinFollowRules.FavouritesResync(favs, now, book, out _);
+            now[Mine] = "(9.00, 6.00, 7.00)";
+            favs = PinFollowRules.FavouritesResync(favs, now, book, out int moved);
+            Assert.Equal("(1.00, 2.00, 3.00)|(9.00, 6.00, 7.00)", favs);
+            Assert.Equal(1, moved);
+        }
+
+        [Fact]
+        public void A_portal_that_is_no_favourite_is_not_remembered()
+        {
+            var book = new Dictionary<VehicleId, string>();
+            PinFollowRules.FavouritesResync("(1.00, 2.00, 3.00)", new Dictionary<VehicleId, string> { [Mine] = "(5.00, 6.00, 7.00)" }, book, out _);
+            Assert.Empty(book);
+        }
+
+        [Fact]
+        public void The_remembered_portals_survive_saving_in_the_character()
+        {
+            var book = new Dictionary<VehicleId, string> { [Home] = "(1.00, -2.50, 3.00)", [Mine] = "(5.00, 6.00, 7.00)" };
+            var back = PinFollowRules.ParseFavouriteBook(PinFollowRules.FormatFavouriteBook(book));
+            Assert.Equal(book, back);
+            Assert.Empty(PinFollowRules.ParseFavouriteBook(null));
+            Assert.Empty(PinFollowRules.ParseFavouriteBook("garbage|1:x@y"));
+            // No place, or no player before the id: nothing to follow.
+            Assert.Empty(PinFollowRules.ParseFavouriteBook("1:2@|:3@(1.00, 2.00, 3.00)"));
+        }
+
         [Fact]
         public void The_patches_tab_says_what_TargetPortal_following_did()
         {

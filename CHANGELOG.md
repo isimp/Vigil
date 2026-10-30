@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.22
+
+*TargetPortal's pins follow their portal* now keeps a favourite with its portal also when the portal is moved while TargetPortal shows no pins, which is most of the time: it drops its pins on leaving a portal unless its icons are shown. Vigil remembers each favourite portal by the portal's id in the world, which a move does not change, in its own entry of the character's data, and once a second rewrites the favourite of a portal that stands somewhere else. TargetPortal's own favourites keep their form, so switching the patch off leaves them as they are.
+
 ## 0.43.21
 
 Two new patches, off until switched on.

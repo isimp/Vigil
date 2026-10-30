@@ -14,9 +14,12 @@ namespace Vigil.Recorder
     /// TargetPortal 1.2.7 keeps its portal pins by place and names each once, when it makes it, so a
     /// renamed portal kept its old name on the map and in the favourites list; it keeps favourites
     /// as the place a portal had when it was marked, so a moved portal lost its favourite. On, after
-    /// each of TargetPortal's pin updates a pin whose portal has another tag takes the new one, and
-    /// before it a favourite whose portal has moved is moved with it; the favourites list is then
-    /// built again. TargetPortal's code is compared with the code this was written against (1.2.7),
+    /// each of TargetPortal's pin updates a pin whose portal has another tag takes the new one. A
+    /// favourite moves with its portal: Vigil remembers each favourite portal by its world id (which
+    /// a move does not change) in its own entry of the character's data, and every second, and
+    /// before each pin update, rewrites the favourite of a portal standing elsewhere; TargetPortal's
+    /// own favourites keep their form. The favourites list is then built again. TargetPortal's code
+    /// is compared with the code this was written against (1.2.7),
     /// and any change makes the patch step aside. The switch is this game's own.
     /// </summary>
     internal static class TargetPortalPatch
@@ -45,6 +48,15 @@ namespace Vigil.Recorder
         private static Action s_fillFavourites;
         private static readonly AccessTools.FieldRef<Minimap, bool> s_pinUpdate = AccessTools.FieldRefAccess<Minimap, bool>("m_pinUpdateRequired");
 
+        /// <summary>Vigil's own entry in the character's data: the favourite portals by world id, which TargetPortal does not read.</summary>
+        private const string BookKey = "Vigil TargetPortal favourite portals";
+        private const float ResyncSeconds = 1f;
+        private static FieldInfo s_knownPortals;
+        private static Player s_bookFor;
+        private static Dictionary<VehicleId, string> s_book = new Dictionary<VehicleId, string>();
+        private static readonly Dictionary<VehicleId, string> s_now = new Dictionary<VehicleId, string>();
+        private static float s_nextResync;
+
         public static void Hook(Action<string> log)
         {
             s_log = log;
@@ -65,7 +77,9 @@ namespace Vigil.Recorder
                 }
                 s_activePins = AccessTools.DeclaredField(map, "activePins")?.GetValue(null) as Dictionary<Minimap.PinData, ZDO>;
                 s_fillFavourites = AccessTools.MethodDelegate<Action>(fill);
-                if (s_activePins == null)
+                // Every portal this game knows, refilled by TargetPortal every 5 s from the game's own portal list.
+                s_knownPortals = AccessTools.DeclaredField(info.Instance.GetType(), "knownPortals");
+                if (s_activePins == null || s_knownPortals == null || s_knownPortals.FieldType != typeof(HashSet<ZDO>))
                 {
                     Problem = "TargetPortal's pin code changed (an update)";
                     return;
@@ -102,6 +116,60 @@ namespace Vigil.Recorder
         private static bool Live(ZDO zdo) =>
             zdo != null && ZDOMan.instance != null && ZDOMan.instance.GetZDO(zdo.m_uid) == zdo && Game.instance != null && Game.instance.PortalPrefabHash.Contains(zdo.GetPrefab());
 
+        /// <summary>
+        /// Every second: favourites follow their portals by the portals' world ids, also while
+        /// TargetPortal has no pins (it drops them on leaving a portal unless its icons are shown).
+        /// </summary>
+        public static void Update()
+        {
+            if (!On || !Found || Problem != null) return;
+            var player = Player.m_localPlayer;
+            if (player == null || ZDOMan.instance == null) return;
+            float now = Time.unscaledTime;
+            if (now < s_nextResync) return;
+            s_nextResync = now + ResyncSeconds;
+            try
+            {
+                Resync(player);
+                if (s_favouritesChanged && s_activePins.Count > 0) s_fillFavourites();
+                s_favouritesChanged = false;
+            }
+            catch (Exception e)
+            {
+                StepAside("its look at the favourites failed: " + e.GetType().Name + " " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Moves each favourite whose remembered portal stands elsewhere now, and keeps the book of
+        /// favourite portals (world id and place) in the character's data, beside TargetPortal's own.
+        /// </summary>
+        private static void Resync(Player player)
+        {
+            if (s_bookFor != player)
+            {
+                s_bookFor = player;
+                s_book = PinFollowRules.ParseFavouriteBook(player.m_customData.TryGetValue(BookKey, out string kept) ? kept : null);
+            }
+            player.m_customData.TryGetValue(FavouritesKey, out string favs);
+            if (string.IsNullOrEmpty(favs) && s_book.Count == 0) return;
+            s_now.Clear();
+            if (s_knownPortals.GetValue(null) is HashSet<ZDO> portals)
+                foreach (var zdo in portals)
+                    if (Live(zdo)) s_now[new VehicleId(zdo.m_uid.UserID, zdo.m_uid.ID)] = zdo.GetPosition().ToString();
+            string next = PinFollowRules.FavouritesResync(favs, s_now, s_book, out int moved);
+            if (!ReferenceEquals(next, favs))
+            {
+                player.m_customData[FavouritesKey] = next;
+                s_moved += moved;
+                s_favouritesChanged = true;
+            }
+            string book = PinFollowRules.FormatFavouriteBook(s_book);
+            player.m_customData.TryGetValue(BookKey, out string stored);
+            if (book.Length == 0) player.m_customData.Remove(BookKey);
+            else if (book != stored) player.m_customData[BookKey] = book;
+        }
+
         /// <summary>Before TargetPortal moves the pin of a moved portal (it keeps pins by place): the favourite of its old place goes to the new one.</summary>
         private static void BeforeAddPins()
         {
@@ -121,9 +189,12 @@ namespace Vigil.Recorder
                     now = moved;
                     s_moved++;
                 }
-                if (ReferenceEquals(now, saved)) return;
-                player.m_customData[FavouritesKey] = now;
-                s_favouritesChanged = true;
+                if (!ReferenceEquals(now, saved))
+                {
+                    player.m_customData[FavouritesKey] = now;
+                    s_favouritesChanged = true;
+                }
+                Resync(player);
             }
             catch (Exception e)
             {
