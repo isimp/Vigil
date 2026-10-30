@@ -22,17 +22,17 @@ namespace Vigil.Recorder
     /// tag, a cart's or ship's name or type), through Cartur's own matching; its label shown or gone
     /// alike. A CanvasGroup on the pin carries it, so HUDCompass's colours stay as they are. Both
     /// mods' code is compared with the code this was written against (HUDCompass 1.2.1, Cartur
-    /// 2.0.0 and 2.0.1), and any change makes the patch step aside. The switch is this game's own.
+    /// 2.0.0, unchanged in 2.0.1), and any change makes the patch step aside. The switch is this game's own.
     /// </summary>
     internal static class CarturMapPatch
     {
         private const string HarmonyId = "isimp.Vigil.patches.carturmap";
 
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
-        private const ulong KnownCompassCode = 0xA2263FC08E9D9063UL;
+        private const ulong KnownCompassCode = 0xF60025B2D0CB66DFUL;
 
-        /// <summary>Cartur 2.0.0's and 2.0.1's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key); 2.0.1 added members, which renumbers the tokens in the same code.</summary>
-        private static readonly ulong[] KnownCarturCode = { 0xA1F97E6C8BB2DBB2UL, 0xF877CCE3BE6131BBUL };
+        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key), as in 2.0.0 and 2.0.1.</summary>
+        private const ulong KnownCarturCode = 0x4772ADD9366B4242UL;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -73,7 +73,7 @@ namespace Vigil.Recorder
                 var mapPostfix = hud.GetType("neobotics.ValheimMods.DynamicMapMarkers+Minimap_UpdatePins_Patch")?.GetMethod("Minimap_UpdatePins_DMM_Postfix", any);
                 var toPin = dmmType?.GetMethod("MarkerToPinData", any);
                 if (main == null || markerData == null || draw == null || mapPostfix == null || toPin == null
-                    || CodeHash(new[] { draw, mapPostfix, toPin }) != KnownCompassCode)
+                    || CodeShape.Hash(new[] { draw, mapPostfix, toPin }) != KnownCompassCode)
                 {
                     Problem = "HUDCompass's map pin code changed (an update)";
                     return;
@@ -88,7 +88,7 @@ namespace Vigil.Recorder
                 var step = hiding?.GetMethod("Step", any);
                 var cycle = hiding?.GetProperty("Cycle", any)?.GetGetMethod(true);
                 if (fade == null || active == null || matches == null || cycleHides == null || step == null || cycle == null || !cycle.ReturnType.IsEnum
-                    || Array.IndexOf(KnownCarturCode, CodeHash(new[] { fade, cycleHides, step })) < 0)
+                    || CodeShape.Hash(new[] { fade, cycleHides, step }) != KnownCarturCode)
                 {
                     Problem = "Cartur's search or hiding code changed (an update)";
                     return;
@@ -112,19 +112,6 @@ namespace Vigil.Recorder
             {
                 Problem = "HUDCompass or Cartur could not be hooked: " + e.GetType().Name + " " + e.Message;
             }
-        }
-
-        /// <summary>FNV-1a over the IL of each method in turn.</summary>
-        private static ulong CodeHash(IEnumerable<MethodInfo> methods)
-        {
-            ulong h = 14695981039346656037UL;
-            foreach (var m in methods)
-                foreach (byte b in m.GetMethodBody().GetILAsByteArray())
-                {
-                    h ^= b;
-                    h *= 1099511628211UL;
-                }
-            return h;
         }
 
         private static Func<object, T> Getter<T>(Type type, string name)

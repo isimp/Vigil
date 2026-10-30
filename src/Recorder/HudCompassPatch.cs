@@ -27,7 +27,7 @@ namespace Vigil.Recorder
     /// A second switch, "the compass follows Cartur's map", works inside this frame when Cartur's Map
     /// Pins is installed: the map pins Cartur hides (its hidden names, its hide key) are left off the
     /// compass, and pins take the colour Cartur gives them on the map (<see cref="CarturPinRules"/>).
-    /// Cartur's colouring code is compared with 2.0.0's and 2.0.1's, and any change makes that part step aside.
+    /// Cartur's colouring code is compared with 2.0.0's (unchanged in 2.0.1), and any change makes that part step aside.
     /// </summary>
     internal static class HudCompassPatch
     {
@@ -35,8 +35,8 @@ namespace Vigil.Recorder
         public const string Guid = "neobotics.valheim_mod.hudcompass";
         public const string CarturGuid = "com.jekkle.valheim.carturmappins";
 
-        /// <summary>The IL of the compass postfix and the pin rules in HUDCompass 1.2.1.</summary>
-        private const ulong KnownCode = 0x31CF98BBE3A684B3UL;
+        /// <summary>The code (<see cref="CodeShape"/>) of the compass postfix and the pin rules in HUDCompass 1.2.1.</summary>
+        private const ulong KnownCode = 0xB3167DD1F16EEE79UL;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -51,8 +51,8 @@ namespace Vigil.Recorder
 
         public static string State => CompassPinRules.StateLine(On, Found, Version, Problem, s_frames, Ms(s_ticks), s_pins, s_made, s_reused, s_theirFrames, Ms(s_theirTicks));
 
-        /// <summary>Cartur 2.0.0's and 2.0.1's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins (2.0.1 added members, which renumbers the tokens in the same code).</summary>
-        private static readonly ulong[] KnownCarturColours = { 0xA506A78BD2002009UL, 0x5CF581481F99782FUL };
+        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins, as in 2.0.0 and 2.0.1.</summary>
+        private const ulong KnownCarturColours = 0x68AFBF848CEE8CB2UL;
 
         /// <summary>This game's switch for following Cartur's map, kept current by the config entry.</summary>
         public static bool FollowCartur;
@@ -166,7 +166,7 @@ namespace Vigil.Recorder
                     return;
                 }
                 var rules = new[] { "MatchType", "MatchTypeOrName", "MatchNameOrWildcard", "IsInBounds" }.Select(n => main.GetMethod(n, any)).ToList();
-                if (rules.Any(m => m == null) || CodeHash(new[] { update }.Concat(rules)) != KnownCode)
+                if (rules.Any(m => m == null) || CodeShape.Hash(new[] { update }.Concat(rules)) != KnownCode)
                 {
                     Problem = "its compass code changed (an update)";
                     return;
@@ -230,7 +230,7 @@ namespace Vigil.Recorder
                 var tintFor = styles?.GetMethod("TintFor", any);
                 var looted = placer?.GetMethod("LootedChestType", any);
                 if (colours == null || isHidden == null || keyHides == null || styleFor == null || colourFor == null || tintFor == null || looted == null
-                    || colourFor.ReturnType != typeof(Color?) || Array.IndexOf(KnownCarturColours, CodeHash(new[] { colours })) < 0)
+                    || colourFor.ReturnType != typeof(Color?) || CodeShape.Hash(new[] { colours }) != KnownCarturColours)
                 {
                     FollowProblem = "Cartur's colour code changed (an update)";
                     return;
@@ -248,19 +248,6 @@ namespace Vigil.Recorder
             {
                 FollowProblem = "Cartur could not be hooked: " + e.GetType().Name + " " + e.Message;
             }
-        }
-
-        /// <summary>FNV-1a over the IL of each method in turn.</summary>
-        private static ulong CodeHash(IEnumerable<MethodInfo> methods)
-        {
-            ulong h = 14695981039346656037UL;
-            foreach (var m in methods)
-                foreach (byte b in m.GetMethodBody().GetILAsByteArray())
-                {
-                    h ^= b;
-                    h *= 1099511628211UL;
-                }
-            return h;
         }
 
         private static AccessTools.FieldRef<F> Static<F>(Type type, string name) => AccessTools.StaticFieldRefAccess<F>(AccessTools.DeclaredField(type, name));

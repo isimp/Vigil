@@ -21,6 +21,8 @@
     <Compile Include="../../src/Preloader/BundleHookEdit.cs" />
     <Compile Include="../../src/Preloader/SaveHold.cs" />
     <Compile Include="../../src/Preloader/LookupMemory.cs" />
+    <!-- The check of other mods' code reads it with Mono.Cecil only. -->
+    <Compile Include="../../src/Recorder/CodeShape.cs" />
   </ItemGroup>
 
   <ItemGroup>

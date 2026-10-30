@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.0
+
+The patches on HUDCompass, Cartur's Map Pins and TargetPortal check the other mod's code in a new way. They compared its compiled bytes, which change whenever the mod gains new parts anywhere, even in code that stays the same, so Cartur's 2.0.1 update switched two patches off for nothing. They now compare what the code does: each step, and the names of what it calls, reads and writes. An update that leaves that code alone keeps the patches working; one that changes it still makes them step aside. Nothing else changes.
+
 ## 0.43.23
 
 *The compass follows Cartur's map* and *Cartur's map search and hide key cover HUDCompass's pins* work with Cartur's Map Pins 2.0.1 as well. Both stepped aside after its update because the compiled code they check differed. The code of what they use is the same as in 2.0.0; 2.0.1 added new parts, which renumbers references inside the old code. Cartur's new default opacity per kind is part of a pin's colour, so the compass shows it too.

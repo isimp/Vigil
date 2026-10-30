@@ -30,7 +30,7 @@ namespace Vigil.Recorder
         private const string HarmonyId = "isimp.Vigil.patches.compassfollow";
 
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
-        private const ulong KnownCode = 0xA2263FC08E9D9063UL;
+        private const ulong KnownCode = 0xF60025B2D0CB66DFUL;
 
         private const float CheckSeconds = 0.25f;
 
@@ -91,7 +91,7 @@ namespace Vigil.Recorder
                 var toPin = dmmType?.GetMethod("MarkerToPinData", any);
                 var destroy = markerData?.GetMethod("Destroy", any);
                 if (main == null || markerData == null || markerType == null || draw == null || mapPostfix == null || toPin == null || destroy == null
-                    || CodeHash(new[] { draw, mapPostfix, toPin }) != KnownCode)
+                    || CodeShape.Hash(new[] { draw, mapPostfix, toPin }) != KnownCode)
                 {
                     Problem = "HUDCompass's map pin code changed (an update)";
                     return;
@@ -119,19 +119,6 @@ namespace Vigil.Recorder
             {
                 Problem = "HUDCompass could not be hooked: " + e.GetType().Name + " " + e.Message;
             }
-        }
-
-        /// <summary>FNV-1a over the IL of each method in turn.</summary>
-        private static ulong CodeHash(IEnumerable<MethodInfo> methods)
-        {
-            ulong h = 14695981039346656037UL;
-            foreach (var m in methods)
-                foreach (byte b in m.GetMethodBody().GetILAsByteArray())
-                {
-                    h ^= b;
-                    h *= 1099511628211UL;
-                }
-            return h;
         }
 
         private static Func<object, T> Getter<T>(Type type, string name)

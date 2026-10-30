@@ -6,7 +6,7 @@
     <RootNamespace>Vigil</RootNamespace>
     <LangVersion>latest</LangVersion>
     <!-- The one place the version is set: the plugin's own version is generated from it. -->
-    <Version>0.43.23</Version>
+    <Version>0.44.0</Version>
     <Authors>isimp</Authors>
     <Product>Vigil</Product>
     <Description>Private admin and lag-diagnosis tool for my group's Valheim server; not maintained for anyone else's use.</Description>
@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- Compiles against the Mono.Cecil BepInEx 5.4.23 ships in its core folder; that copy is the one used at run time. -->
+    <PackageReference Include="Mono.Cecil" Version="0.10.4" PrivateAssets="all" ExcludeAssets="runtime" />
     <!-- ServerSync compresses its config payloads. -->
     <Reference Include="System.IO.Compression" />
   </ItemGroup>

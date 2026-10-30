@@ -29,7 +29,7 @@ namespace Vigil.Recorder
         private const string FavouritesKey = "TargetPortal Favorites";
 
         /// <summary>TargetPortal 1.2.7's Map.AddPortalPins, Map.FillFavorites and Map.ToggleFavoritePortal.</summary>
-        private const ulong KnownCode = 0x0D118261F52AD2DFUL;
+        private const ulong KnownCode = 0xC3723D54C26C89E5UL;
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -70,7 +70,7 @@ namespace Vigil.Recorder
                 var add = map?.GetMethod("AddPortalPins", any);
                 var fill = map?.GetMethod("FillFavorites", any);
                 var toggle = map?.GetMethod("ToggleFavoritePortal", any);
-                if (add == null || fill == null || toggle == null || CodeHash(new[] { add, fill, toggle }) != KnownCode)
+                if (add == null || fill == null || toggle == null || CodeShape.Hash(new[] { add, fill, toggle }) != KnownCode)
                 {
                     Problem = "TargetPortal's pin code changed (an update)";
                     return;
@@ -91,19 +91,6 @@ namespace Vigil.Recorder
             {
                 Problem = "TargetPortal could not be hooked: " + e.GetType().Name + " " + e.Message;
             }
-        }
-
-        /// <summary>FNV-1a over the IL of each method in turn.</summary>
-        private static ulong CodeHash(IEnumerable<MethodInfo> methods)
-        {
-            ulong h = 14695981039346656037UL;
-            foreach (var m in methods)
-                foreach (byte b in m.GetMethodBody().GetILAsByteArray())
-                {
-                    h ^= b;
-                    h *= 1099511628211UL;
-                }
-            return h;
         }
 
         private static void StepAside(string why)
