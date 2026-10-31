@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.3
+
+A new patch, off until switched on: *OdinOnDemand plays from where its speakers stand* (`Patches.OdinOnDemandSpeakersFollow`). An OdinOnDemand radio keeps each linked speaker's place from the moment it was linked and plays from there, so a speaker moved with EasyRelocate went on sounding at its old place, and the remote's link lines showed it there. On, the radio plays from where each linked speaker stands while it is loaded, places its sound again right after an EasyRelocate move and when a speaker loads somewhere else, and the game that holds the radio's data saves the new places there. A moved radio places its sound again too, and each player's own volume for it moves with it on the games that have it loaded. It works with OdinOnDemand 1.3.0 and leaves other versions alone; without EasyRelocate 1.1.1 a moved speaker is followed when it loads.
+
 ## 0.44.2
 
 *Cartur's map search and hide key cover HUDCompass's pins* works with Cartur's Map Pins 2.1.0. Its hide key now steps through all pins, only your own, only auto pins and none. Carts, ships and portals from HUDCompass count as auto pins: they stay with only auto pins shown and are hidden with only your own or none. The patch stepped aside on 2.1.0 because that code changed. *The compass follows Cartur's map* keeps working and follows the new steps too; 2.1.0's new setting that hides emptied chests on the map does not reach the compass.
