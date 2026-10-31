@@ -19,7 +19,8 @@ namespace Vigil.Recorder
         private const string CompassPinsFollowNote = "The game redraws its map pins only when something asks for it (walking, dragging or zooming the map, a pin added or removed), and HUDCompass places its cart, ship and portal pins only then; it writes a pin's name and colour only when it makes the pin and makes it again only after the pin was hidden. So a portal moved, renamed or linked while you stand near kept its old place, name and colour until the pins were hidden once, as entering a portal with TargetPortal does. On, a quarter-second look compares each pin with its portal, cart or ship (the server's place for a far one while VehiclePinsFromServer is in use) and asks for a redraw when one differs, and a pin whose name or colour is out of date is made again. A HUDCompass whose map pin code differs from 1.2.1 is left alone.";
         private const string TargetPortalFollowNote = "TargetPortal names its portal pins once, when it makes them, so a renamed portal kept its old name on the map and in the favourites list, and it keeps favourites by the place a portal had when it was marked, so a moved portal lost its favourite. On, each time TargetPortal updates its pins a pin takes its portal's current tag, a favourite moves with its portal, and the favourites list is built again. On a server, a portal's new place and name reach a far player's game only with VehiclePinsFromServer on there. A TargetPortal whose pin code differs from 1.2.7 is left alone.";
         private const string OdinSpeakersNote = "An OdinOnDemand radio keeps each linked speaker's place from the moment it was linked and plays from there, so a speaker moved with EasyRelocate went on sounding at its old place, and a player's own volume for a radio, kept under the radio's place, was lost when the radio moved. On, the radio plays from where each linked speaker stands while it is loaded, places its sound again after an EasyRelocate move and when a speaker loads somewhere else, and the game that holds the radio's data saves the new places there. A moved radio's volume goes with it on the games that have it loaded. An OdinOnDemand whose speaker code differs from 1.3.0 is left alone.";
-        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers;
+        private const string OdinMusicFadeNote = "OdinOnDemand lowers the game's music the nearer you stand to a playing radio, measured to the radio itself, so next to a far linked speaker the game's music played at full beside the stream. On, the distance is to the nearest place the radio's sound comes from: each speaker and the radio while it plays from each speaker, the middle of its speakers otherwise. OdinOnDemand's own fade curve and Lowest Fade Volume DB stay. An OdinOnDemand whose fade code differs from 1.3.0 is left alone.";
+        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -119,6 +120,9 @@ namespace Vigil.Recorder
             _odinSpeakers = Config.Bind("Patches", "OdinOnDemandSpeakersFollow", false, "This game's own switch: " + OdinSpeakersNote);
             OdinSpeakersPatch.On = _odinSpeakers.Value;
             _odinSpeakers.SettingChanged += (_, __) => OdinSpeakersPatch.On = _odinSpeakers.Value;
+            _odinMusicFade = Config.Bind("Patches", "OdinOnDemandMusicFade", false, "This game's own switch: " + OdinMusicFadeNote);
+            OdinMusicFadePatch.On = _odinMusicFade.Value;
+            _odinMusicFade.SettingChanged += (_, __) => OdinMusicFadePatch.On = _odinMusicFade.Value;
             _awaySleep = Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -228,6 +232,8 @@ namespace Vigil.Recorder
             if (!_server) OdinSpeakersPatch.Hook(line => _host.Log.LogWarning(line));
             if (OdinSpeakersPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for OdinOnDemand playing from where its speakers stand stepped aside: " + OdinSpeakersPatch.Problem);
             if (OdinSpeakersPatch.MoveProblem != null) _host.Log.LogWarning("Vigil: OdinOnDemand's speakers follow an EasyRelocate move only when they load: " + OdinSpeakersPatch.MoveProblem);
+            if (!_server) OdinMusicFadePatch.Hook(line => _host.Log.LogWarning(line));
+            if (OdinMusicFadePatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for OdinOnDemand's music fade stepped aside: " + OdinMusicFadePatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -257,7 +263,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0)) + " of 20 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0)) + " of 21 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -428,6 +434,9 @@ namespace Vigil.Recorder
 
             OwnSwitch("OdinOnDemand plays from where its speakers stand", _odinSpeakers, "OdinOnDemandSpeakersFollow", OdinSpeakersNote);
             if (!_server) Ui.Row("On this game", Toned(OdinSpeakersPatch.State, OdinSpeakersPatch.Problem != null ? ResultTone.Caution : _odinSpeakers.Value && OdinSpeakersPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("OdinOnDemand fades the game's music by where it plays", _odinMusicFade, "OdinOnDemandMusicFade", OdinMusicFadeNote);
+            if (!_server) Ui.Row("On this game", Toned(OdinMusicFadePatch.State, OdinMusicFadePatch.Problem != null ? ResultTone.Caution : _odinMusicFade.Value && OdinMusicFadePatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Carts, ships and portals where they really are");
             Ui.BeginFormLine("Switch");

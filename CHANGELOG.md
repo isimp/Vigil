@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.4
+
+A new patch, off until switched on: *OdinOnDemand fades the game's music by where it plays* (`Patches.OdinOnDemandMusicFade`). OdinOnDemand lowers the game's music the nearer you stand to a playing radio, measured to the radio itself, so next to a far linked speaker the game's music played at full beside the stream. On, the distance is to the nearest place the radio's sound comes from: each speaker and the radio while it plays from each speaker, the middle of its speakers otherwise. OdinOnDemand's own fade curve and its Lowest Fade Volume DB stay. It works with OdinOnDemand 1.3.0 and leaves other versions alone.
+
 ## 0.44.3
 
 A new patch, off until switched on: *OdinOnDemand plays from where its speakers stand* (`Patches.OdinOnDemandSpeakersFollow`). An OdinOnDemand radio keeps each linked speaker's place from the moment it was linked and plays from there, so a speaker moved with EasyRelocate went on sounding at its old place, and the remote's link lines showed it there. On, the radio plays from where each linked speaker stands while it is loaded, places its sound again right after an EasyRelocate move and when a speaker loads somewhere else, and the game that holds the radio's data saves the new places there. A moved radio places its sound again too, and each player's own volume for it moves with it on the games that have it loaded. It works with OdinOnDemand 1.3.0 and leaves other versions alone; without EasyRelocate 1.1.1 a moved speaker is followed when it loads.
