@@ -87,11 +87,11 @@ namespace Vigil.Tests
         }
 
         // Cartur's map search: while text is typed, a map pin whose name does not hold it is drawn at
-        // 15 % and loses its label. Cartur's hide key steps through all shown, all hidden and auto pins
-        // hidden. HUDCompass's cart, ship and portal pins are not map pins and stayed as they were;
-        // with the patch on they follow both. They are made by a mod, not by hand, so "auto pins
-        // hidden" hides them too.
-        private const int AllShown = 0, AllHidden = 1, AutoHidden = 2;
+        // 15 % and loses its label. Cartur's hide key (2.1.0) steps through all pins, only your own,
+        // only auto pins and none (2.0: all, none, only your own). HUDCompass's cart, ship and portal
+        // pins are not map pins and stayed as they were; with the patch on they follow both. Nobody
+        // places them by hand, so they go with the auto pins.
+        private const string AllShown = "All", MineOnly = "Yours", AutoOnly = "Auto", NoneShown = "None";
 
         [Fact]
         public void While_searching_a_cart_ship_or_portal_pin_that_does_not_match_fades_like_Cartur_s_pins()
@@ -115,16 +115,32 @@ namespace Vigil.Tests
         }
 
         [Fact]
-        public void The_hide_key_hides_portals_carts_and_ships_with_all_pins_and_with_auto_pins()
+        public void The_hide_key_hides_portals_carts_and_ships_with_no_pins_and_with_only_your_own()
         {
-            foreach (int step in new[] { AllHidden, AutoHidden })
+            foreach (string mode in new[] { NoneShown, MineOnly })
             {
-                Assert.Equal(0f, CarturPinRules.MapIconAlpha(step, searching: false, matches: true), 3);
-                Assert.Equal(0f, CarturPinRules.MapLabelAlpha(step, searching: false, matches: true), 3);
+                Assert.Equal(0f, CarturPinRules.MapIconAlpha(mode, searching: false, matches: true), 3);
+                Assert.Equal(0f, CarturPinRules.MapLabelAlpha(mode, searching: false, matches: true), 3);
                 // A search, matching or not, does not bring a hidden pin back, not even faded.
-                Assert.Equal(0f, CarturPinRules.MapIconAlpha(step, searching: true, matches: true), 3);
-                Assert.Equal(0f, CarturPinRules.MapIconAlpha(step, searching: true, matches: false), 3);
+                Assert.Equal(0f, CarturPinRules.MapIconAlpha(mode, searching: true, matches: true), 3);
+                Assert.Equal(0f, CarturPinRules.MapIconAlpha(mode, searching: true, matches: false), 3);
             }
+        }
+
+        [Fact]
+        public void With_only_auto_pins_shown_portals_carts_and_ships_stay_and_the_search_still_fades_them()
+        {
+            Assert.Equal(1f, CarturPinRules.MapIconAlpha(AutoOnly, searching: false, matches: false), 3);
+            Assert.Equal(1f, CarturPinRules.MapLabelAlpha(AutoOnly, searching: false, matches: false), 3);
+            Assert.Equal(0.15f, CarturPinRules.MapIconAlpha(AutoOnly, searching: true, matches: false), 3);
+            Assert.Equal(0f, CarturPinRules.MapLabelAlpha(AutoOnly, searching: true, matches: false), 3);
+        }
+
+        [Fact]
+        public void A_hide_key_mode_Vigil_does_not_know_leaves_the_pins_shown()
+        {
+            Assert.False(CarturPinRules.KeyHides("Favourites"));
+            Assert.False(CarturPinRules.KeyHides(null));
         }
 
         [Fact]
@@ -135,8 +151,9 @@ namespace Vigil.Tests
             Assert.Equal("stepped aside: x", CarturPinRules.MapLine(true, true, "x", AllShown, false, 0, 0));
             Assert.Equal("working · no search, pins shown", CarturPinRules.MapLine(true, true, null, AllShown, false, 0, 0));
             Assert.Equal("working · searching: 2 of 30 carts, ships and portals match", CarturPinRules.MapLine(true, true, null, AllShown, true, 2, 30));
-            Assert.Equal("working · hidden with the hide key: 30 carts, ships and portals", CarturPinRules.MapLine(true, true, null, AllHidden, false, 0, 30));
-            Assert.Equal("working · hidden with the hide key: 30 carts, ships and portals", CarturPinRules.MapLine(true, true, null, AutoHidden, true, 0, 30));
+            Assert.Equal("working · hidden with the hide key: 30 carts, ships and portals", CarturPinRules.MapLine(true, true, null, NoneShown, false, 0, 30));
+            Assert.Equal("working · hidden with the hide key: 30 carts, ships and portals", CarturPinRules.MapLine(true, true, null, MineOnly, true, 0, 30));
+            Assert.Equal("working · no search, pins shown", CarturPinRules.MapLine(true, true, null, AutoOnly, false, 0, 30));
         }
     }
 }

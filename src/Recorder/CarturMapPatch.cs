@@ -14,15 +14,17 @@ namespace Vigil.Recorder
     /// <summary>
     /// The game patch "Cartur's map search and hide key cover HUDCompass's pins" (<see cref="CarturPinRules"/>).
     /// Cartur's Map Pins fades a map pin whose name does not hold the text typed into its search on
-    /// the large map and hides its label, and its hide key steps through all pins shown, all hidden
-    /// and auto pins hidden. HUDCompass 1.2.1 draws its cart, ship and portal pins itself, not as map
-    /// pins, so both passed them by. On, a postfix after HUDCompass's map pin update gives each of
-    /// those pins the same strength: gone while the hide key hides pins (they are made by a mod, so
-    /// both hiding steps hide them), else faded when the search does not match its name (a portal's
-    /// tag, a cart's or ship's name or type), through Cartur's own matching; its label shown or gone
-    /// alike. A CanvasGroup on the pin carries it, so HUDCompass's colours stay as they are. Both
-    /// mods' code is compared with the code this was written against (HUDCompass 1.2.1, Cartur
-    /// 2.0.0, unchanged in 2.0.1), and any change makes the patch step aside. The switch is this game's own.
+    /// the large map and hides its label, and its hide key steps through all pins, only your own,
+    /// only auto pins (2.1.0) and none. HUDCompass 1.2.1 draws its cart, ship and portal pins itself,
+    /// not as map pins, so both passed them by. On, a postfix after HUDCompass's map pin update gives
+    /// each of those pins the same strength: gone while the hide key shows none or only your own
+    /// (nobody places them by hand, so they go with the auto pins), else faded when the search does
+    /// not match its name (a portal's tag, a cart's or ship's name or type), through Cartur's own
+    /// matching; its label shown or gone alike. A CanvasGroup on the pin carries it, so HUDCompass's
+    /// colours stay as they are. The hide key's mode is read by its name, which means the same in
+    /// 2.0 and 2.1.0 although the order changed. Both mods' code is compared with the code this was
+    /// written against (HUDCompass 1.2.1, Cartur 2.0.0 to 2.1.0), and any change makes the patch
+    /// step aside. The switch is this game's own.
     /// </summary>
     internal static class CarturMapPatch
     {
@@ -31,8 +33,8 @@ namespace Vigil.Recorder
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
         private const ulong KnownCompassCode = 0x0F71C38696676BFDUL;
 
-        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key), as in 2.0.0 and 2.0.1.</summary>
-        private const ulong KnownCarturCode = 0xDC9C8AF80AB28234UL;
+        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key): 2.0.0 and 2.0.1, then 2.1.0 (a fourth mode, only auto pins).</summary>
+        private static readonly ulong[] KnownCarturCode = { 0xDC9C8AF80AB28234UL, 0x0ED0DB2241B986BBUL };
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;
@@ -42,9 +44,10 @@ namespace Vigil.Recorder
         public static string Problem { get; private set; }
 
         private static bool s_searching, s_changed;
-        private static int s_step, s_matching, s_pins;
+        private static string s_mode;
+        private static int s_matching, s_pins;
 
-        public static string State => CarturPinRules.MapLine(On, Found, Problem, s_step, s_searching, s_matching, s_pins);
+        public static string State => CarturPinRules.MapLine(On, Found, Problem, s_mode, s_searching, s_matching, s_pins);
 
         private static Action<string> s_log;
         private static object s_dmm;
@@ -53,7 +56,7 @@ namespace Vigil.Recorder
         private static Func<object, string> s_label;
         private static Func<bool> s_searchActive;
         private static Func<string, bool> s_searchMatches;
-        private static Func<object> s_hideStep;
+        private static Func<object> s_hideMode;
 
         public static void Hook(Action<string> log)
         {
@@ -88,14 +91,14 @@ namespace Vigil.Recorder
                 var step = hiding?.GetMethod("Step", any);
                 var cycle = hiding?.GetProperty("Cycle", any)?.GetGetMethod(true);
                 if (fade == null || active == null || matches == null || cycleHides == null || step == null || cycle == null || !cycle.ReturnType.IsEnum
-                    || CodeShape.Hash(new[] { fade, cycleHides, step }) != KnownCarturCode)
+                    || !KnownCarturCode.Contains(CodeShape.Hash(new[] { fade, cycleHides, step })))
                 {
                     Problem = "Cartur's search or hiding code changed (an update)";
                     return;
                 }
                 s_searchActive = AccessTools.MethodDelegate<Func<bool>>(active);
                 s_searchMatches = AccessTools.MethodDelegate<Func<string, bool>>(matches);
-                s_hideStep = OpenCall.Make<Func<object>>(cycle);
+                s_hideMode = OpenCall.Make<Func<object>>(cycle);
                 s_dmm = AccessTools.DeclaredField(main, "s_dmm")?.GetValue(null);
                 s_markersField = AccessTools.DeclaredField(dmmType, "Markers");
                 s_marker = Getter<GameObject>(markerData, "Marker");
@@ -127,11 +130,11 @@ namespace Vigil.Recorder
             if (Problem != null) return;
             try
             {
-                int step = On ? Convert.ToInt32(s_hideStep()) : 0;
+                string mode = On ? s_hideMode().ToString() : null;
                 bool searching = On && s_searchActive();
-                s_step = step;
+                s_mode = mode;
                 s_searching = searching;
-                bool changes = CarturPinRules.KeyHides(step) || searching;
+                bool changes = CarturPinRules.KeyHides(mode) || searching;
                 if (!changes && !s_changed) return;
                 if (!(s_markersField.GetValue(s_dmm) is IDictionary markers)) return;
                 int matching = 0, pins = 0;
@@ -142,9 +145,9 @@ namespace Vigil.Recorder
                     pins++;
                     bool match = !searching || s_searchMatches(s_label(marker));
                     if (match) matching++;
-                    SetAlpha(icon, CarturPinRules.MapIconAlpha(step, searching, match));
+                    SetAlpha(icon, CarturPinRules.MapIconAlpha(mode, searching, match));
                     var tag = s_nametag(marker);
-                    if (tag != null) SetAlpha(tag, CarturPinRules.MapLabelAlpha(step, searching, match));
+                    if (tag != null) SetAlpha(tag, CarturPinRules.MapLabelAlpha(mode, searching, match));
                 }
                 s_matching = matching;
                 s_pins = pins;

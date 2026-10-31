@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.2
+
+*Cartur's map search and hide key cover HUDCompass's pins* works with Cartur's Map Pins 2.1.0. Its hide key now steps through all pins, only your own, only auto pins and none. Carts, ships and portals from HUDCompass count as auto pins: they stay with only auto pins shown and are hidden with only your own or none. The patch stepped aside on 2.1.0 because that code changed. *The compass follows Cartur's map* keeps working and follows the new steps too; 2.1.0's new setting that hides emptied chests on the map does not reach the compass.
+
 ## 0.44.1
 
 *HUDCompass keeps its pin icons* stepped aside on 0.44.0 although HUDCompass had not changed: the new code check wrote decimal numbers as text, and the game's runtime writes some of them differently. Numbers are now compared by their exact value, the same on every runtime.

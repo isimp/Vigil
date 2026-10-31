@@ -27,7 +27,7 @@ namespace Vigil.Recorder
     /// A second switch, "the compass follows Cartur's map", works inside this frame when Cartur's Map
     /// Pins is installed: the map pins Cartur hides (its hidden names, its hide key) are left off the
     /// compass, and pins take the colour Cartur gives them on the map (<see cref="CarturPinRules"/>).
-    /// Cartur's colouring code is compared with 2.0.0's (unchanged in 2.0.1), and any change makes that part step aside.
+    /// Cartur's colouring code is compared with 2.0.0's (unchanged through 2.1.0), and any change makes that part step aside.
     /// </summary>
     internal static class HudCompassPatch
     {
@@ -51,7 +51,7 @@ namespace Vigil.Recorder
 
         public static string State => CompassPinRules.StateLine(On, Found, Version, Problem, s_frames, Ms(s_ticks), s_pins, s_made, s_reused, s_theirFrames, Ms(s_theirTicks));
 
-        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins, as in 2.0.0 and 2.0.1.</summary>
+        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins, as in 2.0.0 to 2.1.0.</summary>
         private const ulong KnownCarturColours = 0xF94096760D5D5494UL;
 
         /// <summary>This game's switch for following Cartur's map, kept current by the config entry.</summary>
