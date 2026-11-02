@@ -218,18 +218,19 @@ namespace Vigil.Core
         /// <summary>A HUDCompass map pin's strength: gone while the hide key hides pins, else as Cartur's search draws a pin that does not match.</summary>
         public static float MapIconAlpha(string mode, bool searching, bool matches) => KeyHides(mode) ? 0f : searching && !matches ? SearchFaded : 1f;
 
-        /// <summary>A HUDCompass map pin's label: gone while the hide key hides pins or the search leaves the pin out, as Cartur hides its labels.</summary>
-        public static float MapLabelAlpha(string mode, bool searching, bool matches) => KeyHides(mode) || searching && !matches ? 0f : 1f;
+        /// <summary>A HUDCompass map pin's label: gone while the hide key hides pins, the search leaves the pin out or Cartur's label key (2.1.1) has the names off, as Cartur hides its labels.</summary>
+        public static float MapLabelAlpha(string mode, bool searching, bool matches, bool namesOff) => namesOff || KeyHides(mode) || searching && !matches ? 0f : 1f;
 
         /// <summary>What "Cartur's map search and hide key cover HUDCompass's pins" does on this game, in words.</summary>
-        public static string MapLine(bool on, bool found, string problem, string mode, bool searching, int matching, int pins)
+        public static string MapLine(bool on, bool found, string problem, string mode, bool searching, bool namesOff, int matching, int pins)
         {
             if (!on) return "off: this game's switch (Patches.HudCompassCarturMap)";
             if (!found) return Missing;
             if (problem != null) return "stepped aside: " + problem;
             if (KeyHides(mode)) return string.Format(CultureInfo.InvariantCulture, "working · hidden with the hide key: {0} carts, ships and portals", pins);
-            if (!searching) return "working · no search, pins shown";
-            return string.Format(CultureInfo.InvariantCulture, "working · searching: {0} of {1} carts, ships and portals match", matching, pins);
+            string names = namesOff ? " · names off with Cartur's label key" : "";
+            if (!searching) return "working · no search, pins shown" + names;
+            return string.Format(CultureInfo.InvariantCulture, "working · searching: {0} of {1} carts, ships and portals match", matching, pins) + names;
         }
 
         /// <summary>What "the compass follows Cartur's map" does on this game, in words.</summary>

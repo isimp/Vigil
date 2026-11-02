@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.5
+
+*Cartur's map search and hide key cover HUDCompass's pins* follows the label key of Cartur's Map Pins 2.1.1 (Shift+H). While it has the names off, HUDCompass's carts, ships and portals lose their names on the map too and keep their pins. Cartur shows the name of the pin under the pointer while names are off; HUDCompass's pins are not among those it points at, so their names stay off.
+
 ## 0.44.4
 
 A new patch, off until switched on: *OdinOnDemand fades the game's music by where it plays* (`Patches.OdinOnDemandMusicFade`). OdinOnDemand lowers the game's music the nearer you stand to a playing radio, measured to the radio itself, so next to a far linked speaker the game's music played at full beside the stream. On, the distance is to the nearest place the radio's sound comes from: each speaker and the radio while it plays from each speaker, the middle of its speakers otherwise. OdinOnDemand's own fade curve and its Lowest Fade Volume DB stay. It works with OdinOnDemand 1.3.0 and leaves other versions alone.

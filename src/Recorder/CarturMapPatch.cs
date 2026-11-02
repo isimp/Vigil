@@ -22,7 +22,10 @@ namespace Vigil.Recorder
     /// not match its name (a portal's tag, a cart's or ship's name or type), through Cartur's own
     /// matching; its label shown or gone alike. A CanvasGroup on the pin carries it, so HUDCompass's
     /// colours stay as they are. The hide key's mode is read by its name, which means the same in
-    /// 2.0 and 2.1.0 although the order changed. Both mods' code is compared with the code this was
+    /// 2.0 and 2.1.0 although the order changed. Cartur 2.1.1's label key hides the names of the
+    /// map's pins and leaves the pins; their labels go with it (older versions have no such key).
+    /// Cartur shows the name of the pin under the pointer while names are off; it does not point at
+    /// HUDCompass's pins, so theirs stay gone. Both mods' code is compared with the code this was
     /// written against (HUDCompass 1.2.1, Cartur 2.0.0 to 2.1.0), and any change makes the patch
     /// step aside. The switch is this game's own.
     /// </summary>
@@ -43,11 +46,11 @@ namespace Vigil.Recorder
         /// <summary>Why the patch stepped aside; null while it is in.</summary>
         public static string Problem { get; private set; }
 
-        private static bool s_searching, s_changed;
+        private static bool s_searching, s_namesOff, s_changed;
         private static string s_mode;
         private static int s_matching, s_pins;
 
-        public static string State => CarturPinRules.MapLine(On, Found, Problem, s_mode, s_searching, s_matching, s_pins);
+        public static string State => CarturPinRules.MapLine(On, Found, Problem, s_mode, s_searching, s_namesOff, s_matching, s_pins);
 
         private static Action<string> s_log;
         private static object s_dmm;
@@ -57,6 +60,7 @@ namespace Vigil.Recorder
         private static Func<bool> s_searchActive;
         private static Func<string, bool> s_searchMatches;
         private static Func<object> s_hideMode;
+        private static Func<bool> s_namesHidden;
 
         public static void Hook(Action<string> log)
         {
@@ -99,6 +103,8 @@ namespace Vigil.Recorder
                 s_searchActive = AccessTools.MethodDelegate<Func<bool>>(active);
                 s_searchMatches = AccessTools.MethodDelegate<Func<string, bool>>(matches);
                 s_hideMode = OpenCall.Make<Func<object>>(cycle);
+                var labelsHidden = hiding.GetProperty("LabelsHidden", any)?.GetGetMethod(true);
+                s_namesHidden = labelsHidden != null && labelsHidden.ReturnType == typeof(bool) ? AccessTools.MethodDelegate<Func<bool>>(labelsHidden) : null;
                 s_dmm = AccessTools.DeclaredField(main, "s_dmm")?.GetValue(null);
                 s_markersField = AccessTools.DeclaredField(dmmType, "Markers");
                 s_marker = Getter<GameObject>(markerData, "Marker");
@@ -124,7 +130,7 @@ namespace Vigil.Recorder
             return Expression.Lambda<Func<object, T>>(Expression.Convert(member, typeof(T)), o).Compile();
         }
 
-        /// <summary>After HUDCompass's map pin update: its pins take the hide key's and the search's strength; once neither applies they are shown in full again.</summary>
+        /// <summary>After HUDCompass's map pin update: its pins take the hide key's, the label key's and the search's strength; once none applies they are shown in full again.</summary>
         private static void AfterMapPins()
         {
             if (Problem != null) return;
@@ -132,9 +138,11 @@ namespace Vigil.Recorder
             {
                 string mode = On ? s_hideMode().ToString() : null;
                 bool searching = On && s_searchActive();
+                bool namesOff = On && s_namesHidden != null && s_namesHidden();
                 s_mode = mode;
                 s_searching = searching;
-                bool changes = CarturPinRules.KeyHides(mode) || searching;
+                s_namesOff = namesOff;
+                bool changes = CarturPinRules.KeyHides(mode) || searching || namesOff;
                 if (!changes && !s_changed) return;
                 if (!(s_markersField.GetValue(s_dmm) is IDictionary markers)) return;
                 int matching = 0, pins = 0;
@@ -147,7 +155,7 @@ namespace Vigil.Recorder
                     if (match) matching++;
                     SetAlpha(icon, CarturPinRules.MapIconAlpha(mode, searching, match));
                     var tag = s_nametag(marker);
-                    if (tag != null) SetAlpha(tag, CarturPinRules.MapLabelAlpha(mode, searching, match));
+                    if (tag != null) SetAlpha(tag, CarturPinRules.MapLabelAlpha(mode, searching, match, namesOff));
                 }
                 s_matching = matching;
                 s_pins = pins;
