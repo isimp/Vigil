@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.6
+
+*EasyRelocate: quicker, and a move always ends* now also mends the stand-in build table EasyRelocate hands you for every move. Once that table lost its selection slots, which other mods can do, no move could be placed again until the game was restarted: every click was refused although the spot was fine. With the switch on, the table gets its slots back on every grab and during a move, and the game's log notes each time it happened.
+
 ## 0.44.5
 
 *Cartur's map search and hide key cover HUDCompass's pins* follows the label key of Cartur's Map Pins 2.1.1 (Shift+H). While it has the names off, HUDCompass's carts, ships and portals lose their names on the map too and keep their pins. Cartur shows the name of the pin under the pointer while names are off; HUDCompass's pins are not among those it points at, so their names stay off.

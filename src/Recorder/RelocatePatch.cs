@@ -17,7 +17,9 @@ namespace Vigil.Recorder
     /// a frame ago, and the ghost's place and status are read from the game's update; the grab key
     /// (with its own modifiers, whatever else is held), Esc, a text box taking the keys, or a build tool
     /// taken in hand ends a move, and with a build tool in hand no piece is grabbed or offered;
-    /// an error out of its Update during a move ends the move as a relog would.</para>
+    /// an error out of its Update during a move ends the move as a relog would; the stand-in piece
+    /// table it hands the player for a move gets its selection slots back on a grab and every frame
+    /// of a move when they are gone (<see cref="Relocate.StandInSlots"/>).</para>
     /// <para>Spirit: the moving ghost's materials are see-through ones on a white base (Unity's lit
     /// see-through diffuse where the game ships it, else the sprite shader), tinted pale blue, pale red
     /// where it cannot be placed, breathing slowly.</para>
@@ -46,18 +48,24 @@ namespace Vigil.Recorder
         /// <summary>EasyRelocate ghost updates left out because the game had just made one.</summary>
         public static long Spared { get; private set; }
 
-        public static string FixesState => Relocate.FixesLine(FixesOn, Found, Version, Problem, Ended, Spared);
+        /// <summary>Times EasyRelocate's stand-in piece table got its selection slots or category back.</summary>
+        public static long Mended { get; private set; }
+
+        public static string FixesState => Relocate.FixesLine(FixesOn, Found, Version, Problem, Ended, Spared, Mended);
 
         public static string SpiritState => Relocate.SpiritLine(SpiritOn, Found, Problem ?? SpiritProblem);
 
         private static readonly AccessTools.FieldRef<Player, GameObject> Ghost = AccessTools.FieldRefAccess<Player, GameObject>("m_placementGhost");
         private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> RightItem = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_rightItem");
         private static readonly Func<Player, bool> TakesInput = AccessTools.MethodDelegate<Func<Player, bool>>(AccessTools.Method(typeof(Player), "TakeInput"));
+        private static readonly AccessTools.FieldRef<PieceTable, List<List<Piece>>> CategoryLists = AccessTools.FieldRefAccess<PieceTable, List<List<Piece>>>("m_availablePiecesByCategory");
+        private static readonly AccessTools.FieldRef<PieceTable, Piece.PieceCategory> ChosenCategory = AccessTools.FieldRefAccess<PieceTable, Piece.PieceCategory>("m_selectedCategory");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private static Relocate.Parts _parts;
         private static Func<bool> _moving;
         private static Func<bool> _textField;
+        private static Func<PieceTable, bool> _isStandIn;
         private static ConfigEntryBase _grabKey;
         private static Action<string> _log;
         private static GameObject _updatedGhost;
@@ -93,12 +101,13 @@ namespace Vigil.Recorder
                 }
                 _moving = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), _parts.IsMoving);
                 _textField = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), _parts.TextFieldFocused);
+                _isStandIn = (Func<PieceTable, bool>)Delegate.CreateDelegate(typeof(Func<PieceTable, bool>), _parts.IsStandIn);
                 _grabKey = _parts.GrabKey.GetValue(null) as ConfigEntryBase;
                 var h = new Harmony(HarmonyId);
                 h.Patch(_parts.TryPatch, prefix: Hm(nameof(BeforeTypeSearch)));
                 h.Patch(_parts.RemoveHooks, prefix: Hm(nameof(BeforeRemoveHooks)));
                 h.Patch(_parts.Update, prefix: Hm(nameof(BeforeUpdate)), finalizer: Hm(nameof(AfterUpdate)));
-                h.Patch(_parts.TryBegin, prefix: Hm(nameof(BeforeTryBegin)));
+                h.Patch(_parts.TryBegin, prefix: Hm(nameof(BeforeTryBegin)), postfix: Hm(nameof(AfterTryBegin)));
                 h.Patch(_parts.HoverHint, prefix: Hm(nameof(BeforeHoverHint)));
                 h.Patch(_parts.UpdateGhost, prefix: Hm(nameof(BeforeGhostUpdate)));
                 h.Patch(AccessTools.Method(typeof(Player), "LateUpdate"), postfix: Hm(nameof(AfterPlayerLateUpdate)));
@@ -130,6 +139,7 @@ namespace Vigil.Recorder
             if (_moving == null || !_moving()) return true;
             if (SpiritOn) Breathe();
             if (!FixesOn) return true;
+            MendStandIn(Player.m_localPlayer);
             var key = _grabKey?.BoxedValue is KeyboardShortcut k ? k : KeyboardShortcut.Empty;
             bool grab = key.MainKey != KeyCode.None && Input.GetKeyDown(key.MainKey);
             bool modifiers = key.Modifiers.All(Input.GetKey);
@@ -152,6 +162,34 @@ namespace Vigil.Recorder
                 if (line != null) MessageHud.instance?.ShowMessage(MessageHud.MessageType.Center, line);
             }
             return false;
+        }
+
+        // A grab hands the player EasyRelocate's stand-in table; mend it before the game's first ghost update reads it.
+        private static void AfterTryBegin(Player __0) => MendStandIn(__0);
+
+        /// <summary>
+        /// Gives EasyRelocate's stand-in piece table, while the player holds it, the selection slots and
+        /// chosen category the game reads it with in every ghost update, where they are gone.
+        /// </summary>
+        private static void MendStandIn(Player player)
+        {
+            if (!FixesOn || player == null || _isStandIn == null) return;
+            var table = player.GetBuildTool();
+            if (table == null) return;
+            bool standIn = _isStandIn(table);
+            int lists = CategoryLists(table)?.Count ?? 0;
+            int before = table.m_selectedPiece?.Length ?? 0;
+            int slots = Relocate.StandInSlots(true, standIn, before, lists);
+            int lastSlots = Relocate.StandInSlots(true, standIn, table.m_lastSelectedPiece?.Length ?? 0, lists);
+            int category = (int)ChosenCategory(table);
+            bool resetCategory = Relocate.ResetsStandInCategory(true, standIn, category);
+            if (slots == 0 && lastSlots == 0 && !resetCategory) return;
+            if (slots > 0) table.m_selectedPiece = new Vector2Int[slots];
+            if (lastSlots > 0) table.m_lastSelectedPiece = new Vector2Int[lastSlots];
+            if (resetCategory) ChosenCategory(table) = Piece.PieceCategory.Max;
+            Mended++;
+            _log?.Invoke("[Vigil] relocate: mended EasyRelocate's stand-in piece table (selection slots " + before + (slots > 0 ? " -> " + slots : "")
+                + ", category " + category + (resetCategory ? " -> none" : "") + ", " + lists + " category lists)");
         }
 
         private static string ToolName(Player player)

@@ -76,6 +76,25 @@ namespace Vigil.Core
         public static bool ReusesGameUpdate(bool on, bool moving, bool sameGhost, int updatedFrame, int frame) =>
             on && moving && sameGhost && frame - updatedFrame <= 1 && updatedFrame <= frame;
 
+        /// <summary>The selection slots the game gives a piece table, one per category of its own.</summary>
+        public const int GameSelectionSlots = 9;
+
+        /// <summary>
+        /// How many selection slots EasyRelocate's stand-in piece table gets back, or 0 to leave it as it
+        /// is. The stand-in is made once a game start and handed to the player for every move; with no
+        /// slots left (mods that size the slots to the table's category lists can leave none),
+        /// <c>PieceTable.GetSelectedIndex</c> throws in every ghost update and every place click is
+        /// refused until a restart. It gets one slot per category list, at least the game's own count.
+        /// </summary>
+        public static int StandInSlots(bool on, bool standIn, int slots, int categoryLists) =>
+            on && standIn && slots <= 0 ? Math.Max(GameSelectionSlots, categoryLists) : 0;
+
+        /// <summary>
+        /// Whether the stand-in table's chosen category goes back to "none chosen": only one below zero,
+        /// which no slot or category list can be read with.
+        /// </summary>
+        public static bool ResetsStandInCategory(bool on, bool standIn, int category) => on && standIn && category < 0;
+
         /// <summary>A colour with alpha, kept free of the game's types.</summary>
         public struct Rgba
         {
@@ -95,7 +114,7 @@ namespace Vigil.Core
         }
 
         /// <summary>What the fixes do on this game, in words.</summary>
-        public static string FixesLine(bool on, bool found, string version, string problem, long ended, long spared)
+        public static string FixesLine(bool on, bool found, string version, string problem, long ended, long spared, long mended)
         {
             if (!on) return "off: this game's switch (Patches.EasyRelocateFixes)";
             if (!found) return "not needed: EasyRelocate is not installed";
@@ -103,6 +122,7 @@ namespace Vigil.Core
             string line = "working · EasyRelocate " + version + " · no freeze on a grab, one ghost update a frame, a move can always be ended";
             if (ended > 0) line += " · " + ended.ToString(CultureInfo.InvariantCulture) + " moves ended by Vigil";
             if (spared > 0) line += " · " + spared.ToString(CultureInfo.InvariantCulture) + " ghost updates spared";
+            if (mended > 0) line += " · " + mended.ToString(CultureInfo.InvariantCulture) + (mended == 1 ? " stand-in piece table mended" : " stand-in piece tables mended");
             return line;
         }
 
@@ -118,7 +138,7 @@ namespace Vigil.Core
         /// <summary>EasyRelocate's members the patches use, found by name and shape.</summary>
         public sealed class Parts
         {
-            public MethodInfo Update, TryBegin, UpdateGhost, Cancel, Abort, ForceReset, SourceValid, IsMoving, HoverHint;
+            public MethodInfo Update, TryBegin, UpdateGhost, Cancel, Abort, ForceReset, SourceValid, IsMoving, HoverHint, IsStandIn;
             public FieldInfo GhostPosition, GhostRotation, PlacementValid, GrabKey;
             public MethodInfo TryPatch, ApplyHooks, RemoveHooks, HarmonyInstance, TextFieldFocused, CreateGhost, Tint;
         }
@@ -146,6 +166,7 @@ namespace Vigil.Core
                 ForceReset = Method(controller, "ForceReset", 0, typeof(void)),
                 SourceValid = Method(controller, "IsSourceStillValid", 0, typeof(bool)),
                 IsMoving = controller.GetProperty("IsMoving", Any)?.GetGetMethod(true),
+                IsStandIn = Method(controller, "IsDummyBuildPieces", 1, typeof(bool), "PieceTable"),
                 GhostPosition = Field(controller, "_ghostPosition", "Vector3"),
                 GhostRotation = Field(controller, "_ghostRotation", "Quaternion"),
                 PlacementValid = Field(controller, "_placementValid", "Boolean"),
@@ -159,7 +180,7 @@ namespace Vigil.Core
                 Tint = Method(tint, "Apply", 2, typeof(void), "GameObject", "Boolean"),
             };
             bool whole = p.Update != null && p.TryBegin != null && p.HoverHint != null && p.UpdateGhost != null && p.Cancel != null && p.Abort != null && p.ForceReset != null && p.SourceValid != null
-                && p.IsMoving != null && p.IsMoving.ReturnType == typeof(bool) && p.GhostPosition != null && p.GhostRotation != null && p.PlacementValid != null
+                && p.IsMoving != null && p.IsMoving.ReturnType == typeof(bool) && p.IsStandIn != null && p.GhostPosition != null && p.GhostRotation != null && p.PlacementValid != null
                 && p.GrabKey != null && p.TryPatch != null && p.ApplyHooks != null && p.RemoveHooks != null && p.HarmonyInstance != null
                 && p.TextFieldFocused != null && p.CreateGhost != null && p.CreateGhost.ReturnType.Name == "GameObject" && p.Tint != null;
             return whole ? p : null;

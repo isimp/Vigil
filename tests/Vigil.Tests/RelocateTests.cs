@@ -156,15 +156,51 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_stand_in_piece_table_without_selection_slots_gets_the_games_slots_back()
+        {
+            // An empty slot array makes the game's PieceTable.GetSelectedIndex throw in every ghost update,
+            // and every place click is refused while the game calls the spot valid.
+            Assert.Equal(9, Relocate.StandInSlots(on: true, standIn: true, slots: 0, categoryLists: 0));
+            Assert.Equal(12, Relocate.StandInSlots(on: true, standIn: true, slots: 0, categoryLists: 12));
+        }
+
+        [Fact]
+        public void A_whole_stand_in_table_another_table_or_the_switch_off_is_left_as_it_is()
+        {
+            Assert.Equal(0, Relocate.StandInSlots(on: true, standIn: true, slots: 9, categoryLists: 9));
+            Assert.Equal(0, Relocate.StandInSlots(on: true, standIn: true, slots: 1, categoryLists: 12));
+            Assert.Equal(0, Relocate.StandInSlots(on: true, standIn: false, slots: 0, categoryLists: 0));
+            Assert.Equal(0, Relocate.StandInSlots(on: false, standIn: true, slots: 0, categoryLists: 0));
+        }
+
+        [Fact]
+        public void A_stand_in_table_with_a_chosen_category_below_zero_is_set_to_none_chosen()
+        {
+            Assert.True(Relocate.ResetsStandInCategory(on: true, standIn: true, category: -1));
+            Assert.False(Relocate.ResetsStandInCategory(on: true, standIn: true, category: 0));
+            Assert.False(Relocate.ResetsStandInCategory(on: true, standIn: false, category: -1));
+            Assert.False(Relocate.ResetsStandInCategory(on: false, standIn: true, category: -1));
+        }
+
+        [Fact]
+        public void The_state_counts_stand_in_tables_mended()
+        {
+            Assert.Equal("working · EasyRelocate 1.1.1 · no freeze on a grab, one ghost update a frame, a move can always be ended · 1 stand-in piece table mended",
+                Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 0, spared: 0, mended: 1));
+            Assert.Equal("working · EasyRelocate 1.1.1 · no freeze on a grab, one ghost update a frame, a move can always be ended · 3 stand-in piece tables mended",
+                Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 0, spared: 0, mended: 3));
+        }
+
+        [Fact]
         public void The_states_say_what_the_patches_do_on_this_game()
         {
-            Assert.Equal("off: this game's switch (Patches.EasyRelocateFixes)", Relocate.FixesLine(on: false, found: true, version: "1.1.1", problem: null, ended: 0, spared: 0));
-            Assert.Equal("not needed: EasyRelocate is not installed", Relocate.FixesLine(on: true, found: false, version: null, problem: null, ended: 0, spared: 0));
-            Assert.Equal("stepped aside: its parts changed (an update)", Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: "its parts changed (an update)", ended: 0, spared: 0));
+            Assert.Equal("off: this game's switch (Patches.EasyRelocateFixes)", Relocate.FixesLine(on: false, found: true, version: "1.1.1", problem: null, ended: 0, spared: 0, mended: 0));
+            Assert.Equal("not needed: EasyRelocate is not installed", Relocate.FixesLine(on: true, found: false, version: null, problem: null, ended: 0, spared: 0, mended: 0));
+            Assert.Equal("stepped aside: its parts changed (an update)", Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: "its parts changed (an update)", ended: 0, spared: 0, mended: 0));
             Assert.Equal("working · EasyRelocate 1.1.1 · no freeze on a grab, one ghost update a frame, a move can always be ended",
-                Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 0, spared: 0));
+                Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 0, spared: 0, mended: 0));
             Assert.Equal("working · EasyRelocate 1.1.1 · no freeze on a grab, one ghost update a frame, a move can always be ended · 2 moves ended by Vigil · 340 ghost updates spared",
-                Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 2, spared: 340));
+                Relocate.FixesLine(on: true, found: true, version: "1.1.1", problem: null, ended: 2, spared: 340, mended: 0));
             Assert.Equal("off: this game's switch (Patches.EasyRelocateSpiritGhost)", Relocate.SpiritLine(on: false, found: true, problem: null));
             Assert.Equal("not needed: EasyRelocate is not installed", Relocate.SpiritLine(on: true, found: false, problem: null));
             Assert.Equal("stepped aside: no see-through shader was found in this game", Relocate.SpiritLine(on: true, found: true, problem: "no see-through shader was found in this game"));
@@ -187,6 +223,7 @@ namespace Vigil.Tests
             Assert.Equal("_placementValid", parts.PlacementValid.Name);
             Assert.Equal("TryBeginRelocate", parts.TryBegin.Name);
             Assert.Equal("LateUpdate", parts.HoverHint.Name);
+            Assert.Equal("IsDummyBuildPieces", parts.IsStandIn.Name);
         }
 
         [Fact]
@@ -194,6 +231,12 @@ namespace Vigil.Tests
         {
             Assert.Null(Relocate.FindParts(name => null));
             Assert.Null(Relocate.FindParts(name => name == Relocate.ControllerType ? typeof(Changed.RelocateController) : Er111(name)));
+        }
+
+        [Fact]
+        public void An_EasyRelocate_without_its_stand_in_table_check_is_not_taken()
+        {
+            Assert.Null(Relocate.FindParts(name => name == Relocate.ControllerType ? typeof(NoStandIn.RelocateController) : Er111(name)));
         }
 
         private static Type Er111(string name)
@@ -214,6 +257,7 @@ namespace Vigil.Tests
 
         // Stand-ins with the shapes of EasyRelocate 1.1.1's members (the game's and Harmony's types as plain classes).
         private sealed class Player { }
+        private sealed class PieceTable { }
         private sealed class Piece { }
         private sealed class GameObject { }
         private sealed class Harmony { }
@@ -237,6 +281,7 @@ namespace Vigil.Tests
             private void AbortRelocate() { }
             private void ForceReset() { }
             private bool IsSourceStillValid() => true;
+            internal static bool IsDummyBuildPieces(PieceTable table) => false;
         }
 
         private static class FreePlacementRotationCompat
@@ -287,6 +332,25 @@ namespace Vigil.Tests
                 internal static bool IsMoving { get; private set; }
                 private void Update() { }
                 private void FollowGhost(Player player) { }
+                private void CancelRelocate() { }
+                private void AbortRelocate() { }
+                private void ForceReset() { }
+                private bool IsSourceStillValid() => true;
+            }
+        }
+
+        // The controller without the check that tells its stand-in piece table from the player's own.
+        private static class NoStandIn
+        {
+            internal sealed class RelocateController
+            {
+                private Vector3 _ghostPosition;
+                private Quaternion _ghostRotation;
+                private bool _placementValid;
+                internal static bool IsMoving { get; private set; }
+                private void Update() { }
+                private void TryBeginRelocate(Player player) { }
+                private void UpdateGhostFromVanilla(Player player) { }
                 private void CancelRelocate() { }
                 private void AbortRelocate() { }
                 private void ForceReset() { }
