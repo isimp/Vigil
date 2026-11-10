@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.0
+
+A new patch, off until switched on: *Summon Commander: the next summon from a radial* (`Patches.SummonCommanderRadial`). No staff has a secondary attack, so with the Dead Raiser or the Spirit Caller in hand that button now opens the game's radial menu to pick your next summon: sword and shield, bow or any weapon for skeletons, wolf, boar, moose, bear or any species for spirits. The pick goes into Summon Commander's settings and stays until the next pick; for skeletons it fills every team slot with that weapon, which replaces a mixed team set there before. It needs Summon Commander 1.0.1 and leaves other versions alone.
+
 ## 0.44.6
 
 *EasyRelocate: quicker, and a move always ends* now also mends the stand-in build table EasyRelocate hands you for every move. Once that table lost its selection slots, which other mods can do, no move could be placed again until the game was restarted: every click was refused although the spot was fine. With the switch on, the table gets its slots back on every grab and during a move, and the game's log notes each time it happened.
