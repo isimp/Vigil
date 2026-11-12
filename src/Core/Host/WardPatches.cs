@@ -219,16 +219,109 @@ namespace Vigil.Core
         /// is on or the door asks the game's ward check itself.
         /// </summary>
         public static bool LocksDoor(bool wardsLockDoors, bool active, bool inside, bool hasAccess, bool madeDoor) =>
-            wardsLockDoors && active && inside && !hasAccess && !madeDoor;
+            wardsLockDoors && Refuses(active, inside, hasAccess, madeDoor);
+
+        /// <summary>
+        /// Whether a ward keeps the player from a thing, by Protective Wards' own rule for every use it
+        /// guards: an active player ward whose area holds the thing, without access to it or to a ward
+        /// connected to it, unless the player made the thing.
+        /// </summary>
+        public static bool Refuses(bool active, bool inside, bool hasAccess, bool madeIt) => active && inside && !hasAccess && !madeIt;
 
         /// <summary>
         /// The ward the player is asked about at a door: the first that locks it, as Protective Wards
         /// stops at the first, or null when none locks it or that one takes no password.
         /// </summary>
-        public static T DoorWard<T>(IEnumerable<T> wards, Func<T, bool> locks, Func<T, bool> asks) where T : class
+        public static T DoorWard<T>(IEnumerable<T> wards, Func<T, bool> locks, Func<T, bool> asks) where T : class => AskedWard(wards, locks, asks);
+
+        /// <summary>
+        /// The ward the player is asked about at a thing: the first that keeps them from it, as
+        /// Protective Wards refuses at the first, or null when none does or that one takes no password.
+        /// </summary>
+        public static T AskedWard<T>(IEnumerable<T> wards, Func<T, bool> refuses, Func<T, bool> asks) where T : class
         {
-            var first = wards.FirstOrDefault(locks);
+            var first = wards.FirstOrDefault(refuses);
             return first != null && asks(first) ? first : null;
+        }
+
+        /// <summary>
+        /// The game's things whose alt-use is their own (a fire's, a pet's, a tame's, a saddle's, a
+        /// grave's), the ward itself (it asks on plain use) and doors (their own part): alt-use there
+        /// stays theirs.
+        /// </summary>
+        private static readonly string[] OwnAltUse = { "PrivateArea", "Door", "Fireplace", "Pet", "Tameable", "Sadle", "TombStone" };
+
+        /// <summary>Whether alt-use at a thing of this type asks for the password of a ward that keeps the player from it.</summary>
+        public static bool ObjectAsks(string typeName) => typeName != null && Array.IndexOf(OwnAltUse, typeName) < 0;
+
+        /// <summary>The hover line at a thing the player is asked about, the same as at a door.</summary>
+        public const string AltHoverLine = DoorHoverLine;
+
+        /// <summary>
+        /// The self-test's verdict on its thing in the ward: the hover line and the prompt for the
+        /// ward come exactly when the server has a password (<paramref name="opened"/> null: which
+        /// prompt opened cannot be seen).
+        /// </summary>
+        public static WardVerdict ObjectPromptCheck(bool serverHasOne, bool hoverLine, bool? opened)
+        {
+            if (!serverHasOne)
+            {
+                return hoverLine || opened == true
+                    ? new WardVerdict(SelfTestReport.Result.Fail, "the thing asks for a password, though the server has none")
+                    : new WardVerdict(SelfTestReport.Result.Pass, "no password line, as the server has no password");
+            }
+            if (!hoverLine) return new WardVerdict(SelfTestReport.Result.Fail, "the thing's hover has no password line");
+            if (opened == null) return new WardVerdict(SelfTestReport.Result.Info, "the hover line is there; which prompt opened cannot be seen in this Protective Wards");
+            return opened.Value
+                ? new WardVerdict(SelfTestReport.Result.Pass, "the hover line is there and alt-use opened the password prompt for its ward")
+                : new WardVerdict(SelfTestReport.Result.Fail, "alt-use at the thing opened no password prompt for its ward");
+        }
+
+        /// <summary>What the part for other things does on this game, in words: as the ward part, unless only this part stepped aside.</summary>
+        public static string ObjectStateLine(bool serverHasOne, bool found, string version, string problem, string objectProblem)
+        {
+            string ward = StateLine(serverHasOne, found, version, problem);
+            if (!ward.StartsWith("working", StringComparison.Ordinal)) return ward;
+            return objectProblem != null
+                ? "stepped aside: " + objectProblem
+                : "working · Protective Wards " + version + " · alt-use at anything a ward keeps you from asks for that ward's password";
+        }
+
+        /// <summary>The wards that keep the player out where they stand, nearest first ("vigil ward", the panel's button).</summary>
+        public static List<T> SpotWards<T>(IEnumerable<T> wards, Func<T, bool> refuses, Func<T, float> distance) =>
+            wards.Where(refuses).OrderBy(distance).ToList();
+
+        /// <summary>The answer to asking where you stand: the ward asked about and how many more keep you out, or why nothing is asked.</summary>
+        public static string SpotAnswer(bool found, bool serverHasOne, string problem, int refusing, string owner, bool opened)
+        {
+            if (!found) return "Protective Wards is not installed";
+            if (!serverHasOne) return "the server has no ward password, so there is nothing to ask";
+            if (problem != null) return "the ward password patch stepped aside: " + problem;
+            if (refusing <= 0) return "no active ward where you stand keeps you out";
+            if (!opened) return "Protective Wards did not open its password prompt for " + owner + "'s ward";
+            string asking = "asking for the server's ward password for " + owner + "'s ward";
+            int more = refusing - 1;
+            if (more == 0) return asking;
+            return asking + "; " + more.ToString(CultureInfo.InvariantCulture) + (more == 1 ? " more ward where you stand keeps" : " more wards where you stand keep")
+                + " you out: ask again after this one";
+        }
+
+        /// <summary>
+        /// The self-test's verdict on asking at its ward's spot: the prompt for that ward opens exactly
+        /// when the server has a password (<paramref name="opened"/> null: which prompt opened cannot be seen).
+        /// </summary>
+        public static WardVerdict SpotPromptCheck(bool serverHasOne, bool? opened)
+        {
+            if (!serverHasOne)
+            {
+                return opened == true
+                    ? new WardVerdict(SelfTestReport.Result.Fail, "asking at the ward's spot opened a prompt, though the server has no password")
+                    : new WardVerdict(SelfTestReport.Result.Pass, "nothing asked, as the server has no password");
+            }
+            if (opened == null) return new WardVerdict(SelfTestReport.Result.Info, "which prompt opened cannot be seen in this Protective Wards");
+            return opened.Value
+                ? new WardVerdict(SelfTestReport.Result.Pass, "the password prompt opened for the ward around the spot")
+                : new WardVerdict(SelfTestReport.Result.Fail, "asking at the ward's spot opened no password prompt for it");
         }
 
         /// <summary>Whether a use of a door opens the password prompt: alt-use, not held. Plain use stays the door's.</summary>

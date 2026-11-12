@@ -25,7 +25,7 @@ namespace Vigil.Core
         public static readonly string[] Commands =
         {
             "status", "selftest", "on", "off", "auto", "mark", "deep", "hammer", "server", "load", "census", "memory", "patches", "startup", "trace", "inspect", "busiest", "weather",
-            "spawned", "spawnable", "leftovers", "spawns", "missing", "help",
+            "spawned", "spawnable", "leftovers", "ward", "spawns", "missing", "help",
         };
 
         /// <summary>How far back "vigil spawned" looks by default.</summary>
@@ -81,6 +81,7 @@ namespace Vigil.Core
                 "  vigil [status]               this session so far, the recording switch, the spawn marks",
                 "  vigil selftest [server]      check Vigil against the running game, or the server's",
                 "  vigil help [command]         this list, or one command in detail",
+                "  vigil ward                   a ward keeps you out where you stand: ask for the server's password",
                 "Recording",
                 "  vigil on | off | auto        recording switch (auto, the default: while in a world)",
                 "  vigil mark [note]            write a lag report now (key: " + markKey + ")",
@@ -321,6 +322,15 @@ namespace Vigil.Core
                         "  and asset bundles, and the same added up per mod (matched through the mods' asset",
                         "  bundles), into Vigil-memory-<time>.txt. It walks every loaded asset at once, so the",
                         "  game can stall for a moment.",
+                    };
+                case "ward":
+                    return new List<string>
+                    {
+                        "vigil ward   (also /vigil ward in chat)",
+                        "  Where an active ward you have no access to keeps you out where you stand, opens",
+                        "  Protective Wards' password prompt for the nearest such ward; the server's ward",
+                        "  password puts you on its list. Says how many more keep you out there: ask again",
+                        "  after each. Alt-use at a thing a ward keeps you from asks the same.",
                     };
                 case "patches":
                     return new List<string>

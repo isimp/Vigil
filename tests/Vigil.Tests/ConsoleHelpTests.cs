@@ -277,6 +277,18 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_player_kept_out_by_a_ward_finds_how_to_ask_for_the_server_password_in_the_overview_and_its_help()
+        {
+            Assert.Contains("ward", ConsoleHelp.Commands);
+            Assert.Equal(ConsoleHelp.Recorder, ConsoleHelp.Owner("ward"));
+            Assert.Contains("vigil ward", Overview);
+            string about = About("ward");
+            Assert.Contains("/vigil ward", about);
+            Assert.Contains("password", about);
+            Assert.Contains("nearest", about);
+        }
+
+        [Fact]
         public void The_prefab_lister_is_gone_from_the_console_and_its_help()
         {
             Assert.DoesNotContain("prefabs", ConsoleHelp.Commands);

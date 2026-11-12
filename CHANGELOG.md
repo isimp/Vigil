@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.46.0
+
+*Server password for wards* now reaches you wherever a ward keeps you out. Before, it asked only at the ward stone and at doors, so a ward you never saw could lock you out with no way to type the password, for example another base's ward reaching over your own. Now Shift+E asks for that ward's password at anything it keeps you from, such as a chest, a station, an item stand, a portal or a bed, and the hover says so. Fires, tames, saddles and graves keep their own Shift+E.
+
+For building, or when you cannot point at anything, type `/vigil ward` in chat or press *Ward password here* in the panel's *Patches* tab. It asks for the nearest ward that keeps you out where you stand and tells you how many more there are.
+
 ## 0.45.1
 
 *The compass follows Cartur's map* and *Cartur's map search and hide key cover HUDCompass's pins* work with Cartur's Map Pins 2.5.0. Both stepped aside on it because the code they check changed: 2.5.0 now moves a group of pins close together to the group's middle on the large map. Colours, hiding and the search work as before, so the patches do too. HUDCompass's carts, ships and portals are not grouped with Cartur's pins.

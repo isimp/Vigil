@@ -44,7 +44,21 @@ namespace Vigil.Recorder
             Ui.Note("A door a ward locks asks for that ward's password too: its hover names alt-use, and alt-use opens the same prompt for the first ward that locks it. Plain use stays the door's. Where two wards that are not connected lock one door, each is asked about in turn.");
             Ui.Row("Doors", Toned(WardPasswordPatch.DoorState,
                 WardPasswordPatch.DoorProblem != null && WardPasswordPatch.ServerHasOne ? ResultTone.Caution : WardPasswordPatch.ServerHasOne && WardPasswordPatch.DoorsReady ? ResultTone.Good : ResultTone.Quiet));
+            Ui.Note("Anything else a ward keeps you from (a chest, a station, an item stand, a portal, a bed) asks the same: its hover names alt-use, and alt-use opens the prompt for the ward that keeps you from it. A fire, a tame, a saddle and a grave keep their own alt-use. That ward can be one you never saw: another base's ward reaching over yours, which is not connected to yours.");
+            Ui.Row("Other things", Toned(WardPasswordPatch.ObjectState,
+                (WardPasswordPatch.DoorProblem ?? WardPasswordPatch.ObjectProblem) != null && WardPasswordPatch.ServerHasOne ? ResultTone.Caution : WardPasswordPatch.ServerHasOne && WardPasswordPatch.DoorsReady ? ResultTone.Good : ResultTone.Quiet));
+            if (!_server && WardPasswordPatch.ServerHasOne)
+            {
+                if (Ui.Tool("Ward password here", "Opens the password prompt for the nearest ward keeping you out where you stand, also for building; /vigil ward in chat does the same", "Open"))
+                {
+                    Panel.CloseWanted = true;
+                    Ui.Later(() => _wardAskLine = WardPasswordPatch.AskHere(Player.m_localPlayer));
+                }
+                if (_wardAskLine != null) Ui.Row("Last asked", _wardAskLine);
+            }
         }
+
+        private string _wardAskLine;
 
         private void SwitchLine(bool may, BepInEx.Configuration.ConfigEntry<bool> entry, string name)
         {
@@ -71,6 +85,7 @@ namespace Vigil.Recorder
             Add(checks, area, "game patch: wards repair the whole connected base, or by themselves", WardRepairPatch.State);
             Add(checks, area, "game patch: server password for wards", WardPasswordPatch.State);
             Add(checks, area, "game patch: server password for wards, at doors", WardPasswordPatch.DoorState);
+            Add(checks, area, "game patch: server password for wards, at other things", WardPasswordPatch.ObjectState);
         }
 
         private static void Add(List<SelfTestReport.Check> checks, string area, string what, string state) =>

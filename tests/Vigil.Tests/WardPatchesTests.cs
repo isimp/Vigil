@@ -258,6 +258,137 @@ namespace Vigil.Tests
                 WardPassword.DoorStateLine(serverHasOne: true, found: false, version: null, problem: null, doorProblem: null));
         }
 
+        // ------------------------------------------------------------------ anything a ward keeps you from
+
+        [Fact]
+        public void A_ward_keeps_you_from_a_thing_in_its_area_while_active_unless_you_have_access_or_made_the_thing()
+        {
+            Assert.True(WardPassword.Refuses(active: true, inside: true, hasAccess: false, madeIt: false));
+            Assert.False(WardPassword.Refuses(active: true, inside: true, hasAccess: true, madeIt: false));
+            Assert.False(WardPassword.Refuses(active: true, inside: false, hasAccess: false, madeIt: false));
+            Assert.False(WardPassword.Refuses(active: false, inside: true, hasAccess: false, madeIt: false));
+            Assert.False(WardPassword.Refuses(active: true, inside: true, hasAccess: false, madeIt: true));
+        }
+
+        [Fact]
+        public void Alt_use_asks_for_the_password_at_chests_stations_stands_and_switches_a_ward_keeps_you_from()
+        {
+            foreach (var type in new[] { "Container", "CraftingStation", "ItemStand", "Switch", "Smelter", "Fermenter", "Beehive", "Bed", "TeleportWorld", "ShipControlls", "Pickable", "MapTable" })
+                Assert.True(WardPassword.ObjectAsks(type), type);
+        }
+
+        [Fact]
+        public void Things_with_an_alt_use_of_their_own_keep_it_and_the_ward_and_doors_keep_their_own_way()
+        {
+            foreach (var type in new[] { "Fireplace", "Pet", "Tameable", "Sadle", "TombStone", "PrivateArea", "Door" })
+                Assert.False(WardPassword.ObjectAsks(type), type);
+            Assert.False(WardPassword.ObjectAsks(null));
+        }
+
+        [Fact]
+        public void At_a_thing_the_player_is_asked_about_the_first_ward_that_keeps_them_from_it()
+        {
+            var a = W("a", 0);
+            var b = W("b", 5);
+            var c = W("c", 9);
+
+            Assert.Same(b, WardPassword.AskedWard(new[] { a, b, c }, refuses: w => w != a, asks: w => true));
+            Assert.Null(WardPassword.AskedWard(new[] { a, b }, refuses: w => false, asks: w => true));
+            // Protective Wards refuses at the first ward, so a later one is never asked about.
+            Assert.Null(WardPassword.AskedWard(new[] { a, b }, refuses: w => true, asks: w => w == b));
+        }
+
+        [Fact]
+        public void A_thing_names_alt_use_in_its_hover_with_the_same_line_as_a_door()
+        {
+            Assert.Equal(WardPassword.DoorHoverLine, WardPassword.AltHoverLine);
+        }
+
+        [Fact]
+        public void The_self_test_passes_a_thing_that_asks_exactly_when_the_server_has_a_password()
+        {
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.ObjectPromptCheck(serverHasOne: true, hoverLine: true, opened: true).Result);
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.ObjectPromptCheck(serverHasOne: false, hoverLine: false, opened: false).Result);
+        }
+
+        [Fact]
+        public void The_self_test_fails_a_thing_without_the_line_or_the_prompt_or_asking_without_a_password()
+        {
+            var noLine = WardPassword.ObjectPromptCheck(serverHasOne: true, hoverLine: false, opened: true);
+            Assert.Equal(SelfTestReport.Result.Fail, noLine.Result);
+            Assert.Equal("the thing's hover has no password line", noLine.Text);
+            var noPrompt = WardPassword.ObjectPromptCheck(serverHasOne: true, hoverLine: true, opened: false);
+            Assert.Equal(SelfTestReport.Result.Fail, noPrompt.Result);
+            Assert.Equal("alt-use at the thing opened no password prompt for its ward", noPrompt.Text);
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.ObjectPromptCheck(serverHasOne: false, hoverLine: true, opened: false).Result);
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.ObjectPromptCheck(serverHasOne: false, hoverLine: false, opened: true).Result);
+            Assert.Equal(SelfTestReport.Result.Info, WardPassword.ObjectPromptCheck(serverHasOne: true, hoverLine: true, opened: null).Result);
+        }
+
+        [Fact]
+        public void The_state_of_the_things_part_follows_the_ward_part_and_names_its_own_trouble()
+        {
+            Assert.Equal("working · Protective Wards 2.1.0 · alt-use at anything a ward keeps you from asks for that ward's password",
+                WardPassword.ObjectStateLine(serverHasOne: true, found: true, version: "2.1.0", problem: null, objectProblem: null));
+            Assert.Equal("stepped aside: its hover line could not be hooked",
+                WardPassword.ObjectStateLine(serverHasOne: true, found: true, version: "2.1.0", problem: null, objectProblem: "its hover line could not be hooked"));
+            Assert.Equal("off: the server has no ward password",
+                WardPassword.ObjectStateLine(serverHasOne: false, found: true, version: "2.1.0", problem: null, objectProblem: "x"));
+        }
+
+        // ------------------------------------------------------------------ asking where you stand (vigil ward, the panel's button)
+
+        [Fact]
+        public void Where_you_stand_every_ward_that_keeps_you_out_is_found_nearest_first()
+        {
+            var far = W("far", 30);
+            var near = W("near", 4);
+            var yours = W("yours", 1);
+            var off = W("off", 2, active: false);
+
+            var found = WardPassword.SpotWards(new[] { far, yours, off, near }, refuses: w => w != yours && w.Active, distance: w => w.X);
+
+            Assert.Equal(new[] { near, far }, found);
+        }
+
+        [Fact]
+        public void Asking_where_you_stand_names_the_ward_asked_about_and_how_many_more_keep_you_out()
+        {
+            Assert.Equal("asking for the server's ward password for Bob's ward",
+                WardPassword.SpotAnswer(found: true, serverHasOne: true, problem: null, refusing: 1, owner: "Bob", opened: true));
+            Assert.Equal("asking for the server's ward password for Bob's ward; 2 more wards where you stand keep you out: ask again after this one",
+                WardPassword.SpotAnswer(found: true, serverHasOne: true, problem: null, refusing: 3, owner: "Bob", opened: true));
+            Assert.Equal("asking for the server's ward password for Bob's ward; 1 more ward where you stand keeps you out: ask again after this one",
+                WardPassword.SpotAnswer(found: true, serverHasOne: true, problem: null, refusing: 2, owner: "Bob", opened: true));
+        }
+
+        [Fact]
+        public void Asking_where_you_stand_says_why_nothing_is_asked()
+        {
+            Assert.Equal("no active ward where you stand keeps you out",
+                WardPassword.SpotAnswer(found: true, serverHasOne: true, problem: null, refusing: 0, owner: null, opened: false));
+            Assert.Equal("the server has no ward password, so there is nothing to ask",
+                WardPassword.SpotAnswer(found: true, serverHasOne: false, problem: null, refusing: 1, owner: "Bob", opened: false));
+            Assert.Equal("Protective Wards is not installed",
+                WardPassword.SpotAnswer(found: false, serverHasOne: true, problem: null, refusing: 1, owner: "Bob", opened: false));
+            Assert.Equal("the ward password patch stepped aside: its password prompt changed (an update)",
+                WardPassword.SpotAnswer(found: true, serverHasOne: true, problem: "its password prompt changed (an update)", refusing: 1, owner: "Bob", opened: false));
+            Assert.Equal("Protective Wards did not open its password prompt for Bob's ward",
+                WardPassword.SpotAnswer(found: true, serverHasOne: true, problem: null, refusing: 1, owner: "Bob", opened: false));
+        }
+
+        [Fact]
+        public void The_self_test_passes_asking_where_you_stand_when_the_prompt_opens_for_the_ward_exactly_with_a_password()
+        {
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.SpotPromptCheck(serverHasOne: true, opened: true).Result);
+            Assert.Equal(SelfTestReport.Result.Pass, WardPassword.SpotPromptCheck(serverHasOne: false, opened: false).Result);
+            var none = WardPassword.SpotPromptCheck(serverHasOne: true, opened: false);
+            Assert.Equal(SelfTestReport.Result.Fail, none.Result);
+            Assert.Equal("asking at the ward's spot opened no password prompt for it", none.Text);
+            Assert.Equal(SelfTestReport.Result.Fail, WardPassword.SpotPromptCheck(serverHasOne: false, opened: true).Result);
+            Assert.Equal(SelfTestReport.Result.Info, WardPassword.SpotPromptCheck(serverHasOne: true, opened: null).Result);
+        }
+
         [Fact]
         public void The_self_test_says_so_when_it_cannot_see_which_prompt_opened()
         {

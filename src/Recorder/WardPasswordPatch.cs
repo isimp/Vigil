@@ -130,8 +130,115 @@ namespace Vigil.Recorder
             {
                 DoorProblem = "its doors could not be hooked: " + e.GetType().Name + " " + e.Message;
                 s_door = null;
+                return;
+            }
+            HookHover(log);
+        }
+
+        /// <summary>Why the hover line at other things is missing while alt-use there works; null when it shows.</summary>
+        public static string ObjectProblem { get; private set; }
+
+        /// <summary>
+        /// The hover line at a thing a ward keeps the player from: a postfix on the game's crosshair
+        /// step (<c>Hud.UpdateCrosshair</c>), which sets the hovered thing's text every frame, so the
+        /// line is added once per frame for every kind of thing without patching each one.
+        /// </summary>
+        private static void HookHover(Action<string> log)
+        {
+            try
+            {
+                var crosshair = AccessTools.Method(typeof(Hud), "UpdateCrosshair", new[] { typeof(Player), typeof(float) });
+                if (crosshair == null)
+                {
+                    ObjectProblem = "the game's hover step changed (an update), so the line is missing; alt-use still asks";
+                    return;
+                }
+                new Harmony(HarmonyId).Patch(crosshair, postfix: new HarmonyMethod(typeof(WardPasswordPatch), nameof(AfterCrosshair)));
+                log?.Invoke("Vigil: other things a ward keeps players from ask for its password too.");
+            }
+            catch (Exception e)
+            {
+                ObjectProblem = "its hover line could not be hooked: " + e.GetType().Name + " " + e.Message;
             }
         }
+
+        /// <summary>The thing alt-use acts on when the player looks at <paramref name="go"/>, as the game's interact step finds it.</summary>
+        private static Component Target(GameObject go) => go != null ? go.GetComponentInParent<Interactable>() as Component : null;
+
+        /// <summary>
+        /// The ward the player is asked about at a thing other than a door or a ward
+        /// (<see cref="WardPassword.ObjectAsks"/>): the first that keeps them from it, by Protective
+        /// Wards' own rule, while it takes the server's password; or null.
+        /// </summary>
+        public static PrivateArea ObjectWard(Component thing, Player player)
+        {
+            if (s_door == null || !ServerHasOne || thing == null || player == null || !WardPassword.ObjectAsks(thing.GetType().Name)) return null;
+            var at = thing.transform.position;
+            return WardPassword.AskedWard(s_allAreas(),
+                ward => ward != null && WardPassword.Refuses(s_active(ward), s_inside(ward, at, 0f), s_access(ward, player), s_madeBy(thing, player)),
+                ward => s_offers(ward, player));
+        }
+
+        /// <summary>The line the hover of <paramref name="go"/> gets for the player, or null; the self-test reads it too.</summary>
+        public static string ObjectHoverLine(GameObject go, Player player)
+        {
+            if (Localization.instance == null || ObjectWard(Target(go), player) == null) return null;
+            string line = Localization.instance.Localize(WardPassword.AltHoverLine);
+            // The game turns key boxes into bare sprites on a gamepad before it shows the text; the line follows.
+            if (ZInput.IsGamepadActive()) line = line.Replace("[<color=yellow><b><sprite=", "<sprite=").Replace("\"></b></color>]", "\">");
+            return line;
+        }
+
+        private static void AfterCrosshair(Hud __instance, Player player)
+        {
+            try
+            {
+                if (!ServerHasOne || __instance == null || __instance.m_hoverName == null || player == null || player != Player.m_localPlayer) return;
+                if (string.IsNullOrEmpty(__instance.m_hoverName.text)) return;
+                string line = ObjectHoverLine(player.GetHoverObject(), player);
+                if (line != null) __instance.m_hoverName.text += line;
+            }
+            catch (Exception)
+            {
+                // The hover line is a help; a failure leaves the game's own text.
+            }
+        }
+
+        /// <summary>
+        /// The wards that keep the player out at <paramref name="at"/>, nearest first: active, holding
+        /// the spot, without access to them or a ward connected to them.
+        /// </summary>
+        public static List<PrivateArea> SpotWards(Vector3 at, Player player)
+        {
+            if (s_door == null || player == null) return new List<PrivateArea>();
+            return WardPassword.SpotWards(s_allAreas(),
+                ward => ward != null && WardPassword.Refuses(s_active(ward), s_inside(ward, at, 0f), s_access(ward, player), madeIt: false),
+                ward => Utils.DistanceXZ(ward.transform.position, at));
+        }
+
+        /// <summary>
+        /// "vigil ward" and the panel's button: opens Protective Wards' password prompt for the nearest
+        /// ward keeping the player out where they stand (or at <paramref name="at"/>), and says how many
+        /// more do there.
+        /// </summary>
+        public static string AskHere(Player player, Vector3? at = null)
+        {
+            if (player == null) return "not in a world";
+            var wards = ServerHasOne && s_shape != null ? SpotWards(at ?? player.transform.position, player) : new List<PrivateArea>();
+            var first = wards.FirstOrDefault();
+            bool opened = first != null && s_prompt(first, player);
+            return WardPassword.SpotAnswer(Found, ServerHasOne, s_shape == null ? Problem ?? "Protective Wards is not hooked" : s_door == null ? DoorProblem : null,
+                wards.Count, first != null ? OwnerName(first) : null, opened);
+        }
+
+        private static string OwnerName(PrivateArea ward)
+        {
+            var view = ward.GetComponent<ZNetView>();
+            string name = view != null && view.IsValid() ? view.GetZDO().GetString(ZDOVars.s_creatorName) : "";
+            return string.IsNullOrEmpty(name) ? "someone" : name;
+        }
+
+        public static string ObjectState => WardPassword.ObjectStateLine(ServerHasOne, Found, Version, Problem, DoorProblem ?? ObjectProblem);
 
         /// <summary>The ward the player is asked about at the door (<see cref="WardPassword.DoorWard"/>), or null.</summary>
         public static PrivateArea DoorWard(Door door, Player player)
@@ -157,8 +264,8 @@ namespace Vigil.Recorder
         private static bool BeforeInteract(Player __instance, GameObject go, bool hold, bool alt)
         {
             if (!WardPassword.DoorUseAsks(hold, alt) || go == null || __instance != Player.m_localPlayer || __instance.InAttack() || __instance.InDodge()) return true;
-            var door = go.GetComponentInParent<Interactable>() as Door;
-            var ward = DoorWard(door, __instance);
+            var thing = Target(go);
+            var ward = thing is Door door ? DoorWard(door, __instance) : ObjectWard(thing, __instance);
             return ward == null || !s_prompt(ward, __instance);
         }
 

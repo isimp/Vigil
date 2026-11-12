@@ -253,6 +253,7 @@ namespace Vigil.Recorder
             if (word == "spawned") return "Vigil: " + Safe(() => SpawnedCommand(rest));
             if (word == "spawnable") return "Vigil: " + Own(SpawnableCommand);
             if (word == "leftovers") return "Vigil: " + Safe(() => LeftoversCommand(rest));
+            if (word == "ward") return "Vigil: " + Safe(() => WardPasswordPatch.AskHere(Player.m_localPlayer));
             if (word == "busiest") return "Vigil: " + Safe(() => StartBusiest(rest, toConsole: true));
             if (word == "weather") return "Vigil: " + Safe(() => WeatherCommand(rest));
             if (word == "trace") return "Vigil: " + Safe(() => TraceCommand(rest));

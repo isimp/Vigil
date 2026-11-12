@@ -170,7 +170,12 @@ namespace Vigil.Recorder
                     : offered == WardPasswordPatch.ServerHasOne
                         ? new Check(Here, prompt, Outcome.Pass, offered ? "offered, as the server has a password" : "not offered, as the server has no password")
                         : new Check(Here, prompt, Outcome.Fail, offered ? "offered, though the server has no password" : "not offered, though the server has a password"));
-                if (!access) WardTestDoorAsks(checks, door, ward, player);
+                if (!access)
+                {
+                    WardTestDoorAsks(checks, door, ward, player);
+                    WardTestThingAsks(checks, ward, spot.At + new Vector3(0f, 0f, Vigil.Core.WardTestSite.WallOffset), player);
+                    WardTestSpotAsks(checks, ward, player);
+                }
                 if (!WardPasswordPatch.ServerHasOne)
                 {
                     checks.Add(new Check(Here, what, Outcome.Info, "no password set on the server: nobody is asked, so no guess was tried"));
@@ -258,6 +263,82 @@ namespace Vigil.Recorder
             }
             var verdict = WardPassword.DoorPromptCheck(WardPasswordPatch.ServerHasOne, line, opened);
             checks.Add(new Check(Here, what, verdict.Result, verdict.Text));
+        }
+
+        /// <summary>
+        /// A thing in the test ward, standing in for a chest or a station: made on this game only (no
+        /// network object, nothing to remove on the server), its hover line read as the crosshair adds
+        /// it, alt-use through the player's interact step, then gone again.
+        /// </summary>
+        private static void WardTestThingAsks(List<Check> checks, PrivateArea ward, Vector3 at, Player player)
+        {
+            const string what = "the password at a thing the ward keeps you from";
+            if (!WardPasswordPatch.DoorsReady)
+            {
+                checks.Add(new Check(Here, what, Outcome.Warn, WardPasswordPatch.ObjectState));
+                return;
+            }
+            var thing = new GameObject("Vigil ward test thing");
+            try
+            {
+                thing.transform.position = at;
+                thing.AddComponent<WardTestThing>();
+                bool line = WardPasswordPatch.ObjectHoverLine(thing, player) != null;
+                bool? opened = null;
+                try
+                {
+                    s_playerInteract(player, thing, false, true);
+                    if (WardPasswordPatch.SeesPrompt) opened = WardPasswordPatch.PromptWard == ward.GetComponent<ZNetView>().GetZDO().m_uid;
+                }
+                finally
+                {
+                    WardPasswordPatch.ClosePrompt();
+                }
+                var verdict = WardPassword.ObjectPromptCheck(WardPasswordPatch.ServerHasOne, line, opened);
+                checks.Add(new Check(Here, what, verdict.Result, verdict.Text));
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(thing);
+            }
+        }
+
+        /// <summary>Asking where you stand ("vigil ward", the panel's button), at the test ward's own spot.</summary>
+        private static void WardTestSpotAsks(List<Check> checks, PrivateArea ward, Player player)
+        {
+            const string what = "the password asked where you stand (vigil ward)";
+            if (!WardPasswordPatch.DoorsReady)
+            {
+                checks.Add(new Check(Here, what, Outcome.Warn, WardPasswordPatch.ObjectState));
+                return;
+            }
+            bool? opened = null;
+            string answer;
+            try
+            {
+                answer = WardPasswordPatch.AskHere(player, ward.transform.position);
+                if (WardPasswordPatch.SeesPrompt) opened = WardPasswordPatch.PromptWard == ward.GetComponent<ZNetView>().GetZDO().m_uid;
+            }
+            finally
+            {
+                WardPasswordPatch.ClosePrompt();
+            }
+            var verdict = WardPassword.SpotPromptCheck(WardPasswordPatch.ServerHasOne, opened);
+            checks.Add(new Check(Here, what, verdict.Result, verdict.Text + " (" + answer + ")"));
+        }
+
+        /// <summary>The self-test's stand-in for a thing a ward guards: hoverable, and its own use does nothing.</summary>
+        private sealed class WardTestThing : MonoBehaviour, Hoverable, Interactable
+        {
+            public string GetHoverText() => "Vigil ward test thing";
+
+            public string GetHoverName() => "Vigil ward test thing";
+
+            public float GetHoverOffset() => 0f;
+
+            public bool Interact(Humanoid user, bool hold, bool alt) => false;
+
+            public bool UseItem(Humanoid user, ItemDrop.ItemData item) => false;
         }
 
         /// <summary>After the password: plain use through the player's interact step opens the test's door.</summary>

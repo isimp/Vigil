@@ -155,8 +155,17 @@ internal sealed class Panel
     /// <summary>Frames the panel was open in, for what drawing it costs.</summary>
     public static long OpenFrames { get; private set; }
 
+    /// <summary>Set by a button whose work needs the game's own screen: the panel closes on its next update.</summary>
+    public static bool CloseWanted;
+
     public void Update()
     {
+        if (CloseWanted)
+        {
+            CloseWanted = false;
+            if (IsOpen) Close();
+        }
+
         UpdateLook();
         if (IsOpen)
         {
