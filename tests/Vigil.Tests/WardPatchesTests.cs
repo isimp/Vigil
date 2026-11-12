@@ -352,6 +352,30 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void Once_the_nearest_ward_lets_you_in_only_wards_not_connected_to_it_still_keep_you_out()
+        {
+            var nearest = W("nearest", 0);
+            var joined = W("joined", 5);
+            var apart = W("apart", 9);
+
+            // Protective Wards asks from each ward whether a ward connected to it lets the player in.
+            var closed = WardPassword.StillClosed(new[] { nearest, joined, apart }, reaches: (from, to) => from == joined && to == nearest);
+
+            Assert.Equal(new[] { apart }, closed);
+            Assert.Empty(WardPassword.StillClosed(new Ward[0], reaches: (from, to) => false));
+            Assert.Empty(WardPassword.StillClosed(new[] { nearest }, reaches: (from, to) => false));
+        }
+
+        [Fact]
+        public void Without_a_way_to_see_connections_every_other_ward_still_counts_as_closed()
+        {
+            var nearest = W("nearest", 0);
+            var other = W("other", 5);
+
+            Assert.Equal(new[] { other }, WardPassword.StillClosed(new[] { nearest, other }, reaches: null));
+        }
+
+        [Fact]
         public void Asking_where_you_stand_names_the_ward_asked_about_and_how_many_more_keep_you_out()
         {
             Assert.Equal("asking for the server's ward password for Bob's ward",
@@ -489,6 +513,8 @@ namespace Vigil.Tests
             Assert.Equal("wardAccessProtectDoors", shape.LocksDoors.Name);
             Assert.Equal("s_promptWardID", shape.PromptWard.Name);
             Assert.Equal("ClosePrompt", shape.ClosePrompt.Name);
+            Assert.Equal("ConnectedAccessAreas", shape.Connected.Name);
+            Assert.Equal("wardAccessConnectedAccessMode", shape.ConnectedMode.Name);
         }
 
         [Fact]
@@ -863,6 +889,12 @@ namespace Vigil.Tests
                 internal static Dictionary<PrivateArea, int> wardIsRepairing = new Dictionary<PrivateArea, int>();
 
                 public static ConfigEntry<bool> wardAccessProtectDoors = new ConfigEntry<bool>();
+
+                public enum WardConnectedAccessMode { Off, SameCreatorOnly, MutualTrust, AnyConnected }
+
+                public static ConfigEntry<WardConnectedAccessMode> wardAccessConnectedAccessMode = new ConfigEntry<WardConnectedAccessMode>();
+
+                public static IEnumerable<PrivateArea> ConnectedAccessAreas(PrivateArea ward, WardConnectedAccessMode mode) => null;
 
                 public static bool IsPointInsideWardArea(PrivateArea ward, Vector3 point, float radius = 0f) => false;
 

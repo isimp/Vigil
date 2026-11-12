@@ -227,8 +227,29 @@ namespace Vigil.Recorder
             var wards = ServerHasOne && s_shape != null ? SpotWards(at ?? player.transform.position, player) : new List<PrivateArea>();
             var first = wards.FirstOrDefault();
             bool opened = first != null && s_prompt(first, player);
+            int refusing = first == null ? 0 : 1 + WardPassword.StillClosed(wards, Reaches()).Count;
             return WardPassword.SpotAnswer(Found, ServerHasOne, s_shape == null ? Problem ?? "Protective Wards is not hooked" : s_door == null ? DoorProblem : null,
-                wards.Count, first != null ? OwnerName(first) : null, opened);
+                refusing, first != null ? OwnerName(first) : null, opened);
+        }
+
+        /// <summary>
+        /// Whether Protective Wards' connected access at the first ward takes in the second, under its
+        /// setting now (<c>ConnectedAccessAreas</c>); null when that cannot be read, so every ward counts.
+        /// </summary>
+        private static Func<PrivateArea, PrivateArea, bool> Reaches()
+        {
+            if (s_door?.Connected == null) return null;
+            try
+            {
+                var entry = s_door.ConnectedMode.GetValue(null);
+                var mode = entry?.GetType().GetProperty("Value")?.GetValue(entry);
+                if (mode == null) return null;
+                return (from, to) => ((IEnumerable)s_door.Connected.Invoke(null, new[] { from, mode })).Cast<PrivateArea>().Contains(to);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         private static string OwnerName(PrivateArea ward)

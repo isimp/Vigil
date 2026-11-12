@@ -4,7 +4,7 @@
 
 *Server password for wards* now reaches you wherever a ward keeps you out. Before, it asked only at the ward stone and at doors, so a ward you never saw could lock you out with no way to type the password, for example another base's ward reaching over your own. Now Shift+E asks for that ward's password at anything it keeps you from, such as a chest, a station, an item stand, a portal or a bed, and the hover says so. Fires, tames, saddles and graves keep their own Shift+E.
 
-For building, or when you cannot point at anything, type `/vigil ward` in chat or press *Ward password here* in the panel's *Patches* tab. It asks for the nearest ward that keeps you out where you stand and tells you how many more there are.
+For building, or when you cannot point at anything, type `/vigil ward` in chat or press *Ward password here* in the panel's *Patches* tab. It asks for the nearest ward that keeps you out where you stand. Wards that cover the same spot usually share access, so one password opens them all; if one there does not share it, you are told to ask again.
 
 ## 0.45.1
 

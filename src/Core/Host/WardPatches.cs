@@ -291,6 +291,20 @@ namespace Vigil.Core
         public static List<T> SpotWards<T>(IEnumerable<T> wards, Func<T, bool> refuses, Func<T, float> distance) =>
             wards.Where(refuses).OrderBy(distance).ToList();
 
+        /// <summary>
+        /// Of the wards keeping the player out where they stand (nearest first), the ones that still
+        /// do once the nearest lets them in: those from which Protective Wards' connected access does
+        /// not reach the nearest (<paramref name="reaches"/>(from, to)). Wards over one spot overlap, so
+        /// with connected access for any overlapping ward none is left. Without <paramref name="reaches"/>
+        /// every other ward counts.
+        /// </summary>
+        public static List<T> StillClosed<T>(IList<T> refusing, Func<T, T, bool> reaches) where T : class
+        {
+            if (refusing.Count == 0) return new List<T>();
+            var first = refusing[0];
+            return refusing.Skip(1).Where(w => reaches == null || !reaches(w, first)).ToList();
+        }
+
         /// <summary>The answer to asking where you stand: the ward asked about and how many more keep you out, or why nothing is asked.</summary>
         public static string SpotAnswer(bool found, bool serverHasOne, string problem, int refusing, string owner, bool opened)
         {
@@ -775,6 +789,12 @@ namespace Vigil.Core
 
             /// <summary><c>ClosePrompt()</c>; null: the self-test leaves the prompt to the player.</summary>
             public MethodInfo ClosePrompt;
+
+            /// <summary><c>ConnectedAccessAreas(PrivateArea, WardConnectedAccessMode)</c>, the wards whose access counts at a ward; null: "vigil ward" counts every other ward.</summary>
+            public MethodInfo Connected;
+
+            /// <summary><c>wardAccessConnectedAccessMode</c>, its "Connected ward access mode" setting (a ConfigEntry of that enum); null with <see cref="Connected"/>.</summary>
+            public FieldInfo ConnectedMode;
         }
 
         public static DoorShape FindDoor(Func<string, Type> type)
@@ -796,6 +816,18 @@ namespace Vigil.Core
             bool boolSetting = setting != null && setting.IsGenericType && setting.Name == "ConfigEntry`1"
                 && setting.GetGenericArguments()[0] == typeof(bool) && setting.GetProperty("Value") != null;
             if (shape.PromptWard != null && shape.PromptWard.FieldType.Name != "ZDOID") shape.PromptWard = null;
+            // Optional: the mode setting's type is the enum the connected list takes.
+            var modeSetting = pw.GetField("wardAccessConnectedAccessMode", Static);
+            var mode = modeSetting?.FieldType;
+            var modeType = mode != null && mode.IsGenericType && mode.Name == "ConfigEntry`1" && mode.GetProperty("Value") != null ? mode.GetGenericArguments()[0] : null;
+            var connected = modeType == null || !modeType.IsEnum ? null : pw.GetMethods(Static).FirstOrDefault(m => m.Name == "ConnectedAccessAreas"
+                && typeof(IEnumerable).IsAssignableFrom(m.ReturnType) && m.GetParameters().Length == 2
+                && m.GetParameters()[0].ParameterType.Name == "PrivateArea" && m.GetParameters()[1].ParameterType == modeType);
+            if (connected != null)
+            {
+                shape.Connected = connected;
+                shape.ConnectedMode = modeSetting;
+            }
             return shape.Prompt != null && shape.Active != null && shape.Inside != null && shape.MadeBy != null && boolSetting ? shape : null;
         }
 
