@@ -36,8 +36,8 @@ namespace Vigil.Recorder
         /// <summary>HUDCompass 1.2.1's DrawMarker, its map pin postfix and MarkerToPinData.</summary>
         private const ulong KnownCompassCode = 0x0F71C38696676BFDUL;
 
-        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key): 2.0.0 and 2.0.1, then 2.1.0 (a fourth mode, only auto pins).</summary>
-        private static readonly ulong[] KnownCarturCode = { 0xDC9C8AF80AB28234UL, 0x0ED0DB2241B986BBUL };
+        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix (its search fades the map's pins), PinHiding.CycleHides and PinHiding.Step (its hide key): 2.0.0 and 2.0.1, then 2.1.0 (a fourth mode, only auto pins) to 2.4.0, then 2.5.0 (the postfix also moves grouped pins to their group's middle on the large map).</summary>
+        private static readonly ulong[] KnownCarturCode = { 0xDC9C8AF80AB28234UL, 0x0ED0DB2241B986BBUL, 0xF583A5573BFE225EUL };
 
         /// <summary>This game's switch, kept current by the config entry.</summary>
         public static bool On;

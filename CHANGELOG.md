@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.1
+
+*The compass follows Cartur's map* and *Cartur's map search and hide key cover HUDCompass's pins* work with Cartur's Map Pins 2.5.0. Both stepped aside on it because the code they check changed: 2.5.0 now moves a group of pins close together to the group's middle on the large map. Colours, hiding and the search work as before, so the patches do too. HUDCompass's carts, ships and portals are not grouped with Cartur's pins.
+
 ## 0.45.0
 
 A new patch, off until switched on: *Summon Commander: the next summon from a radial* (`Patches.SummonCommanderRadial`). No staff has a secondary attack, so with the Dead Raiser or the Spirit Caller in hand that button now opens the game's radial menu to pick your next summon: sword and shield, bow or any weapon for skeletons, wolf, boar, moose, bear or any species for spirits. The pick goes into Summon Commander's settings and stays until the next pick; for skeletons it fills every team slot with that weapon, which replaces a mixed team set there before. It needs Summon Commander 1.0.1 and leaves other versions alone.

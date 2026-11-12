@@ -51,8 +51,8 @@ namespace Vigil.Recorder
 
         public static string State => CompassPinRules.StateLine(On, Found, Version, Problem, s_frames, Ms(s_ticks), s_pins, s_made, s_reused, s_theirFrames, Ms(s_theirTicks));
 
-        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins, as in 2.0.0 to 2.1.0.</summary>
-        private const ulong KnownCarturColours = 0xF94096760D5D5494UL;
+        /// <summary>The code (<see cref="CodeShape"/>) of Cartur's Patch_Minimap_UpdatePins.Postfix, where it colours the map's pins: 2.0.0 to 2.4.0, then 2.5.0 (it also moves grouped pins to their group's middle on the large map; colours unchanged).</summary>
+        private static readonly ulong[] KnownCarturColours = { 0xF94096760D5D5494UL, 0x8E08FE5571FA8BF9UL };
 
         /// <summary>This game's switch for following Cartur's map, kept current by the config entry.</summary>
         public static bool FollowCartur;
@@ -230,7 +230,7 @@ namespace Vigil.Recorder
                 var tintFor = styles?.GetMethod("TintFor", any);
                 var looted = placer?.GetMethod("LootedChestType", any);
                 if (colours == null || isHidden == null || keyHides == null || styleFor == null || colourFor == null || tintFor == null || looted == null
-                    || colourFor.ReturnType != typeof(Color?) || CodeShape.Hash(new[] { colours }) != KnownCarturColours)
+                    || colourFor.ReturnType != typeof(Color?) || !KnownCarturColours.Contains(CodeShape.Hash(new[] { colours })))
                 {
                     FollowProblem = "Cartur's colour code changed (an update)";
                     return;
