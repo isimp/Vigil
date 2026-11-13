@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.1
+
+A new patch, off until switched on: *OdinOnDemand's stream cannot crash the game* (`Patches.OdinOnDemandSafeStream`). While a radio streamed, the game could crash outright, mostly when it was running slowly, because OdinOnDemand asked Unity where the stream was from a part of the game that must not ask. On, the game notes each stream's play position once a frame and OdinOnDemand works from that note instead. The sound stays the same. It works with OdinOnDemand 1.3.0 and leaves other versions alone.
+
 ## 0.46.0
 
 *Server password for wards* now reaches you wherever a ward keeps you out. Before, it asked only at the ward stone and at doors, so a ward you never saw could lock you out with no way to type the password, for example another base's ward reaching over your own. Now Shift+E asks for that ward's password at anything it keeps you from, such as a chest, a station, an item stand, a portal or a bed, and the hover says so. Fires, tames, saddles and graves keep their own Shift+E.

@@ -21,7 +21,8 @@ namespace Vigil.Recorder
         private const string OdinSpeakersNote = "An OdinOnDemand radio keeps each linked speaker's place from the moment it was linked and plays from there, so a speaker moved with EasyRelocate went on sounding at its old place, and a player's own volume for a radio, kept under the radio's place, was lost when the radio moved. On, the radio plays from where each linked speaker stands while it is loaded, places its sound again after an EasyRelocate move and when a speaker loads somewhere else, and the game that holds the radio's data saves the new places there. A moved radio's volume goes with it on the games that have it loaded. An OdinOnDemand whose speaker code differs from 1.3.0 is left alone.";
         private const string OdinMusicFadeNote = "OdinOnDemand lowers the game's music the nearer you stand to a playing radio, measured to the radio itself, so next to a far linked speaker the game's music played at full beside the stream. On, the distance is to the nearest place the radio's sound comes from: each speaker and the radio while it plays from each speaker, the middle of its speakers otherwise. OdinOnDemand's own fade curve and Lowest Fade Volume DB stay. An OdinOnDemand whose fade code differs from 1.3.0 is left alone.";
         private const string SummonRadialNote = "No staff in the game has a secondary attack. On, with the Dead Raiser or the Spirit Caller in hand that button (middle mouse unless rebound; on a controller the layout's secondary attack) opens the game's radial menu with what your next summon is to be: for the Dead Raiser sword and shield, bow or any weapon, for the Spirit Caller wolf, boar, moose, bear or any species. The pick goes into Summon Commander's own settings, which decide what the staff summons, and stays until the next pick: the Spirit Caller's next spirit, and for the Dead Raiser every skeleton team slot set to the weapon picked, which replaces the team set there before. The radial works like the game's own: click or flick to pick, the staff's button or Esc to close, and with the game's release-to-use setting a hold and release picks. Needs Summon Commander; one whose next-summon code differs from 1.0.1 is left alone.";
-        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade, _summonRadial;
+        private const string OdinSafeStreamNote = "OdinOnDemand's radios ask Unity for their play position from Unity's sound thread, while the game's main thread may be stopping or changing that same sound, and the game has crashed there, mostly while it was running slowly. On, the main thread notes each stream's play position once a frame and the sound thread works it out from that note, so it never asks Unity. The sound is the same; at most the first moment after the switch is turned on mid-stream may skip. An OdinOnDemand whose stream code differs from 1.3.0 is left alone.";
+        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade, _odinSafeStream, _summonRadial;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -125,6 +126,9 @@ namespace Vigil.Recorder
             _odinMusicFade = Config.Bind("Patches", "OdinOnDemandMusicFade", false, "This game's own switch: " + OdinMusicFadeNote);
             OdinMusicFadePatch.On = _odinMusicFade.Value;
             _odinMusicFade.SettingChanged += (_, __) => OdinMusicFadePatch.On = _odinMusicFade.Value;
+            _odinSafeStream = Config.Bind("Patches", "OdinOnDemandSafeStream", false, "This game's own switch: " + OdinSafeStreamNote);
+            OdinSafeStreamPatch.On = _odinSafeStream.Value;
+            _odinSafeStream.SettingChanged += (_, __) => OdinSafeStreamPatch.On = _odinSafeStream.Value;
             _summonRadial = Config.Bind("Patches", "SummonCommanderRadial", false, "This game's own switch: " + SummonRadialNote);
             SummonRadialPatch.On = _summonRadial.Value;
             _summonRadial.SettingChanged += (_, __) => SummonRadialPatch.On = _summonRadial.Value;
@@ -239,6 +243,8 @@ namespace Vigil.Recorder
             if (OdinSpeakersPatch.MoveProblem != null) _host.Log.LogWarning("Vigil: OdinOnDemand's speakers follow an EasyRelocate move only when they load: " + OdinSpeakersPatch.MoveProblem);
             if (!_server) OdinMusicFadePatch.Hook(line => _host.Log.LogWarning(line));
             if (OdinMusicFadePatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for OdinOnDemand's music fade stepped aside: " + OdinMusicFadePatch.Problem);
+            if (!_server) OdinSafeStreamPatch.Hook(line => _host.Log.LogWarning(line));
+            if (OdinSafeStreamPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch keeping OdinOnDemand's stream from crashing the game stepped aside: " + OdinSafeStreamPatch.Problem);
             if (!_server) SummonRadialPatch.Hook(line => _host.Log.LogWarning(line));
             if (SummonRadialPatch.Problem != null) _host.Log.LogWarning("Vigil: the Summon Commander radial patch stepped aside: " + SummonRadialPatch.Problem);
             AwaySleepPatch.Hook();
@@ -270,7 +276,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0) + (_summonRadial.Value ? 1 : 0)) + " of 22 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0) + (_odinSafeStream.Value ? 1 : 0) + (_summonRadial.Value ? 1 : 0)) + " of 23 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -444,6 +450,9 @@ namespace Vigil.Recorder
 
             OwnSwitch("OdinOnDemand fades the game's music by where it plays", _odinMusicFade, "OdinOnDemandMusicFade", OdinMusicFadeNote);
             if (!_server) Ui.Row("On this game", Toned(OdinMusicFadePatch.State, OdinMusicFadePatch.Problem != null ? ResultTone.Caution : _odinMusicFade.Value && OdinMusicFadePatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("OdinOnDemand's stream cannot crash the game", _odinSafeStream, "OdinOnDemandSafeStream", OdinSafeStreamNote);
+            if (!_server) Ui.Row("On this game", Toned(OdinSafeStreamPatch.State, OdinSafeStreamPatch.Problem != null ? ResultTone.Caution : _odinSafeStream.Value && OdinSafeStreamPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             OwnSwitch("Summon Commander: the next summon from a radial", _summonRadial, "SummonCommanderRadial", SummonRadialNote);
             if (!_server) Ui.Row("On this game", Toned(SummonRadialPatch.State, SummonRadialPatch.Problem != null ? ResultTone.Caution : _summonRadial.Value && SummonRadialPatch.Found ? ResultTone.Good : ResultTone.Quiet));

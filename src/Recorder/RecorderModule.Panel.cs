@@ -516,7 +516,7 @@ namespace Vigil.Recorder
                     chest.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                     : chest.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
                     : SelfTestReport.Result.Info, chest));
-                foreach (var (name, state) in new[] { ("game patch: EasyRelocate quicker, and a move always ends", RelocatePatch.FixesState), ("game patch: EasyRelocate's ghost is a spirit", RelocatePatch.SpiritState), ("game patch: OdinOnDemand plays from where its speakers stand", OdinSpeakersPatch.State), ("game patch: OdinOnDemand fades the game's music by where it plays", OdinMusicFadePatch.State), ("game patch: Summon Commander's next summon from a radial", SummonRadialPatch.State) })
+                foreach (var (name, state) in new[] { ("game patch: EasyRelocate quicker, and a move always ends", RelocatePatch.FixesState), ("game patch: EasyRelocate's ghost is a spirit", RelocatePatch.SpiritState), ("game patch: OdinOnDemand plays from where its speakers stand", OdinSpeakersPatch.State), ("game patch: OdinOnDemand fades the game's music by where it plays", OdinMusicFadePatch.State), ("game patch: OdinOnDemand's stream cannot crash the game", OdinSafeStreamPatch.State),("game patch: Summon Commander's next summon from a radial", SummonRadialPatch.State) })
                     checks.Add(new SelfTestReport.Check(area, name,
                         state.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                         : state.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
