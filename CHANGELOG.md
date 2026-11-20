@@ -2,7 +2,7 @@
 
 ## 0.47.0
 
-A new patch, off until switched on: *AdjustablePortals: favourite portals* (`Patches.AdjustablePortalsFavourites`). AdjustablePortals lets you pick where a portal sends you from a list or on the map, but has no favourites. On, a star on each row of its list marks a portal as a favourite, and your favourites come first under their own heading. On its map, right click a portal to mark it; favourites carry a star and a panel at the map's left lists them, and a click there travels. Favourites stay with your character, also when a portal is renamed or moved, and your TargetPortal favourites are taken over the first time. It is checked against AdjustablePortals 0.7.0; 0.8.0 has the same picker source, and any version whose picker code differs is left alone.
+A new patch, off until switched on: *AdjustablePortals: favourite portals* (`Patches.AdjustablePortalsFavourites`). AdjustablePortals lets you pick where a portal sends you from a list or on the map, but has no favourites. On, a star on each row of its list marks a portal as a favourite, and your favourites come first under their own heading. On its map, right click a portal to mark it; favourites carry a star and a panel at the map's left lists them, and a click there travels. Favourites stay with your character, also when a portal is renamed or moved, and your TargetPortal favourites are taken over the first time. It works with AdjustablePortals 0.7.0 and 0.8.0 and leaves other versions alone.
 
 ## 0.46.1
 

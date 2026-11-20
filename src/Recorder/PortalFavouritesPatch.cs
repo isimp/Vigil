@@ -22,16 +22,16 @@ namespace Vigil.Recorder
     /// unmarks it, favourite pins carry a star, and a panel beside the map lists the favourites, a
     /// click on one travelling there through AdjustablePortals' own <c>PortalTargeting.TravelTo</c>.
     /// Everything is drawn with AdjustablePortals' own <c>PickerUI</c> and the build menu's
-    /// favourite star. AdjustablePortals' picker code is compared with 0.7.0's (0.8.0's source is
-    /// the same), and any change makes the patch step aside. The switch is this game's own.
+    /// favourite star. AdjustablePortals' picker code is compared with 0.7.0's and 0.8.0's, which
+    /// are the same, and any change makes the patch step aside. The switch is this game's own.
     /// </summary>
     internal static class PortalFavouritesPatch
     {
         private const string HarmonyId = "isimp.Vigil.patches.portalfavourites";
 
         /// <summary>
-        /// AdjustablePortals 0.7.0's PortalListPicker Build, Rebuild, AddRow; PortalMapPicker Open,
-        /// Close, PickAt; PickerUI CreatePanel, AddText, AddButton, NewLayoutRow.
+        /// AdjustablePortals 0.7.0's and 0.8.0's PortalListPicker Build, Rebuild, AddRow;
+        /// PortalMapPicker Open, Close, PickAt; PickerUI CreatePanel, AddText, AddButton, NewLayoutRow.
         /// </summary>
         private const ulong KnownCode = 0x013033726379EFEDUL;
 
