@@ -18,7 +18,7 @@ namespace Vigil.Tests
         [Fact]
         public void A_portal_marked_as_a_favourite_is_one_and_marked_again_is_not()
         {
-            var favourites = new HashSet<VehicleId>();
+            var favourites = new List<VehicleId>();
             Assert.True(PortalFavourites.Toggle(favourites, Home));
             Assert.Contains(Home, favourites);
             Assert.False(PortalFavourites.Toggle(favourites, Home));
@@ -26,18 +26,26 @@ namespace Vigil.Tests
         }
 
         [Fact]
-        public void Favourites_are_kept_in_the_character_data_and_read_back()
+        public void A_new_favourite_goes_to_the_end_of_the_favourites()
         {
-            var favourites = new HashSet<VehicleId> { Camp, Home };
+            var favourites = new List<VehicleId> { Camp, Home };
+            PortalFavourites.Toggle(favourites, Mine);
+            Assert.Equal(new[] { Camp, Home, Mine }, favourites);
+        }
+
+        [Fact]
+        public void Favourites_are_kept_in_the_character_data_in_their_order_and_read_back()
+        {
+            var favourites = new List<VehicleId> { Home, Camp };
             string text = PortalFavourites.FormatBook(favourites);
-            Assert.Equal("-222:3|111:1", text);
+            Assert.Equal("111:1|-222:3", text);
             Assert.Equal(favourites, PortalFavourites.ParseBook(text));
         }
 
         [Fact]
-        public void An_unreadable_entry_in_the_kept_favourites_is_left_out()
+        public void An_unreadable_or_repeated_entry_in_the_kept_favourites_is_left_out()
         {
-            Assert.Equal(new HashSet<VehicleId> { Home }, PortalFavourites.ParseBook("111:1|nonsense|:5|7:|x:1|8:-1"));
+            Assert.Equal(new[] { Home }, PortalFavourites.ParseBook("111:1|nonsense|:5|7:|x:1|8:-1|111:1"));
             Assert.Empty(PortalFavourites.ParseBook(null));
             Assert.Empty(PortalFavourites.ParseBook(""));
         }
@@ -47,14 +55,14 @@ namespace Vigil.Tests
         {
             // Vigil's book of TargetPortal favourites names Home by id; TargetPortal's own list names Camp's place.
             string vigilBook = "111:1@(10.00, 30.00, 5.00)";
-            string targetPortalOwn = "(400.50, 31.00, -80.25)|(9.00, 9.00, 9.00)";
+            string targetPortalOwn = "(400.50, 31.00, -80.25)|(9.00, 9.00, 9.00)|(10.00, 30.00, 5.00)";
             var destinations = new List<(VehicleId, string)>
             {
                 (Home, "(10.00, 30.00, 5.00)"),
                 (Mine, "(55.00, 30.00, 5.00)"),
                 (Camp, "(400.50, 31.00, -80.25)"),
             };
-            Assert.Equal(new HashSet<VehicleId> { Home, Camp }, PortalFavourites.Seed(vigilBook, targetPortalOwn, destinations));
+            Assert.Equal(new[] { Home, Camp }, PortalFavourites.Seed(vigilBook, targetPortalOwn, destinations));
         }
 
         [Fact]
@@ -66,23 +74,58 @@ namespace Vigil.Tests
         }
 
         [Fact]
-        public void Favourites_come_first_in_the_list_and_both_groups_keep_its_own_order()
+        public void Favourites_come_first_in_the_list_in_their_own_order_and_the_rest_keep_the_lists()
         {
             var list = new[] { "Ashlands", "Copper mine", "Home", "Mistlands camp", "Unnamed portal" };
-            var favourite = new HashSet<string> { "Mistlands camp", "Home" };
-            Assert.Equal(new[] { "Home", "Mistlands camp", "Ashlands", "Copper mine", "Unnamed portal" },
-                PortalFavourites.FavouritesFirst(list, favourite.Contains));
+            var favourites = new List<string> { "Mistlands camp", "Home" };
+            Assert.Equal(new[] { "Mistlands camp", "Home", "Ashlands", "Copper mine", "Unnamed portal" },
+                PortalFavourites.FavouritesFirst(list, favourites.IndexOf));
         }
 
         [Fact]
-        public void A_portal_marked_later_takes_its_place_in_order_not_the_end()
+        public void The_list_is_ordered_again_from_its_own_order_each_time()
         {
-            // The list is ordered again from AdjustablePortals' own order each time, never from the last partition.
             var list = new[] { "A", "B", "C", "D" };
-            var first = PortalFavourites.FavouritesFirst(list, n => n == "C");
-            var again = PortalFavourites.FavouritesFirst(list, n => n == "C" || n == "A");
-            Assert.Equal(new[] { "C", "A", "B", "D" }, first);
-            Assert.Equal(new[] { "A", "C", "B", "D" }, again);
+            Assert.Equal(new[] { "C", "A", "B", "D" }, PortalFavourites.FavouritesFirst(list, n => n == "C" ? 0 : -1));
+            Assert.Equal(new[] { "C", "A", "B", "D" }, PortalFavourites.FavouritesFirst(list, n => n == "C" ? 0 : n == "A" ? 1 : -1));
+        }
+
+        [Fact]
+        public void A_favourite_dropped_before_another_moves_there()
+        {
+            var favourites = new List<VehicleId> { Home, Mine, Camp };
+            PortalFavourites.MoveBefore(favourites, Camp, Home);
+            Assert.Equal(new[] { Camp, Home, Mine }, favourites);
+            PortalFavourites.MoveBefore(favourites, Camp, Mine);
+            Assert.Equal(new[] { Home, Camp, Mine }, favourites);
+        }
+
+        [Fact]
+        public void A_favourite_dropped_below_the_last_goes_to_the_end()
+        {
+            var favourites = new List<VehicleId> { Home, Mine, Camp };
+            PortalFavourites.MoveBefore(favourites, Home, null);
+            Assert.Equal(new[] { Mine, Camp, Home }, favourites);
+        }
+
+        [Fact]
+        public void A_favourite_dropped_on_its_own_place_stays()
+        {
+            var favourites = new List<VehicleId> { Home, Mine, Camp };
+            PortalFavourites.MoveBefore(favourites, Mine, Mine);
+            Assert.Equal(new[] { Home, Mine, Camp }, favourites);
+            PortalFavourites.MoveBefore(favourites, Mine, Camp);
+            Assert.Equal(new[] { Home, Mine, Camp }, favourites);
+        }
+
+        [Fact]
+        public void A_drag_drops_before_the_first_row_whose_middle_is_below_the_pointer()
+        {
+            var middles = new[] { 16f, 48f, 80f };
+            Assert.Equal(0, PortalFavourites.InsertAt(middles, 3f));
+            Assert.Equal(1, PortalFavourites.InsertAt(middles, 20f));
+            Assert.Equal(2, PortalFavourites.InsertAt(middles, 64f));
+            Assert.Equal(3, PortalFavourites.InsertAt(middles, 200f));
         }
 
         [Fact]
@@ -106,14 +149,15 @@ namespace Vigil.Tests
         }
 
         private static readonly string[] SideNames = { "Zebra", "Home", "Ashlands", "Camp", "Bog", "home" };
-        private static readonly bool[] SideFavourite = { true, true, false, true, false, false };
+        // Zebra, then Home, then Camp, in the order the player put them.
+        private static readonly int[] SideRank = { 0, 1, -1, 2, -1, -1 };
         private static readonly float[] SideDistance = { 10f, 900f, 50f, 20f, 30f, 40f };
 
         [Fact]
-        public void The_list_beside_the_map_shows_favourites_first_then_all_other_portals_by_name()
+        public void The_list_beside_the_map_shows_favourites_in_their_order_then_all_other_portals_by_name()
         {
-            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, "", 10);
-            Assert.Equal(new[] { "Camp", "Home", "Zebra" }, list.Favourites.Select(i => SideNames[i]));
+            var list = PortalFavourites.SideList(SideNames, SideRank, SideDistance, "", 10);
+            Assert.Equal(new[] { "Zebra", "Home", "Camp" }, list.Favourites.Select(i => SideNames[i]));
             // By name ignoring case, as AdjustablePortals' own list orders them.
             Assert.Equal(new[] { 2, 4, 5 }, list.Others);
             Assert.Equal(0, list.More);
@@ -123,14 +167,14 @@ namespace Vigil.Tests
         public void Portals_sharing_a_name_stand_nearest_first()
         {
             // Every vanilla pair shares its name; the distance tells them apart, as in AdjustablePortals' own list.
-            var list = PortalFavourites.SideList(new[] { "Home", "Home", "Ashlands" }, new bool[3], new[] { 900f, 10f, 5f }, "", 10);
+            var list = PortalFavourites.SideList(new[] { "Home", "Home", "Ashlands" }, new[] { -1, -1, -1 }, new[] { 900f, 10f, 5f }, "", 10);
             Assert.Equal(new[] { 2, 1, 0 }, list.Others);
         }
 
         [Fact]
         public void Typing_in_the_filter_narrows_both_groups_by_name_ignoring_case()
         {
-            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, "HOM", 10);
+            var list = PortalFavourites.SideList(SideNames, SideRank, SideDistance, "HOM", 10);
             Assert.Equal(new[] { 1 }, list.Favourites);
             Assert.Equal(new[] { 5 }, list.Others);
         }
@@ -138,16 +182,16 @@ namespace Vigil.Tests
         [Fact]
         public void A_filter_matching_nothing_leaves_the_list_empty()
         {
-            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, "Swamp", 10);
+            var list = PortalFavourites.SideList(SideNames, SideRank, SideDistance, "Swamp", 10);
             Assert.Empty(list.Favourites);
             Assert.Empty(list.Others);
             Assert.Equal(0, list.More);
         }
 
         [Fact]
-        public void A_long_list_keeps_the_favourites_and_counts_the_rest()
+        public void A_very_long_list_keeps_the_favourites_and_counts_the_rest()
         {
-            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, null, 4);
+            var list = PortalFavourites.SideList(SideNames, SideRank, SideDistance, null, 4);
             Assert.Equal(3, list.Favourites.Count);
             Assert.Equal(new[] { 2 }, list.Others);
             Assert.Equal(2, list.More);

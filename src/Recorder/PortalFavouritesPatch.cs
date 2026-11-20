@@ -40,8 +40,9 @@ namespace Vigil.Recorder
 
         private const string StarName = "VigilFavouriteStar";
         private const float StarSize = 20f, StarIndent = 26f, HeadingHeight = 24f;
-        private const float SideWidth = 330f, SideRow = 32f, SideTop = 52f, SideFilter = 30f, SideFoot = 44f;
-        private const int SideMax = 12;
+        private const float SideWidth = 340f, SideRow = 32f, SideTop = 52f, SideFilter = 30f, SideListHeight = 400f, SideFoot = 50f, GripWidth = 22f, FocusWidth = 30f;
+        // Rows are real objects made again on every keystroke in the filter, as in AdjustablePortals' list; past this the filter narrows it.
+        private const int SideMaxRows = 300;
         private static readonly Color Orange = new Color(1f, 0.631f, 0.235f, 1f);
         private static readonly Color StarOff = new Color(0.48f, 0.4f, 0.31f, 0.85f);
 
@@ -83,7 +84,7 @@ namespace Vigil.Recorder
         private static readonly AccessTools.FieldRef<Minimap, bool> s_pinUpdate = AccessTools.FieldRefAccess<Minimap, bool>("m_pinUpdateRequired");
 
         /// <summary>The favourites, read from the character's data for <see cref="s_bookFor"/>.</summary>
-        private static HashSet<VehicleId> s_favourites = new HashSet<VehicleId>();
+        private static List<VehicleId> s_favourites = new List<VehicleId>();
         private static Player s_bookFor;
 
         /// <summary>The list picker the list's own order was taken from, and that order.</summary>
@@ -97,7 +98,19 @@ namespace Vigil.Recorder
         private static readonly List<object> s_mapDestinations = new List<object>();
         private static GameObject s_side;
         private static InputField s_filter;
-        private static RectTransform s_sideRows;
+        private static RectTransform s_sideContent;
+        private static float s_sideWidth;
+        /// <summary>Where the player last left the panel; the left edge until moved.</summary>
+        private static Vector2? s_sidePosition;
+        /// <summary>The favourite rows shown, top down, and their portals, for a drag to find where it drops.</summary>
+        private static readonly List<RectTransform> s_favRows = new List<RectTransform>();
+        private static readonly List<VehicleId> s_favRowIds = new List<VehicleId>();
+        private static Sprite s_focusSprite;
+        /// <summary>Jotunn's window drag, its GUIManager and the scroll view it makes, as AdjustablePortals' list uses them.</summary>
+        private static Type s_dragWindow;
+        private static PropertyInfo s_guiInstance;
+        private static MethodInfo s_createScrollView;
+        private static FieldInfo s_handleColors;
         private static object s_firstShown;
         private static MethodInfo s_addTextField, s_newRect, s_blockInput;
         private static FieldInfo s_destDistance;
@@ -153,10 +166,16 @@ namespace Vigil.Recorder
                 s_destDistance = AccessTools.DeclaredField(destination, "Distance");
                 s_destDistanceText = AccessTools.DeclaredProperty(destination, "DistanceText");
                 // Jotunn's input block, as AdjustablePortals' own list holds it: no walking and no map keys while the filter takes the keys.
-                s_blockInput = Type.GetType("Jotunn.Managers.GUIManager, Jotunn")?.GetMethod("BlockInput", BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(bool) }, null);
+                var gui = Type.GetType("Jotunn.Managers.GUIManager, Jotunn");
+                s_blockInput = gui?.GetMethod("BlockInput", BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(bool) }, null);
+                s_guiInstance = gui?.GetProperty("Instance", BindingFlags.Static | BindingFlags.Public);
+                s_createScrollView = gui?.GetMethod("CreateScrollView", BindingFlags.Instance | BindingFlags.Public, null,
+                    new[] { typeof(Transform), typeof(bool), typeof(bool), typeof(float), typeof(float), typeof(ColorBlock), typeof(Color), typeof(float), typeof(float) }, null);
+                s_handleColors = gui?.GetField("ValheimScrollbarHandleColorBlock", BindingFlags.Instance | BindingFlags.Public);
+                s_dragWindow = Type.GetType("Jotunn.GUI.DragWindowCntrl, Jotunn");
                 s_screenToWorld = AccessTools.DeclaredMethod(typeof(Minimap), "ScreenToWorldPoint", new[] { typeof(Vector3) });
                 s_pinRadius = AccessTools.DeclaredProperty(typeof(Minimap), "PinInteractRadius");
-                if (new object[] { s_listCurrent, s_listDestinations, s_listFilter, s_listContent, s_listWidth, s_mapPins, s_mapSelecting, s_destId, s_destName, s_destPosition, s_destDistance, s_destDistanceText, s_blockInput, s_screenToWorld, s_pinRadius }.Any(m => m == null)
+                if (new object[] { s_listCurrent, s_listDestinations, s_listFilter, s_listContent, s_listWidth, s_mapPins, s_mapSelecting, s_destId, s_destName, s_destPosition, s_destDistance, s_destDistanceText, s_blockInput, s_guiInstance, s_createScrollView, s_handleColors, s_screenToWorld, s_pinRadius }.Any(m => m == null)
                     || s_destId.FieldType != typeof(ZDOID) || s_mapSelecting.FieldType != typeof(bool))
                 {
                     Problem = "AdjustablePortals' picker code changed (an update)";
@@ -271,7 +290,7 @@ namespace Vigil.Recorder
                     foreach (var d in destinations) s_listOrder.Add(d);
                 }
                 if (!Book(s_listOrder)) return;
-                var ordered = PortalFavourites.FavouritesFirst(s_listOrder, d => s_favourites.Contains(IdOf(d)));
+                var ordered = PortalFavourites.FavouritesFirst(s_listOrder, d => s_favourites.IndexOf(IdOf(d)));
                 destinations.Clear();
                 foreach (var d in ordered) destinations.Add(d);
             }
@@ -420,92 +439,250 @@ namespace Vigil.Recorder
 
         private static void DestroySide()
         {
-            if (s_side != null) UnityEngine.Object.Destroy(s_side);
+            if (s_side != null)
+            {
+                // The panel opens again where the player left it, for as long as the game runs.
+                s_sidePosition = ((RectTransform)s_side.transform).anchoredPosition;
+                UnityEngine.Object.Destroy(s_side);
+            }
             s_side = null;
             s_filter = null;
-            s_sideRows = null;
+            s_sideContent = null;
             s_firstShown = null;
+            s_favRows.Clear();
+            s_favRowIds.Clear();
         }
 
         /// <summary>
-        /// The panel at the map's left, as AdjustablePortals' own list: a filter, then the
-        /// favourites and all other portals under their headings, each row with its star, its name
-        /// and how far it is; a click on a row travels there, a click on its star marks it.
+        /// The panel at the map's left, as AdjustablePortals' own list: a filter, then in a scrolling
+        /// list the favourites in the player's order and all other portals by name, each row with its
+        /// star, its name, how far it is and a button that centres the map on it; a click on a row
+        /// travels there, a favourite's grip drags it to another place. The panel moves by dragging.
         /// </summary>
         private static void BuildSide()
         {
             DestroySide();
             var map = Minimap.instance;
             if (map == null || map.m_largeRoot == null) return;
-            float rowsHeight = SideMax * SideRow + 2 * HeadingHeight;
-            float height = SideTop + SideFilter + 10f + rowsHeight + SideFoot;
+            float height = SideTop + SideFilter + 10f + SideListHeight + SideFoot;
             s_side = (GameObject)s_createPanel.Invoke(null, new object[] { map.m_largeRoot.transform, SideWidth, height, "Choose a destination" });
             var rt = (RectTransform)s_side.transform;
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 0.5f);
-            rt.anchoredPosition = new Vector2(40f, 0f);
+            // Centred pivot: Jotunn's window drag keeps a window on screen by its half size.
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = s_sidePosition ?? new Vector2(40f + SideWidth / 2f, 0f);
             s_side.transform.SetAsLastSibling();
+            if (s_dragWindow != null) s_side.AddComponent(s_dragWindow);
             float inner = SideWidth - 32f;
             s_filter = (InputField)s_addTextField.Invoke(null, new object[] { s_side.transform, 16f, SideTop, inner, SideFilter, "Filter..." });
             s_filter.onValueChanged.AddListener(_ => FillSide());
             s_filter.onEndEdit.AddListener(_ => FilterDone());
             s_filter.gameObject.AddComponent<FilterFocus>();
-            s_sideRows = (RectTransform)s_newRect.Invoke(null, new object[] { "VigilPortalRows", s_side.transform, 16f, SideTop + SideFilter + 10f, inner, rowsHeight });
-            s_addText.Invoke(null, new object[] { s_side.transform, 16f, height - SideFoot + 4f, inner, SideFoot - 12f, "Click a star, or right click a portal, to mark it.", 13, TextAnchor.MiddleLeft, (Color?)Orange });
+            var holder = (RectTransform)s_newRect.Invoke(null, new object[] { "VigilPortalList", s_side.transform, 16f, SideTop + SideFilter + 10f, inner, SideListHeight });
+            var gui = s_guiInstance.GetValue(null);
+            var handles = (ColorBlock)s_handleColors.GetValue(gui);
+            var view = (GameObject)s_createScrollView.Invoke(gui, new object[] { holder, false, true, 8f, 4f, handles, new Color(0f, 0f, 0f, 0.5f), inner, SideListHeight });
+            s_sideContent = view.transform.Find("Scroll View/Viewport/Content") as RectTransform;
+            var scroll = view.GetComponentInChildren<ScrollRect>();
+            if (scroll != null) scroll.scrollSensitivity = 200f;
+            // The scroll bar and its border take this much of the width, as in AdjustablePortals' list.
+            s_sideWidth = inner - 16f;
+            s_addText.Invoke(null, new object[] { s_side.transform, 16f, height - SideFoot + 2f, inner, SideFoot - 8f, "Star or right click a portal to mark it; drag a favourite by its grip to reorder.", 13, TextAnchor.MiddleLeft, (Color?)Orange });
             FillSide();
         }
 
-        /// <summary>The rows under the filter, laid out again for its text and the favourites.</summary>
+        /// <summary>The rows of the list, laid out again for the filter's text and the favourites.</summary>
         private static void FillSide()
         {
-            if (s_sideRows == null) return;
-            foreach (Transform child in s_sideRows)
+            if (s_sideContent == null) return;
+            foreach (Transform child in s_sideContent)
             {
+                // Hidden first: destruction waits for the end of the frame and the layout would go on placing them.
                 child.gameObject.SetActive(false);
                 UnityEngine.Object.Destroy(child.gameObject);
             }
+            s_favRows.Clear();
+            s_favRowIds.Clear();
             var names = s_mapDestinations.Select(NameOf).ToList();
-            var favourite = s_mapDestinations.Select(d => s_favourites.Contains(IdOf(d))).ToList();
+            var rank = s_mapDestinations.Select(d => s_favourites.IndexOf(IdOf(d))).ToList();
             var distance = s_mapDestinations.Select(d => (float)s_destDistance.GetValue(d)).ToList();
-            var list = PortalFavourites.SideList(names, favourite, distance, s_filter != null ? s_filter.text : "", SideMax);
-            float width = s_sideRows.sizeDelta.x, y = 0f;
+            var list = PortalFavourites.SideList(names, rank, distance, s_filter != null ? s_filter.text : "", SideMaxRows);
             s_firstShown = null;
             if (list.Favourites.Count > 0)
             {
-                SideHeading("Favourites", ref y, width);
-                foreach (int i in list.Favourites) SideRowFor(s_mapDestinations[i], names[i], true, ref y, width);
+                SideNote("Favourites", HeadingHeight, TextAnchor.LowerLeft, Orange);
+                foreach (int i in list.Favourites) SideRowFor(s_mapDestinations[i], names[i], true);
             }
             if (list.Others.Count > 0)
             {
-                if (list.Favourites.Count > 0) SideHeading("All portals", ref y, width);
-                foreach (int i in list.Others) SideRowFor(s_mapDestinations[i], names[i], false, ref y, width);
+                if (list.Favourites.Count > 0) SideNote("All portals", HeadingHeight, TextAnchor.LowerLeft, Orange);
+                foreach (int i in list.Others) SideRowFor(s_mapDestinations[i], names[i], false);
             }
-            if (list.Favourites.Count + list.Others.Count == 0)
-                s_addText.Invoke(null, new object[] { s_sideRows, 10f, y, width - 20f, SideRow, "No portals match.", 14, TextAnchor.MiddleLeft, null });
-            else if (list.More > 0)
-                s_addText.Invoke(null, new object[] { s_sideRows, 10f, y, width - 20f, SideRow, "... " + list.More + " more, type to narrow the list.", 14, TextAnchor.MiddleLeft, null });
+            if (list.Favourites.Count + list.Others.Count == 0) SideNote("No portals match.", SideRow, TextAnchor.MiddleLeft, null);
+            else if (list.More > 0) SideNote("... " + list.More + " more, type to narrow the list.", SideRow, TextAnchor.MiddleLeft, null);
         }
 
-        private static void SideHeading(string words, ref float y, float width)
+        private static void SideNote(string words, float height, TextAnchor anchor, Color? colour)
         {
-            s_addText.Invoke(null, new object[] { s_sideRows, 10f, y, width - 20f, HeadingHeight, words, 14, TextAnchor.LowerLeft, (Color?)Orange });
-            y += HeadingHeight;
+            var row = (GameObject)s_newLayoutRow.Invoke(null, new object[] { s_sideContent, s_sideWidth, height });
+            s_addText.Invoke(null, new object[] { row.transform, 10f, 0f, s_sideWidth - 20f, height, words, 14, anchor, colour });
         }
 
-        private static void SideRowFor(object destination, string name, bool lit, ref float y, float width)
+        /// <summary>One portal's row: a grip for a favourite, its star, a button with its name and distance that travels there, and the focus button.</summary>
+        private static void SideRowFor(object destination, string name, bool favourite)
         {
             if (s_firstShown == null) s_firstShown = destination;
-            float height = SideRow - 4f, nameWidth = width * 0.62f;
-            var button = (Button)s_addButton.Invoke(null, new object[] { s_sideRows, 0f, y, width, height, "", new UnityAction(() => Travel(destination)) });
+            var row = (GameObject)s_newLayoutRow.Invoke(null, new object[] { s_sideContent, s_sideWidth, SideRow });
+            float height = SideRow - 4f, left = GripWidth, right = s_sideWidth - FocusWidth;
+            var button = (Button)s_addButton.Invoke(null, new object[] { row.transform, left, 0f, right - left - 4f, height, "", new UnityAction(() => Travel(destination)) });
             button.navigation = new Navigation { mode = Navigation.Mode.None };
-            s_addText.Invoke(null, new object[] { button.transform, StarIndent + 10f, 0f, nameWidth - StarIndent - 10f, height, name, 16, TextAnchor.MiddleLeft, null });
-            s_addText.Invoke(null, new object[] { button.transform, nameWidth, 0f, width - nameWidth - 10f, height, s_destDistanceText.GetValue(destination) as string ?? "", 14, TextAnchor.MiddleRight, (Color?)Orange });
-            Star(s_sideRows, 8f, y + (height - StarSize) / 2f, lit, () =>
+            float buttonWidth = right - left - 4f, nameLeft = StarIndent + 10f, distanceWidth = 76f;
+            var nameText = (Text)s_addText.Invoke(null, new object[] { button.transform, nameLeft, 0f, buttonWidth - nameLeft - distanceWidth - 6f, height, name, 16, TextAnchor.MiddleLeft, null });
+            Shorten(nameText, buttonWidth - nameLeft - distanceWidth - 6f);
+            s_addText.Invoke(null, new object[] { button.transform, buttonWidth - distanceWidth - 6f, 0f, distanceWidth, height, s_destDistanceText.GetValue(destination) as string ?? "", 14, TextAnchor.MiddleRight, (Color?)Orange });
+            Star(row.transform, left + 6f, (height - StarSize) / 2f, favourite, () =>
             {
                 Toggle(destination);
                 FillSide();
                 if (Minimap.instance != null) s_pinUpdate(Minimap.instance) = true;
             });
-            y += SideRow;
+            FocusButton(row.transform, right, height, destination);
+            if (!favourite) return;
+            var id = IdOf(destination);
+            Grip(row.transform, height, id);
+            s_favRows.Add((RectTransform)row.transform);
+            s_favRowIds.Add(id);
+        }
+
+        /// <summary>Cuts a name that would not fit its box down to what fits, ending in "...".</summary>
+        private static void Shorten(Text text, float width)
+        {
+            if (text == null || string.IsNullOrEmpty(text.text)) return;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            string full = text.text;
+            if (text.preferredWidth <= width) return;
+            for (int keep = full.Length - 1; keep > 0; keep--)
+            {
+                text.text = full.Substring(0, keep).TrimEnd() + "...";
+                if (text.preferredWidth <= width) return;
+            }
+        }
+
+        /// <summary>The button at a row's right end: the map centres on the portal, which stays to be picked.</summary>
+        private static void FocusButton(Transform row, float x, float height, object destination)
+        {
+            var go = new GameObject("VigilPortalFocus", typeof(RectTransform), typeof(Image), typeof(Button)) { layer = row.gameObject.layer };
+            go.transform.SetParent(row, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 1f);
+            rt.sizeDelta = new Vector2(FocusWidth - 4f, height);
+            rt.anchoredPosition = new Vector2(x + 2f, 0f);
+            var image = go.GetComponent<Image>();
+            image.sprite = FocusSprite();
+            image.color = s_focusSprite != null ? new Color(0.85f, 0.75f, 0.55f, 1f) : new Color(0f, 0f, 0f, 0.3f);
+            image.preserveAspect = true;
+            var button = go.GetComponent<Button>();
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            button.onClick.AddListener(() => Focus(destination));
+        }
+
+        private static void Focus(object destination)
+        {
+            var map = Minimap.instance;
+            if (!Working || map == null) return;
+            map.ShowPointOnMap((Vector3)s_destPosition.GetValue(destination));
+            s_pinUpdate(map) = true;
+        }
+
+        /// <summary>The game's own ping pin picture, for the focus button; none where the map has none.</summary>
+        private static Sprite FocusSprite()
+        {
+            if (s_focusSprite == null && Minimap.instance != null) s_focusSprite = Minimap.instance.m_icons.Find(s => s.m_name == Minimap.PinType.Ping).m_icon;
+            return s_focusSprite;
+        }
+
+        /// <summary>The grip at a favourite's left: three short bars over a hit area that starts the drag.</summary>
+        private static void Grip(Transform row, float height, VehicleId id)
+        {
+            var go = new GameObject("VigilPortalGrip", typeof(RectTransform), typeof(Image)) { layer = row.gameObject.layer };
+            go.transform.SetParent(row, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 1f);
+            rt.sizeDelta = new Vector2(GripWidth - 2f, height);
+            rt.anchoredPosition = Vector2.zero;
+            // Clear but hit: the whole strip takes the drag, not only the bars.
+            go.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.01f);
+            for (int i = 0; i < 3; i++)
+            {
+                var bar = new GameObject("Bar", typeof(RectTransform), typeof(Image)) { layer = go.layer };
+                bar.transform.SetParent(go.transform, false);
+                var b = (RectTransform)bar.transform;
+                b.anchorMin = b.anchorMax = b.pivot = new Vector2(0.5f, 0.5f);
+                b.sizeDelta = new Vector2(10f, 2f);
+                b.anchoredPosition = new Vector2(0f, (i - 1) * 4f);
+                var image = bar.GetComponent<Image>();
+                image.color = new Color(0.79f, 0.71f, 0.54f, 1f);
+                image.raycastTarget = false;
+            }
+            go.AddComponent<GripDrag>().Id = id;
+        }
+
+        /// <summary>Where a dragged favourite would drop now, by the pointer against the favourite rows' middles.</summary>
+        private static int DropIndex(PointerEventData eventData)
+        {
+            if (s_sideContent == null || !RectTransformUtility.ScreenPointToLocalPointInRectangle(s_sideContent, eventData.position, eventData.pressEventCamera, out var local)) return -1;
+            var middles = s_favRows.Select(r => -r.localPosition.y + r.rect.height / 2f).ToList();
+            return PortalFavourites.InsertAt(middles, -local.y);
+        }
+
+        /// <summary>Drags a favourite to another place among the favourites: a line shows where it drops.</summary>
+        private sealed class GripDrag : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+        {
+            public VehicleId Id;
+            private RectTransform _line;
+
+            public void OnBeginDrag(PointerEventData eventData)
+            {
+                if (s_sideContent == null) return;
+                var go = new GameObject("VigilDropLine", typeof(RectTransform), typeof(Image), typeof(LayoutElement)) { layer = gameObject.layer };
+                go.transform.SetParent(s_sideContent, false);
+                go.GetComponent<LayoutElement>().ignoreLayout = true;
+                var image = go.GetComponent<Image>();
+                image.color = Orange;
+                image.raycastTarget = false;
+                _line = (RectTransform)go.transform;
+                _line.anchorMin = _line.anchorMax = new Vector2(0f, 1f);
+                _line.pivot = new Vector2(0f, 0.5f);
+                _line.sizeDelta = new Vector2(s_sideWidth, 2f);
+                OnDrag(eventData);
+            }
+
+            public void OnDrag(PointerEventData eventData)
+            {
+                if (_line == null || s_favRows.Count == 0) return;
+                int at = DropIndex(eventData);
+                if (at < 0) return;
+                var row = at < s_favRows.Count ? s_favRows[at] : s_favRows[s_favRows.Count - 1];
+                float down = -row.localPosition.y + (at < s_favRows.Count ? 0f : row.rect.height);
+                _line.localPosition = new Vector3(row.localPosition.x, -down, 0f);
+            }
+
+            public void OnEndDrag(PointerEventData eventData)
+            {
+                if (_line != null) Destroy(_line.gameObject);
+                _line = null;
+                int at = DropIndex(eventData);
+                if (at < 0 || Player.m_localPlayer == null || Player.m_localPlayer != s_bookFor) return;
+                VehicleId? before = at < s_favRowIds.Count ? s_favRowIds[at] : (VehicleId?)null;
+                PortalFavourites.MoveBefore(s_favourites, Id, before);
+                Player.m_localPlayer.m_customData[PortalFavourites.BookKey] = PortalFavourites.FormatBook(s_favourites);
+                FillSide();
+            }
+
+            private void OnDestroy()
+            {
+                if (_line != null) Destroy(_line.gameObject);
+            }
         }
 
         /// <summary>Enter in the filter travels to the first portal it shows, as in AdjustablePortals' own list; any end of typing gives the keys back.</summary>

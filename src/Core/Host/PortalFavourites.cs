@@ -23,22 +23,44 @@ namespace Vigil.Core
         /// <summary>Vigil's own book of TargetPortal favourites by world id, and TargetPortal's list of them by place.</summary>
         public const string TargetPortalBookKey = "Vigil TargetPortal favourite portals", TargetPortalFavouritesKey = "TargetPortal Favorites";
 
-        /// <summary>Marks a portal as a favourite, or unmarks one that was; true when it is one now.</summary>
-        public static bool Toggle(HashSet<VehicleId> favourites, VehicleId portal)
+        /// <summary>Marks a portal as a favourite, at the end of the favourites, or unmarks one that was; true when it is one now.</summary>
+        public static bool Toggle(List<VehicleId> favourites, VehicleId portal)
         {
             if (favourites.Remove(portal)) return false;
             favourites.Add(portal);
             return true;
         }
 
-        /// <summary>The favourites as text for the character's data: "user:id" joined by '|', in order.</summary>
-        public static string FormatBook(IEnumerable<VehicleId> favourites) =>
-            string.Join("|", favourites.OrderBy(v => v.User).ThenBy(v => v.Id).Select(v => v.ToString()).ToArray());
-
-        /// <summary>Reads <see cref="FormatBook"/>'s text; unreadable entries are left out.</summary>
-        public static HashSet<VehicleId> ParseBook(string text)
+        /// <summary>
+        /// Moves a favourite to stand just before <paramref name="before"/>, or last for none, as a
+        /// favourite dragged in the list is dropped; dropped on its own place, or just before the
+        /// one after it, it stays.
+        /// </summary>
+        public static void MoveBefore(List<VehicleId> favourites, VehicleId moved, VehicleId? before)
         {
-            var favourites = new HashSet<VehicleId>();
+            if (before.HasValue && before.Value.Equals(moved)) return;
+            if (!favourites.Remove(moved)) return;
+            int at = before.HasValue ? favourites.IndexOf(before.Value) : -1;
+            if (at < 0) favourites.Add(moved);
+            else favourites.Insert(at, moved);
+        }
+
+        /// <summary>Where a dragged row drops: before the first row whose middle lies below the pointer, counted down from the list's top.</summary>
+        public static int InsertAt(IReadOnlyList<float> rowMiddles, float pointer)
+        {
+            int at = 0;
+            while (at < rowMiddles.Count && rowMiddles[at] <= pointer) at++;
+            return at;
+        }
+
+        /// <summary>The favourites as text for the character's data: "user:id" joined by '|', in the player's order.</summary>
+        public static string FormatBook(IEnumerable<VehicleId> favourites) =>
+            string.Join("|", favourites.Select(v => v.ToString()).ToArray());
+
+        /// <summary>Reads <see cref="FormatBook"/>'s text in its order; unreadable and repeated entries are left out.</summary>
+        public static List<VehicleId> ParseBook(string text)
+        {
+            var favourites = new List<VehicleId>();
             if (string.IsNullOrEmpty(text)) return favourites;
             foreach (string part in text.Split('|'))
             {
@@ -46,33 +68,34 @@ namespace Vigil.Core
                 if (colon <= 0 || colon == part.Length - 1) continue;
                 if (!long.TryParse(part.Substring(0, colon), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long user)) continue;
                 if (!uint.TryParse(part.Substring(colon + 1), NumberStyles.None, CultureInfo.InvariantCulture, out uint id)) continue;
-                favourites.Add(new VehicleId(user, id));
+                var portal = new VehicleId(user, id);
+                if (!favourites.Contains(portal)) favourites.Add(portal);
             }
             return favourites;
         }
 
         /// <summary>
         /// The first favourites of a character that has none kept yet: TargetPortal's, by the world
-        /// ids in Vigil's book of them (<paramref name="targetPortalBook"/>) and by the places in
+        /// ids in Vigil's book of them (<paramref name="targetPortalBook"/>), then by the places in
         /// TargetPortal's own list (<paramref name="targetPortalFavourites"/>) matched with the
         /// <paramref name="destinations"/>' places as the game writes a place out.
         /// </summary>
-        public static HashSet<VehicleId> Seed(string targetPortalBook, string targetPortalFavourites, IEnumerable<(VehicleId Id, string Place)> destinations)
+        public static List<VehicleId> Seed(string targetPortalBook, string targetPortalFavourites, IEnumerable<(VehicleId Id, string Place)> destinations)
         {
-            var seeded = new HashSet<VehicleId>(PinFollowRules.ParseFavouriteBook(targetPortalBook).Keys);
+            var seeded = new List<VehicleId>(PinFollowRules.ParseFavouriteBook(targetPortalBook).Keys);
             if (string.IsNullOrEmpty(targetPortalFavourites)) return seeded;
             var places = new HashSet<string>(targetPortalFavourites.Split('|'), StringComparer.Ordinal);
             foreach (var (id, place) in destinations)
-                if (place != null && places.Contains(place)) seeded.Add(id);
+                if (place != null && places.Contains(place) && !seeded.Contains(id)) seeded.Add(id);
             return seeded;
         }
 
-        /// <summary>The list with its favourites first; both groups keep the list's own order.</summary>
-        public static List<T> FavouritesFirst<T>(IReadOnlyList<T> list, Func<T, bool> isFavourite)
+        /// <summary>The list with its favourites first in their own order (<paramref name="rank"/>, -1 for none), the rest in the list's order.</summary>
+        public static List<T> FavouritesFirst<T>(IReadOnlyList<T> list, Func<T, int> rank)
         {
             var ordered = new List<T>(list.Count);
-            foreach (var item in list) if (isFavourite(item)) ordered.Add(item);
-            foreach (var item in list) if (!isFavourite(item)) ordered.Add(item);
+            ordered.AddRange(list.Where(item => rank(item) >= 0).OrderBy(rank));
+            ordered.AddRange(list.Where(item => rank(item) < 0));
             return ordered;
         }
 
@@ -128,11 +151,12 @@ namespace Vigil.Core
 
         /// <summary>
         /// The list beside AdjustablePortals' map: the portals whose name holds <paramref name="filter"/>
-        /// (ignoring case; all for none), favourites first, each group by name and among one name
+        /// (ignoring case; all for none), the favourites first in the player's order
+        /// (<paramref name="rank"/>, -1 for none), then all other portals by name and among one name
         /// nearest first, as AdjustablePortals orders its own list; at most <paramref name="max"/> rows,
         /// favourites kept first, the rest counted.
         /// </summary>
-        public static SideListing SideList(IReadOnlyList<string> names, IReadOnlyList<bool> favourite, IReadOnlyList<float> distance, string filter, int max)
+        public static SideListing SideList(IReadOnlyList<string> names, IReadOnlyList<int> rank, IReadOnlyList<float> distance, string filter, int max)
         {
             var shown = new List<int>();
             for (int i = 0; i < names.Count; i++)
@@ -143,8 +167,8 @@ namespace Vigil.Core
                 return byName != 0 ? byName : distance[a].CompareTo(distance[b]);
             });
             var listing = new SideListing();
-            foreach (int i in shown) if (favourite[i]) listing.Favourites.Add(i);
-            foreach (int i in shown) if (!favourite[i]) listing.Others.Add(i);
+            listing.Favourites.AddRange(shown.Where(i => rank[i] >= 0).OrderBy(i => rank[i]));
+            listing.Others.AddRange(shown.Where(i => rank[i] < 0));
             int total = listing.Favourites.Count + listing.Others.Count;
             listing.More = Math.Max(0, total - max);
             int cut = listing.More;
