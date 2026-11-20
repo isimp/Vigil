@@ -22,7 +22,8 @@ namespace Vigil.Recorder
         private const string OdinMusicFadeNote = "OdinOnDemand lowers the game's music the nearer you stand to a playing radio, measured to the radio itself, so next to a far linked speaker the game's music played at full beside the stream. On, the distance is to the nearest place the radio's sound comes from: each speaker and the radio while it plays from each speaker, the middle of its speakers otherwise. OdinOnDemand's own fade curve and Lowest Fade Volume DB stay. An OdinOnDemand whose fade code differs from 1.3.0 is left alone.";
         private const string SummonRadialNote = "No staff in the game has a secondary attack. On, with the Dead Raiser or the Spirit Caller in hand that button (middle mouse unless rebound; on a controller the layout's secondary attack) opens the game's radial menu with what your next summon is to be: for the Dead Raiser sword and shield, bow or any weapon, for the Spirit Caller wolf, boar, moose, bear or any species. The pick goes into Summon Commander's own settings, which decide what the staff summons, and stays until the next pick: the Spirit Caller's next spirit, and for the Dead Raiser every skeleton team slot set to the weapon picked, which replaces the team set there before. The radial works like the game's own: click or flick to pick, the staff's button or Esc to close, and with the game's release-to-use setting a hold and release picks. Needs Summon Commander; one whose next-summon code differs from 1.0.1 is left alone.";
         private const string OdinSafeStreamNote = "OdinOnDemand's radios ask Unity for their play position from Unity's sound thread, while the game's main thread may be stopping or changing that same sound, and the game has crashed there, mostly while it was running slowly. On, the main thread notes each stream's play position once a frame and the sound thread works it out from that note, so it never asks Unity. The sound is the same; at most the first moment after the switch is turned on mid-stream may skip. An OdinOnDemand whose stream code differs from 1.3.0 is left alone.";
-        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade, _odinSafeStream, _summonRadial;
+        private const string PortalFavouritesNote = "AdjustablePortals lets you choose where a portal sends you, from a list or on the map, and has no favourites. On, a star at the left of each row of its list marks or unmarks a portal as one of your favourites, and the list shows your favourites first under their own heading. On its map, a right click on a portal marks or unmarks it, a favourite's pin carries a star, and a panel at the map's left lists your favourites; a click on one travels there as a click on its pin would. Favourites are kept with your character by each portal's world id, so a renamed or moved portal stays one; the first time, your TargetPortal favourites are taken over. An AdjustablePortals whose picker code differs from 0.7.0's is left alone (0.8.0's source is the same).";
+        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade, _odinSafeStream, _summonRadial, _portalFavourites;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -132,6 +133,9 @@ namespace Vigil.Recorder
             _summonRadial = Config.Bind("Patches", "SummonCommanderRadial", false, "This game's own switch: " + SummonRadialNote);
             SummonRadialPatch.On = _summonRadial.Value;
             _summonRadial.SettingChanged += (_, __) => SummonRadialPatch.On = _summonRadial.Value;
+            _portalFavourites = Config.Bind("Patches", "AdjustablePortalsFavourites", false, "This game's own switch: " + PortalFavouritesNote);
+            PortalFavouritesPatch.On = _portalFavourites.Value;
+            _portalFavourites.SettingChanged += (_, __) => PortalFavouritesPatch.On = _portalFavourites.Value;
             _awaySleep =Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -247,6 +251,8 @@ namespace Vigil.Recorder
             if (OdinSafeStreamPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch keeping OdinOnDemand's stream from crashing the game stepped aside: " + OdinSafeStreamPatch.Problem);
             if (!_server) SummonRadialPatch.Hook(line => _host.Log.LogWarning(line));
             if (SummonRadialPatch.Problem != null) _host.Log.LogWarning("Vigil: the Summon Commander radial patch stepped aside: " + SummonRadialPatch.Problem);
+            if (!_server) PortalFavouritesPatch.Hook(line => _host.Log.LogWarning(line));
+            if (PortalFavouritesPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for AdjustablePortals' favourite portals stepped aside: " + PortalFavouritesPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -276,7 +282,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0) + (_odinSafeStream.Value ? 1 : 0) + (_summonRadial.Value ? 1 : 0)) + " of 23 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0) + (_odinSafeStream.Value ? 1 : 0) + (_summonRadial.Value ? 1 : 0) + (_portalFavourites.Value ? 1 : 0)) + " of 24 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -456,6 +462,9 @@ namespace Vigil.Recorder
 
             OwnSwitch("Summon Commander: the next summon from a radial", _summonRadial, "SummonCommanderRadial", SummonRadialNote);
             if (!_server) Ui.Row("On this game", Toned(SummonRadialPatch.State, SummonRadialPatch.Problem != null ? ResultTone.Caution : _summonRadial.Value && SummonRadialPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            OwnSwitch("AdjustablePortals: favourite portals", _portalFavourites, "AdjustablePortalsFavourites", PortalFavouritesNote);
+            if (!_server) Ui.Row("On this game", Toned(PortalFavouritesPatch.State, PortalFavouritesPatch.Problem != null ? ResultTone.Caution : _portalFavourites.Value && PortalFavouritesPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Carts, ships and portals where they really are");
             Ui.BeginFormLine("Switch");
