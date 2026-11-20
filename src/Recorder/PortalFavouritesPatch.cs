@@ -549,7 +549,7 @@ namespace Vigil.Recorder
                 if (!(s_mapPins.GetValue(null) is IDictionary pins) || pins.Count == 0) return;
                 var at = (Vector3)s_screenToWorld.Invoke(__instance, new object[] { (Vector3)ZInput.pointerPosition });
                 float radius = (float)s_pinRadius.GetValue(__instance);
-                var entries = pins.Cast<DictionaryEntry>().ToList();
+                var entries = PortalFavourites.Entries(pins);
                 int hit = PortalFavourites.NearestWithin(entries.Select(e => (((Minimap.PinData)e.Key).m_pos.x, ((Minimap.PinData)e.Key).m_pos.z)).ToList(), at.x, at.z, radius);
                 if (hit < 0) return;
                 Toggle(entries[hit].Value);

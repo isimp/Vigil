@@ -118,6 +118,17 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void A_right_click_reads_the_map_pickers_pins_as_they_are_kept()
+        {
+            // AdjustablePortals keeps its pins in a Dictionary<PinData, Destination>, read here without
+            // its types; listing such a dictionary as DictionaryEntry items failed in game.
+            System.Collections.IDictionary pins = new Dictionary<string, int> { ["Home"] = 1, ["Mine"] = 2 };
+            var entries = PortalFavourites.Entries(pins);
+            Assert.Equal(new object[] { "Home", "Mine" }, entries.Select(e => e.Key));
+            Assert.Equal(new object[] { 1, 2 }, entries.Select(e => e.Value));
+        }
+
+        [Fact]
         public void While_the_portal_map_is_open_only_its_portals_show()
         {
             // HUDCompass's portal markers and the game's own pins would stand on and beside the portals to pick.

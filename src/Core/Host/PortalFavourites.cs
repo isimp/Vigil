@@ -89,6 +89,19 @@ namespace Vigil.Core
             return (0, -1);
         }
 
+        /// <summary>
+        /// A dictionary's entries, key and value, read without its types. A generic dictionary
+        /// lists itself as KeyValuePair items through IEnumerable, so only its own
+        /// IDictionaryEnumerator gives DictionaryEntry items.
+        /// </summary>
+        public static List<(object Key, object Value)> Entries(System.Collections.IDictionary dictionary)
+        {
+            var entries = new List<(object, object)>(dictionary.Count);
+            var e = dictionary.GetEnumerator();
+            while (e.MoveNext()) entries.Add((e.Key, e.Value));
+            return entries;
+        }
+
         /// <summary>The point nearest to (x, z) within <paramref name="radius"/>, as AdjustablePortals picks a portal on its map; -1 for none.</summary>
         public static int NearestWithin(IReadOnlyList<(float X, float Z)> points, float x, float z, float radius)
         {
