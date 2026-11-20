@@ -119,19 +119,40 @@ namespace Vigil.Core
             return best;
         }
 
-        /// <summary>The favourites for the list beside the map, by name, at most <paramref name="max"/>; <paramref name="more"/> counts those left out.</summary>
-        public static List<int> SideRows(IReadOnlyList<string> names, IReadOnlyList<bool> favourite, int max, out int more)
+        /// <summary>What the list beside the map shows: favourites, then all other portals, and how many did not fit.</summary>
+        public sealed class SideListing
         {
-            var rows = new List<int>();
-            for (int i = 0; i < names.Count; i++) if (favourite[i]) rows.Add(i);
-            rows.Sort((a, b) =>
+            public readonly List<int> Favourites = new List<int>(), Others = new List<int>();
+            public int More;
+        }
+
+        /// <summary>
+        /// The list beside AdjustablePortals' map: the portals whose name holds <paramref name="filter"/>
+        /// (ignoring case; all for none), favourites first, each group by name and among one name
+        /// nearest first, as AdjustablePortals orders its own list; at most <paramref name="max"/> rows,
+        /// favourites kept first, the rest counted.
+        /// </summary>
+        public static SideListing SideList(IReadOnlyList<string> names, IReadOnlyList<bool> favourite, IReadOnlyList<float> distance, string filter, int max)
+        {
+            var shown = new List<int>();
+            for (int i = 0; i < names.Count; i++)
+                if (string.IsNullOrEmpty(filter) || (names[i] ?? "").IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0) shown.Add(i);
+            shown.Sort((a, b) =>
             {
                 int byName = string.Compare(names[a], names[b], StringComparison.OrdinalIgnoreCase);
-                return byName != 0 ? byName : a.CompareTo(b);
+                return byName != 0 ? byName : distance[a].CompareTo(distance[b]);
             });
-            more = Math.Max(0, rows.Count - max);
-            if (more > 0) rows.RemoveRange(max, more);
-            return rows;
+            var listing = new SideListing();
+            foreach (int i in shown) if (favourite[i]) listing.Favourites.Add(i);
+            foreach (int i in shown) if (!favourite[i]) listing.Others.Add(i);
+            int total = listing.Favourites.Count + listing.Others.Count;
+            listing.More = Math.Max(0, total - max);
+            int cut = listing.More;
+            int fromOthers = Math.Min(cut, listing.Others.Count);
+            listing.Others.RemoveRange(listing.Others.Count - fromOthers, fromOthers);
+            cut -= fromOthers;
+            if (cut > 0) listing.Favourites.RemoveRange(listing.Favourites.Count - cut, cut);
+            return listing;
         }
 
         /// <summary>

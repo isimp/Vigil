@@ -7,6 +7,7 @@ using BepInEx.Bootstrap;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Vigil.Core;
 
@@ -19,8 +20,9 @@ namespace Vigil.Recorder
     /// favourites first, a postfix on <c>AddRow</c> gives each row a star that marks or unmarks it,
     /// and a postfix on <c>Rebuild</c> puts in the headings. Its map picker (<c>PortalMapPicker.Open</c>
     /// and <c>Close</c>) adds a pin per destination; while it is open a right click on one marks or
-    /// unmarks it, favourite pins carry a star, and a panel beside the map lists the favourites, a
-    /// click on one travelling there through AdjustablePortals' own <c>PortalTargeting.TravelTo</c>.
+    /// unmarks it, favourite pins carry a star, and a panel beside the map lists every portal as its
+    /// list does, a filter over the favourites and all other portals, a click on a row travelling there
+    /// through AdjustablePortals' own <c>PortalTargeting.TravelTo</c>.
     /// Everything is drawn with AdjustablePortals' own <c>PickerUI</c> and the build menu's
     /// favourite star. AdjustablePortals' picker code is compared with 0.7.0's and 0.8.0's, which
     /// are the same, and any change makes the patch step aside. The switch is this game's own.
@@ -31,13 +33,14 @@ namespace Vigil.Recorder
 
         /// <summary>
         /// AdjustablePortals 0.7.0's and 0.8.0's PortalListPicker Build, Rebuild, AddRow;
-        /// PortalMapPicker Open, Close, PickAt; PickerUI CreatePanel, AddText, AddButton, NewLayoutRow.
+        /// PortalMapPicker Open, Close, PickAt; PickerUI CreatePanel, AddText, AddButton, NewLayoutRow,
+        /// AddTextField, NewRect.
         /// </summary>
-        private const ulong KnownCode = 0x013033726379EFEDUL;
+        private const ulong KnownCode = 0xBE6790BEB9108F48UL;
 
         private const string StarName = "VigilFavouriteStar";
         private const float StarSize = 20f, StarIndent = 26f, HeadingHeight = 24f;
-        private const float SideWidth = 250f, SideRow = 32f, SideTop = 52f, SideFoot = 44f;
+        private const float SideWidth = 330f, SideRow = 32f, SideTop = 52f, SideFilter = 30f, SideFoot = 44f;
         private const int SideMax = 12;
         private static readonly Color Orange = new Color(1f, 0.631f, 0.235f, 1f);
         private static readonly Color StarOff = new Color(0.48f, 0.4f, 0.31f, 0.85f);
@@ -93,6 +96,12 @@ namespace Vigil.Recorder
         /// <summary>The map picker's destinations, and the panel of favourites beside the map.</summary>
         private static readonly List<object> s_mapDestinations = new List<object>();
         private static GameObject s_side;
+        private static InputField s_filter;
+        private static RectTransform s_sideRows;
+        private static object s_firstShown;
+        private static MethodInfo s_addTextField, s_newRect, s_blockInput;
+        private static FieldInfo s_destDistance;
+        private static PropertyInfo s_destDistanceText;
         private static Sprite s_star;
         private static bool s_starLooked;
 
@@ -122,8 +131,10 @@ namespace Vigil.Recorder
                 s_addText = Method(ui, "AddText");
                 s_addButton = Method(ui, "AddButton");
                 s_newLayoutRow = Method(ui, "NewLayoutRow");
+                s_addTextField = Method(ui, "AddTextField");
+                s_newRect = Method(ui, "NewRect");
                 s_travelTo = Method(targeting, "TravelTo");
-                var code = new MethodBase[] { build, s_rebuild, addRow, open, close, pickAt, s_createPanel, s_addText, s_addButton, s_newLayoutRow };
+                var code = new MethodBase[] { build, s_rebuild, addRow, open, close, pickAt, s_createPanel, s_addText, s_addButton, s_newLayoutRow, s_addTextField, s_newRect };
                 if (code.Any(m => m == null) || s_travelTo == null || destination == null || CodeShape.Hash(code) != KnownCode)
                 {
                     Problem = "AdjustablePortals' picker code changed (an update)";
@@ -139,9 +150,13 @@ namespace Vigil.Recorder
                 s_destId = AccessTools.DeclaredField(destination, "Id");
                 s_destName = AccessTools.DeclaredField(destination, "Name");
                 s_destPosition = AccessTools.DeclaredField(destination, "Position");
+                s_destDistance = AccessTools.DeclaredField(destination, "Distance");
+                s_destDistanceText = AccessTools.DeclaredProperty(destination, "DistanceText");
+                // Jotunn's input block, as AdjustablePortals' own list holds it: no walking and no map keys while the filter takes the keys.
+                s_blockInput = Type.GetType("Jotunn.Managers.GUIManager, Jotunn")?.GetMethod("BlockInput", BindingFlags.Static | BindingFlags.Public, null, new[] { typeof(bool) }, null);
                 s_screenToWorld = AccessTools.DeclaredMethod(typeof(Minimap), "ScreenToWorldPoint", new[] { typeof(Vector3) });
                 s_pinRadius = AccessTools.DeclaredProperty(typeof(Minimap), "PinInteractRadius");
-                if (new object[] { s_listCurrent, s_listDestinations, s_listFilter, s_listContent, s_listWidth, s_mapPins, s_mapSelecting, s_destId, s_destName, s_destPosition, s_screenToWorld, s_pinRadius }.Any(m => m == null)
+                if (new object[] { s_listCurrent, s_listDestinations, s_listFilter, s_listContent, s_listWidth, s_mapPins, s_mapSelecting, s_destId, s_destName, s_destPosition, s_destDistance, s_destDistanceText, s_blockInput, s_screenToWorld, s_pinRadius }.Any(m => m == null)
                     || s_destId.FieldType != typeof(ZDOID) || s_mapSelecting.FieldType != typeof(bool))
                 {
                     Problem = "AdjustablePortals' picker code changed (an update)";
@@ -407,42 +422,138 @@ namespace Vigil.Recorder
         {
             if (s_side != null) UnityEngine.Object.Destroy(s_side);
             s_side = null;
+            s_filter = null;
+            s_sideRows = null;
+            s_firstShown = null;
         }
 
-        /// <summary>The panel of favourites at the map's left: one button a favourite, by name, and how to mark one.</summary>
+        /// <summary>
+        /// The panel at the map's left, as AdjustablePortals' own list: a filter, then the
+        /// favourites and all other portals under their headings, each row with its star, its name
+        /// and how far it is; a click on a row travels there, a click on its star marks it.
+        /// </summary>
         private static void BuildSide()
         {
             DestroySide();
             var map = Minimap.instance;
             if (map == null || map.m_largeRoot == null) return;
-            var names = s_mapDestinations.Select(NameOf).ToList();
-            var favourite = s_mapDestinations.Select(d => s_favourites.Contains(IdOf(d))).ToList();
-            var rows = PortalFavourites.SideRows(names, favourite, SideMax, out int more);
-            int lines = Math.Max(1, rows.Count) + (more > 0 ? 1 : 0);
-            float height = SideTop + lines * SideRow + SideFoot;
-            s_side = (GameObject)s_createPanel.Invoke(null, new object[] { map.m_largeRoot.transform, SideWidth, height, "Favourites" });
+            float rowsHeight = SideMax * SideRow + 2 * HeadingHeight;
+            float height = SideTop + SideFilter + 10f + rowsHeight + SideFoot;
+            s_side = (GameObject)s_createPanel.Invoke(null, new object[] { map.m_largeRoot.transform, SideWidth, height, "Choose a destination" });
             var rt = (RectTransform)s_side.transform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 0.5f);
             rt.anchoredPosition = new Vector2(40f, 0f);
             s_side.transform.SetAsLastSibling();
-            float inner = SideWidth - 32f, y = SideTop;
-            foreach (int i in rows)
+            float inner = SideWidth - 32f;
+            s_filter = (InputField)s_addTextField.Invoke(null, new object[] { s_side.transform, 16f, SideTop, inner, SideFilter, "Filter..." });
+            s_filter.onValueChanged.AddListener(_ => FillSide());
+            s_filter.onEndEdit.AddListener(_ => FilterDone());
+            s_filter.gameObject.AddComponent<FilterFocus>();
+            s_sideRows = (RectTransform)s_newRect.Invoke(null, new object[] { "VigilPortalRows", s_side.transform, 16f, SideTop + SideFilter + 10f, inner, rowsHeight });
+            s_addText.Invoke(null, new object[] { s_side.transform, 16f, height - SideFoot + 4f, inner, SideFoot - 12f, "Click a star, or right click a portal, to mark it.", 13, TextAnchor.MiddleLeft, (Color?)Orange });
+            FillSide();
+        }
+
+        /// <summary>The rows under the filter, laid out again for its text and the favourites.</summary>
+        private static void FillSide()
+        {
+            if (s_sideRows == null) return;
+            foreach (Transform child in s_sideRows)
             {
-                var destination = s_mapDestinations[i];
-                s_addButton.Invoke(null, new object[] { s_side.transform, 16f, y, inner, SideRow - 4f, names[i], new UnityAction(() => Travel(destination)) });
-                y += SideRow;
+                child.gameObject.SetActive(false);
+                UnityEngine.Object.Destroy(child.gameObject);
             }
-            if (rows.Count == 0)
+            var names = s_mapDestinations.Select(NameOf).ToList();
+            var favourite = s_mapDestinations.Select(d => s_favourites.Contains(IdOf(d))).ToList();
+            var distance = s_mapDestinations.Select(d => (float)s_destDistance.GetValue(d)).ToList();
+            var list = PortalFavourites.SideList(names, favourite, distance, s_filter != null ? s_filter.text : "", SideMax);
+            float width = s_sideRows.sizeDelta.x, y = 0f;
+            s_firstShown = null;
+            if (list.Favourites.Count > 0)
             {
-                s_addText.Invoke(null, new object[] { s_side.transform, 16f, y, inner, SideRow, "No favourites yet.", 14, TextAnchor.MiddleLeft, null });
-                y += SideRow;
+                SideHeading("Favourites", ref y, width);
+                foreach (int i in list.Favourites) SideRowFor(s_mapDestinations[i], names[i], true, ref y, width);
             }
-            if (more > 0)
+            if (list.Others.Count > 0)
             {
-                s_addText.Invoke(null, new object[] { s_side.transform, 16f, y, inner, SideRow, "... " + more + " more on the map", 13, TextAnchor.MiddleLeft, null });
-                y += SideRow;
+                if (list.Favourites.Count > 0) SideHeading("All portals", ref y, width);
+                foreach (int i in list.Others) SideRowFor(s_mapDestinations[i], names[i], false, ref y, width);
             }
-            s_addText.Invoke(null, new object[] { s_side.transform, 16f, y + 6f, inner, SideFoot - 12f, "Right click a portal to mark it.", 13, TextAnchor.MiddleLeft, (Color?)Orange });
+            if (list.Favourites.Count + list.Others.Count == 0)
+                s_addText.Invoke(null, new object[] { s_sideRows, 10f, y, width - 20f, SideRow, "No portals match.", 14, TextAnchor.MiddleLeft, null });
+            else if (list.More > 0)
+                s_addText.Invoke(null, new object[] { s_sideRows, 10f, y, width - 20f, SideRow, "... " + list.More + " more, type to narrow the list.", 14, TextAnchor.MiddleLeft, null });
+        }
+
+        private static void SideHeading(string words, ref float y, float width)
+        {
+            s_addText.Invoke(null, new object[] { s_sideRows, 10f, y, width - 20f, HeadingHeight, words, 14, TextAnchor.LowerLeft, (Color?)Orange });
+            y += HeadingHeight;
+        }
+
+        private static void SideRowFor(object destination, string name, bool lit, ref float y, float width)
+        {
+            if (s_firstShown == null) s_firstShown = destination;
+            float height = SideRow - 4f, nameWidth = width * 0.62f;
+            var button = (Button)s_addButton.Invoke(null, new object[] { s_sideRows, 0f, y, width, height, "", new UnityAction(() => Travel(destination)) });
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            s_addText.Invoke(null, new object[] { button.transform, StarIndent + 10f, 0f, nameWidth - StarIndent - 10f, height, name, 16, TextAnchor.MiddleLeft, null });
+            s_addText.Invoke(null, new object[] { button.transform, nameWidth, 0f, width - nameWidth - 10f, height, s_destDistanceText.GetValue(destination) as string ?? "", 14, TextAnchor.MiddleRight, (Color?)Orange });
+            Star(s_sideRows, 8f, y + (height - StarSize) / 2f, lit, () =>
+            {
+                Toggle(destination);
+                FillSide();
+                if (Minimap.instance != null) s_pinUpdate(Minimap.instance) = true;
+            });
+            y += SideRow;
+        }
+
+        /// <summary>Enter in the filter travels to the first portal it shows, as in AdjustablePortals' own list; any end of typing gives the keys back.</summary>
+        private static void FilterDone()
+        {
+            bool enter = ZInput.GetKeyDown(KeyCode.Return) || ZInput.GetKeyDown(KeyCode.KeypadEnter);
+            var first = s_firstShown;
+            if (EventSystem.current != null && s_filter != null && EventSystem.current.currentSelectedGameObject == s_filter.gameObject)
+                EventSystem.current.SetSelectedGameObject(null);
+            if (enter && first != null) Travel(first);
+        }
+
+        /// <summary>Holds Jotunn's input block for as long as the filter is selected, so typing neither walks the player out of the portal nor works the map's keys.</summary>
+        private sealed class FilterFocus : MonoBehaviour, ISelectHandler, IDeselectHandler
+        {
+            private bool _held;
+
+            public void OnSelect(BaseEventData eventData)
+            {
+                if (_held) return;
+                _held = true;
+                Block(true);
+            }
+
+            public void OnDeselect(BaseEventData eventData) => Release();
+
+            private void OnDisable() => Release();
+
+            private void OnDestroy() => Release();
+
+            private void Release()
+            {
+                if (!_held) return;
+                _held = false;
+                Block(false);
+            }
+
+            private static void Block(bool on)
+            {
+                try
+                {
+                    s_blockInput?.Invoke(null, new object[] { on });
+                }
+                catch (Exception)
+                {
+                    // A failed block leaves the keys as they were.
+                }
+            }
         }
 
         private static void Travel(object destination)
@@ -553,7 +664,7 @@ namespace Vigil.Recorder
                 int hit = PortalFavourites.NearestWithin(entries.Select(e => (((Minimap.PinData)e.Key).m_pos.x, ((Minimap.PinData)e.Key).m_pos.z)).ToList(), at.x, at.z, radius);
                 if (hit < 0) return;
                 Toggle(entries[hit].Value);
-                BuildSide();
+                FillSide();
                 s_pinUpdate(__instance) = true;
             }
             catch (Exception e)

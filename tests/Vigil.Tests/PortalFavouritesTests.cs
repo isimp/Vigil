@@ -105,16 +105,52 @@ namespace Vigil.Tests
             Assert.Equal(-1, PortalFavourites.NearestWithin(new List<(float, float)>(), 0f, 0f, 5f));
         }
 
+        private static readonly string[] SideNames = { "Zebra", "Home", "Ashlands", "Camp", "Bog", "home" };
+        private static readonly bool[] SideFavourite = { true, true, false, true, false, false };
+        private static readonly float[] SideDistance = { 10f, 900f, 50f, 20f, 30f, 40f };
+
         [Fact]
-        public void The_list_beside_the_map_holds_the_favourites_by_name_with_the_rest_counted()
+        public void The_list_beside_the_map_shows_favourites_first_then_all_other_portals_by_name()
         {
-            var names = new[] { "Zebra", "Home", "Ashlands", "Camp", "Bog" };
-            var favs = new[] { true, true, false, true, true };
-            var rows = PortalFavourites.SideRows(names, favs, 3, out int more);
-            Assert.Equal(new[] { "Bog", "Camp", "Home" }, rows.Select(i => names[i]));
-            Assert.Equal(1, more);
-            Assert.Empty(PortalFavourites.SideRows(names, new bool[5], 3, out int none));
-            Assert.Equal(0, none);
+            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, "", 10);
+            Assert.Equal(new[] { "Camp", "Home", "Zebra" }, list.Favourites.Select(i => SideNames[i]));
+            // By name ignoring case, as AdjustablePortals' own list orders them.
+            Assert.Equal(new[] { 2, 4, 5 }, list.Others);
+            Assert.Equal(0, list.More);
+        }
+
+        [Fact]
+        public void Portals_sharing_a_name_stand_nearest_first()
+        {
+            // Every vanilla pair shares its name; the distance tells them apart, as in AdjustablePortals' own list.
+            var list = PortalFavourites.SideList(new[] { "Home", "Home", "Ashlands" }, new bool[3], new[] { 900f, 10f, 5f }, "", 10);
+            Assert.Equal(new[] { 2, 1, 0 }, list.Others);
+        }
+
+        [Fact]
+        public void Typing_in_the_filter_narrows_both_groups_by_name_ignoring_case()
+        {
+            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, "HOM", 10);
+            Assert.Equal(new[] { 1 }, list.Favourites);
+            Assert.Equal(new[] { 5 }, list.Others);
+        }
+
+        [Fact]
+        public void A_filter_matching_nothing_leaves_the_list_empty()
+        {
+            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, "Swamp", 10);
+            Assert.Empty(list.Favourites);
+            Assert.Empty(list.Others);
+            Assert.Equal(0, list.More);
+        }
+
+        [Fact]
+        public void A_long_list_keeps_the_favourites_and_counts_the_rest()
+        {
+            var list = PortalFavourites.SideList(SideNames, SideFavourite, SideDistance, null, 4);
+            Assert.Equal(3, list.Favourites.Count);
+            Assert.Equal(new[] { 2 }, list.Others);
+            Assert.Equal(2, list.More);
         }
 
         [Fact]
