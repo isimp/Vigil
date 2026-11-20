@@ -121,6 +121,22 @@ namespace Vigil.Core
             return rows;
         }
 
+        /// <summary>
+        /// Whether a map pin shows under the game patch "AdjustablePortals' map shows only the
+        /// portals": while its map of portals is open (<paramref name="pickerOpen"/>), only the pins
+        /// it put on the portals to pick (<paramref name="offered"/>); otherwise every pin.
+        /// </summary>
+        public static bool PinShown(bool pickerOpen, bool offered) => !pickerOpen || offered;
+
+        /// <summary>What "AdjustablePortals' map shows only the portals" does on this game, in words.</summary>
+        public static string OnlyPortalsLine(bool on, bool found, string problem, long maps)
+        {
+            if (!on) return "off: this game's switch (Patches.AdjustablePortalsOnlyPortals)";
+            if (!found) return "not needed: AdjustablePortals is not installed";
+            if (problem != null) return "stepped aside: " + problem;
+            return string.Format(CultureInfo.InvariantCulture, "working · {0} portal maps shown with only their portals", maps);
+        }
+
         /// <summary>What "AdjustablePortals: favourite portals" does on this game, in words.</summary>
         public static string Line(bool on, bool found, string problem, long toggled, long trips)
         {

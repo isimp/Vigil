@@ -118,6 +118,29 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void While_the_portal_map_is_open_only_its_portals_show()
+        {
+            // HUDCompass's portal markers and the game's own pins would stand on and beside the portals to pick.
+            Assert.True(PortalFavourites.PinShown(pickerOpen: true, offered: true));
+            Assert.False(PortalFavourites.PinShown(pickerOpen: true, offered: false));
+        }
+
+        [Fact]
+        public void Once_the_portal_map_closes_every_pin_shows_again()
+        {
+            Assert.True(PortalFavourites.PinShown(pickerOpen: false, offered: false));
+        }
+
+        [Fact]
+        public void The_panel_says_what_the_portals_only_map_does_on_this_game()
+        {
+            Assert.StartsWith("off", PortalFavourites.OnlyPortalsLine(false, true, null, 0));
+            Assert.StartsWith("not needed", PortalFavourites.OnlyPortalsLine(true, false, null, 0));
+            Assert.Equal("stepped aside: its picker code changed", PortalFavourites.OnlyPortalsLine(true, true, "its picker code changed", 0));
+            Assert.Equal("working · 4 portal maps shown with only their portals", PortalFavourites.OnlyPortalsLine(true, true, null, 4));
+        }
+
+        [Fact]
         public void The_panel_says_what_the_patch_does_on_this_game()
         {
             Assert.StartsWith("off", PortalFavourites.Line(false, true, null, 0, 0));

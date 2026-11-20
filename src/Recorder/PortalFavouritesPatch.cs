@@ -42,16 +42,35 @@ namespace Vigil.Recorder
         private static readonly Color Orange = new Color(1f, 0.631f, 0.235f, 1f);
         private static readonly Color StarOff = new Color(0.48f, 0.4f, 0.31f, 0.85f);
 
-        /// <summary>This game's switch, kept current by the config entry.</summary>
+        /// <summary>This game's switch for the favourites, kept current by the config entry.</summary>
         public static bool On;
+
+        /// <summary>
+        /// This game's switch for "AdjustablePortals' map shows only the portals": while its map
+        /// picker is open, every game pin but its own and HUDCompass's cart, ship and portal markers
+        /// are hidden, after HUDCompass and Cartur's Map Pins have drawn them, and shown again as it
+        /// closes. Scry's marks step aside by themselves.
+        /// </summary>
+        public static bool OnlyPortals;
 
         public static bool Found { get; private set; }
         /// <summary>Why the patch stepped aside; null while it is in.</summary>
         public static string Problem { get; private set; }
 
-        private static long s_toggled, s_trips;
+        private static long s_toggled, s_trips, s_portalMaps;
 
         public static string State => PortalFavourites.Line(On, Found, Problem, s_toggled, s_trips);
+        public static string OnlyPortalsState => PortalFavourites.OnlyPortalsLine(OnlyPortals, Found, Problem, s_portalMaps);
+
+        /// <summary>HUDCompass's markers (its DynamicMapMarkers.Markers, each a MarkerData with a Marker and a Nametag); none without HUDCompass.</summary>
+        private static object s_compassDmm;
+        private static FieldInfo s_compassMarkers;
+        private static Func<object, GameObject> s_compassIcon, s_compassTag;
+        private static readonly AccessTools.FieldRef<Minimap, List<Minimap.PinData>> s_gamePins = AccessTools.FieldRefAccess<Minimap, List<Minimap.PinData>>("m_pins");
+        /// <summary>The game pins' icons hidden while the map picker is open, shown again as it closes.</summary>
+        private static readonly List<GameObject> s_hidden = new List<GameObject>();
+        /// <summary>Whether anything was hidden for the open map picker, HUDCompass's markers included.</summary>
+        private static bool s_hidAny;
 
         private static Action<string> s_log;
         private static FieldInfo s_listCurrent, s_listDestinations, s_listFilter, s_listContent, s_listWidth, s_mapPins, s_mapSelecting;
@@ -133,7 +152,9 @@ namespace Vigil.Recorder
                 h.Patch(addRow, postfix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(AfterAddRow)));
                 h.Patch(open, postfix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(AfterMapOpen)));
                 h.Patch(close, prefix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(BeforeMapClose)));
-                h.Patch(AccessTools.DeclaredMethod(typeof(Minimap), "UpdatePins"), postfix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(AfterUpdatePins)));
+                // Last: HUDCompass draws its markers, and switches them on, in its own postfix here.
+                h.Patch(AccessTools.DeclaredMethod(typeof(Minimap), "UpdatePins"), postfix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(AfterUpdatePins)) { priority = Priority.Last });
+                FindCompassMarkers();
                 h.Patch(AccessTools.DeclaredMethod(typeof(Minimap), "RemovePinUnderPointer"), prefix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(BeforeRightClick)));
             }
             catch (Exception e)
@@ -142,14 +163,46 @@ namespace Vigil.Recorder
             }
         }
 
+        /// <summary>HUDCompass's markers, read by name; left alone where HUDCompass is missing or its names changed.</summary>
+        private static void FindCompassMarkers()
+        {
+            var compass = Chainloader.PluginInfos.Values.FirstOrDefault(p => p.Metadata.GUID == HudCompassPatch.Guid);
+            if (compass?.Instance == null) return;
+            try
+            {
+                var hud = compass.Instance.GetType().Assembly;
+                var dmmType = hud.GetType("neobotics.ValheimMods.DynamicMapMarkers");
+                var markerData = hud.GetType("neobotics.ValheimMods.MarkerData");
+                s_compassDmm = AccessTools.DeclaredField(hud.GetType("neobotics.ValheimMods.HUDCompass"), "s_dmm")?.GetValue(null);
+                s_compassMarkers = dmmType != null ? AccessTools.DeclaredField(dmmType, "Markers") : null;
+                if (s_compassDmm == null || s_compassMarkers == null || markerData == null) throw new InvalidOperationException("its marker list is not where 1.2.1 keeps it");
+                s_compassIcon = Getter(markerData, "Marker");
+                s_compassTag = Getter(markerData, "Nametag");
+            }
+            catch (Exception e)
+            {
+                s_compassDmm = null;
+                s_log?.Invoke("Vigil: AdjustablePortals' map leaves HUDCompass's markers as they are: " + e.GetType().Name + " " + e.Message);
+            }
+        }
+
+        private static Func<object, GameObject> Getter(Type type, string name)
+        {
+            var o = System.Linq.Expressions.Expression.Parameter(typeof(object), "o");
+            var member = System.Linq.Expressions.Expression.PropertyOrField(System.Linq.Expressions.Expression.Convert(o, type), name);
+            return System.Linq.Expressions.Expression.Lambda<Func<object, GameObject>>(System.Linq.Expressions.Expression.Convert(member, typeof(GameObject)), o).Compile();
+        }
+
         private static void StepAside(string why)
         {
             Problem = why;
             DestroySide();
+            ShowHidden();
             s_log?.Invoke("Vigil: the patch for AdjustablePortals' favourite portals stepped aside: " + why);
         }
 
-        private static bool Working => On && Found && Problem == null;
+        private static bool Ready => Found && Problem == null;
+        private static bool Working => On && Ready;
 
         private static VehicleId IdOf(object destination)
         {
@@ -317,7 +370,9 @@ namespace Vigil.Recorder
         /// <summary>The map picker opened: its destinations kept and the panel of favourites put beside the map.</summary>
         private static void AfterMapOpen(bool __result, object __1)
         {
-            if (!Working || !__result) return;
+            if (!__result || !Ready) return;
+            if (OnlyPortals) s_portalMaps++;
+            if (!On) return;
             try
             {
                 s_mapDestinations.Clear();
@@ -335,6 +390,17 @@ namespace Vigil.Recorder
         {
             DestroySide();
             s_mapDestinations.Clear();
+            ShowHidden();
+        }
+
+        /// <summary>The pins hidden for the map picker shown again; HUDCompass and the pins' names are drawn again by the next pin update.</summary>
+        private static void ShowHidden()
+        {
+            bool any = s_hidAny;
+            s_hidAny = false;
+            foreach (var go in s_hidden) if (go != null) go.SetActive(true);
+            s_hidden.Clear();
+            if (any && Minimap.instance != null) s_pinUpdate(Minimap.instance) = true;
         }
 
         private static void DestroySide()
@@ -386,15 +452,21 @@ namespace Vigil.Recorder
             s_travelTo.Invoke(null, new object[] { destination });
         }
 
-        private static bool Selecting => Working && (bool)s_mapSelecting.GetValue(null);
+        private static bool Selecting => Ready && (bool)s_mapSelecting.GetValue(null);
 
-        /// <summary>While the map picker is open: a star on each favourite's pin, put on again whenever the game makes the pin anew.</summary>
-        private static void AfterUpdatePins()
+        /// <summary>
+        /// While the map picker is open, after every other pin drawing: the other pins hidden where
+        /// only the portals are to show, and a star on each favourite's pin, put on again whenever
+        /// the game makes the pin anew.
+        /// </summary>
+        private static void AfterUpdatePins(Minimap __instance)
         {
-            if (s_side == null || !Selecting) return;
+            if ((!On && !OnlyPortals) || !Selecting) return;
             try
             {
                 if (!(s_mapPins.GetValue(null) is IDictionary pins)) return;
+                if (OnlyPortals) HideOthers(__instance, pins);
+                if (!On || s_side == null) return;
                 foreach (DictionaryEntry pair in pins)
                 {
                     var element = ((Minimap.PinData)pair.Key).m_uiElement;
@@ -408,6 +480,46 @@ namespace Vigil.Recorder
             catch (Exception e)
             {
                 StepAside("its stars on the map failed: " + e.GetType().Name + " " + e.Message);
+            }
+        }
+
+        /// <summary>Every game pin the map picker did not put there, its name too, and HUDCompass's markers, hidden (<see cref="PortalFavourites.PinShown"/>).</summary>
+        private static void HideOthers(Minimap map, IDictionary offered)
+        {
+            foreach (var pin in s_gamePins(map))
+            {
+                if (PortalFavourites.PinShown(true, offered.Contains(pin))) continue;
+                var icon = pin.m_uiElement != null ? pin.m_uiElement.gameObject : null;
+                if (icon != null && icon.activeSelf)
+                {
+                    icon.SetActive(false);
+                    s_hidden.Add(icon);
+                    s_hidAny = true;
+                }
+                // The game sets a name's state on each update by the zoom, so it is hidden again each time.
+                var name = pin.m_NamePinData?.PinNameGameObject;
+                if (name != null && name.activeSelf)
+                {
+                    name.SetActive(false);
+                    s_hidAny = true;
+                }
+            }
+            if (s_compassDmm == null || !(s_compassMarkers.GetValue(s_compassDmm) is IDictionary markers)) return;
+            foreach (object marker in markers.Values)
+            {
+                // HUDCompass switches its markers on, or off by its own settings, on its next drawing.
+                var icon = s_compassIcon(marker);
+                if (icon != null && icon.activeSelf)
+                {
+                    icon.SetActive(false);
+                    s_hidAny = true;
+                }
+                var tag = s_compassTag(marker);
+                if (tag != null && tag.activeSelf)
+                {
+                    tag.SetActive(false);
+                    s_hidAny = true;
+                }
             }
         }
 

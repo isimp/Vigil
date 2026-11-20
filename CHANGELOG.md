@@ -4,6 +4,8 @@
 
 A new patch, off until switched on: *AdjustablePortals: favourite portals* (`Patches.AdjustablePortalsFavourites`). AdjustablePortals lets you pick where a portal sends you from a list or on the map, but has no favourites. On, a star on each row of its list marks a portal as a favourite, and your favourites come first under their own heading. On its map, right click a portal to mark it; favourites carry a star and a panel at the map's left lists them, and a click there travels. Favourites stay with your character, also when a portal is renamed or moved, and your TargetPortal favourites are taken over the first time. It works with AdjustablePortals 0.7.0 and 0.8.0 and leaves other versions alone.
 
+A new patch, off until switched on: *AdjustablePortals' map shows only the portals* (`Patches.AdjustablePortalsOnlyPortals`). AdjustablePortals' map of portals put its own pin on each portal beside HUDCompass's portal marker, so every portal showed two icons, and all your other pins stayed. On, while that map is open it shows only the portals to pick; everything else comes back when it closes.
+
 ## 0.46.1
 
 A new patch, off until switched on: *OdinOnDemand's stream cannot crash the game* (`Patches.OdinOnDemandSafeStream`). While a radio streamed, the game could crash outright, mostly when it was running slowly, because OdinOnDemand asked Unity where the stream was from a part of the game that must not ask. On, the game notes each stream's play position once a frame and OdinOnDemand works from that note instead. The sound stays the same. It works with OdinOnDemand 1.3.0 and leaves other versions alone.
