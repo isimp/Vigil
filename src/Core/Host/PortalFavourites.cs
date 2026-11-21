@@ -45,6 +45,24 @@ namespace Vigil.Core
             else favourites.Insert(at, moved);
         }
 
+        /// <summary>Rows one wheel notch scrolls the list beside the map.</summary>
+        public const int RowsPerNotch = 3;
+
+        /// <summary>
+        /// Where the list beside the map scrolls to (pixels from its top) on a wheel turn of
+        /// <paramref name="wheel"/>: <see cref="RowsPerNotch"/> rows each notch, by its sign only, as
+        /// the size the input reports per notch differs; never past either end.
+        /// </summary>
+        public static float ScrollTo(float current, float wheel, float contentHeight, float viewHeight, float rowHeight)
+        {
+            float max = Math.Max(0f, contentHeight - viewHeight);
+            float next = current - Math.Sign(wheel) * RowsPerNotch * rowHeight;
+            return Math.Min(max, Math.Max(0f, next));
+        }
+
+        /// <summary>Whether the map's own wheel zoom gets the wheel: not while the pointer is over the list beside it.</summary>
+        public static bool MapTakesWheel(bool pointerOverPanel) => !pointerOverPanel;
+
         /// <summary>Where a dragged row drops: before the first row whose middle lies below the pointer, counted down from the list's top.</summary>
         public static int InsertAt(IReadOnlyList<float> rowMiddles, float pointer)
         {

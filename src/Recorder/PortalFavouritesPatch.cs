@@ -40,7 +40,7 @@ namespace Vigil.Recorder
 
         private const string StarName = "VigilFavouriteStar";
         private const float StarSize = 20f, StarIndent = 26f, HeadingHeight = 24f;
-        private const float SideWidth = 340f, SideRow = 32f, SideTop = 52f, SideFilter = 30f, SideListHeight = 400f, SideFoot = 50f, GripWidth = 22f, FocusWidth = 30f;
+        private const float SideWidth = 340f, SideRow = 32f, SideTop = 52f, SideFilter = 30f, SideListHeight = 400f, SideFoot = 50f, GripWidth = 22f, FocusWidth = 30f, ClearWidth = 30f;
         // Rows are real objects made again on every keystroke in the filter, as in AdjustablePortals' list; past this the filter narrows it.
         private const int SideMaxRows = 300;
         private static readonly Color Orange = new Color(1f, 0.631f, 0.235f, 1f);
@@ -106,6 +106,8 @@ namespace Vigil.Recorder
         private static readonly List<RectTransform> s_favRows = new List<RectTransform>();
         private static readonly List<VehicleId> s_favRowIds = new List<VehicleId>();
         private static Sprite s_focusSprite;
+        /// <summary>The camera the panel's canvas draws with; none for a canvas drawn over the screen.</summary>
+        private static Camera s_sideCamera;
         /// <summary>Jotunn's window drag, its GUIManager and the scroll view it makes, as AdjustablePortals' list uses them.</summary>
         private static Type s_dragWindow;
         private static PropertyInfo s_guiInstance;
@@ -190,6 +192,8 @@ namespace Vigil.Recorder
                 h.Patch(AccessTools.DeclaredMethod(typeof(Minimap), "UpdatePins"), postfix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(AfterUpdatePins)) { priority = Priority.Last });
                 FindCompassMarkers();
                 h.Patch(AccessTools.DeclaredMethod(typeof(Minimap), "RemovePinUnderPointer"), prefix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(BeforeRightClick)));
+                // The map zooms by the game's wheel value whatever the pointer is over; over the panel it is the list's.
+                h.Patch(AccessTools.DeclaredMethod(typeof(ZInput), "Internal_GetMouseScrollWheel"), postfix: new HarmonyMethod(typeof(PortalFavouritesPatch), nameof(AfterWheel)));
             }
             catch (Exception e)
             {
@@ -474,7 +478,11 @@ namespace Vigil.Recorder
             s_side.transform.SetAsLastSibling();
             if (s_dragWindow != null) s_side.AddComponent(s_dragWindow);
             float inner = SideWidth - 32f;
-            s_filter = (InputField)s_addTextField.Invoke(null, new object[] { s_side.transform, 16f, SideTop, inner, SideFilter, "Filter..." });
+            var canvas = s_side.GetComponentInParent<Canvas>();
+            s_sideCamera = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+            s_filter = (InputField)s_addTextField.Invoke(null, new object[] { s_side.transform, 16f, SideTop, inner - ClearWidth - 4f, SideFilter, "Filter..." });
+            var clear = (Button)s_addButton.Invoke(null, new object[] { s_side.transform, 16f + inner - ClearWidth, SideTop, ClearWidth, SideFilter, "X", new UnityAction(ClearFilter) });
+            clear.navigation = new Navigation { mode = Navigation.Mode.None };
             s_filter.onValueChanged.AddListener(_ => FillSide());
             s_filter.onEndEdit.AddListener(_ => FilterDone());
             s_filter.gameObject.AddComponent<FilterFocus>();
@@ -484,7 +492,7 @@ namespace Vigil.Recorder
             var view = (GameObject)s_createScrollView.Invoke(gui, new object[] { holder, false, true, 8f, 4f, handles, new Color(0f, 0f, 0f, 0.5f), inner, SideListHeight });
             s_sideContent = view.transform.Find("Scroll View/Viewport/Content") as RectTransform;
             var scroll = view.GetComponentInChildren<ScrollRect>();
-            if (scroll != null) scroll.scrollSensitivity = 200f;
+            if (scroll != null && scroll.viewport != null) scroll.viewport.gameObject.AddComponent<ListWheel>().Scroll = scroll;
             // The scroll bar and its border take this much of the width, as in AdjustablePortals' list.
             s_sideWidth = inner - 16f;
             s_addText.Invoke(null, new object[] { s_side.transform, 16f, height - SideFoot + 2f, inner, SideFoot - 8f, "Star or right click a portal to mark it; drag a favourite by its grip to reorder.", 13, TextAnchor.MiddleLeft, (Color?)Orange });
@@ -682,6 +690,51 @@ namespace Vigil.Recorder
             private void OnDestroy()
             {
                 if (_line != null) Destroy(_line.gameObject);
+            }
+        }
+
+        /// <summary>The filter emptied, which lists every portal again, and the keys given back.</summary>
+        private static void ClearFilter()
+        {
+            if (s_filter == null) return;
+            s_filter.text = "";
+            if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == s_filter.gameObject) EventSystem.current.SetSelectedGameObject(null);
+        }
+
+        /// <summary>Whether the pointer stands over the panel beside the map.</summary>
+        private static bool PointerOverSide() =>
+            s_side != null && RectTransformUtility.RectangleContainsScreenPoint((RectTransform)s_side.transform, ZInput.pointerPosition, s_sideCamera);
+
+        /// <summary>The game's wheel value, none for the map while the pointer is over the panel (<see cref="PortalFavourites.MapTakesWheel"/>).</summary>
+        private static void AfterWheel(ref float __result)
+        {
+            if (__result == 0f || s_side == null) return;
+            try
+            {
+                if (!PortalFavourites.MapTakesWheel(PointerOverSide())) __result = 0f;
+            }
+            catch (Exception)
+            {
+                // The wheel goes on as the game reads it.
+            }
+        }
+
+        /// <summary>
+        /// The list's wheel: <see cref="PortalFavourites.RowsPerNotch"/> rows a notch by its sign
+        /// (<see cref="PortalFavourites.ScrollTo"/>). It sits on the viewport, so a wheel over the rows
+        /// reaches it before the ScrollRect, whose step follows the small size the input reports.
+        /// </summary>
+        private sealed class ListWheel : MonoBehaviour, IScrollHandler
+        {
+            public ScrollRect Scroll;
+
+            public void OnScroll(PointerEventData eventData)
+            {
+                if (Scroll == null || Scroll.content == null || Scroll.viewport == null) return;
+                var content = Scroll.content;
+                Scroll.StopMovement();
+                float y = PortalFavourites.ScrollTo(content.anchoredPosition.y, eventData.scrollDelta.y, content.rect.height, Scroll.viewport.rect.height, SideRow);
+                content.anchoredPosition = new Vector2(content.anchoredPosition.x, y);
             }
         }
 

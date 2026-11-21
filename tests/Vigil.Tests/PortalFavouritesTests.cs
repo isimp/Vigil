@@ -198,6 +198,32 @@ namespace Vigil.Tests
         }
 
         [Fact]
+        public void One_wheel_notch_scrolls_the_list_three_rows_whatever_size_the_input_reports()
+        {
+            // Content 1000 high in a 400 view: it can scroll 600. Down is a negative wheel value.
+            Assert.Equal(96f, PortalFavourites.ScrollTo(0f, -0.05f, 1000f, 400f, 32f));
+            Assert.Equal(96f, PortalFavourites.ScrollTo(0f, -120f, 1000f, 400f, 32f));
+            Assert.Equal(104f, PortalFavourites.ScrollTo(200f, 1f, 1000f, 400f, 32f));
+        }
+
+        [Fact]
+        public void The_list_stops_scrolling_at_its_ends()
+        {
+            Assert.Equal(0f, PortalFavourites.ScrollTo(50f, 1f, 1000f, 400f, 32f));
+            Assert.Equal(600f, PortalFavourites.ScrollTo(580f, -1f, 1000f, 400f, 32f));
+            // A list that fits its view does not scroll.
+            Assert.Equal(0f, PortalFavourites.ScrollTo(0f, -1f, 300f, 400f, 32f));
+            Assert.Equal(200f, PortalFavourites.ScrollTo(200f, 0f, 1000f, 400f, 32f));
+        }
+
+        [Fact]
+        public void The_wheel_over_the_panel_scrolls_the_list_and_leaves_the_map_zoom_alone()
+        {
+            Assert.False(PortalFavourites.MapTakesWheel(pointerOverPanel: true));
+            Assert.True(PortalFavourites.MapTakesWheel(pointerOverPanel: false));
+        }
+
+        [Fact]
         public void A_right_click_reads_the_map_pickers_pins_as_they_are_kept()
         {
             // AdjustablePortals keeps its pins in a Dictionary<PinData, Destination>, read here without
