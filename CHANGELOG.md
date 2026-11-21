@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.47.1
+
+*AdjustablePortals: favourite portals*: a portal name too long for its row in the panel beside the map shows in full when you hold the pointer over it, in the game's own tooltip.
+
 ## 0.47.0
 
 A new patch, off until switched on: *AdjustablePortals: favourite portals* (`Patches.AdjustablePortalsFavourites`). AdjustablePortals lets you pick where a portal sends you from a list or on the map, but has no favourites. On, a star on each row of its list marks a portal as a favourite, and your favourites come first under their own heading. On its map, right click a portal to mark it; favourites carry a star, and a panel you can move lists every portal with a filter, your favourites first in the order you drag them into, a click there travelling and a button centring the map on a portal. Favourites stay with your character, also when a portal is renamed or moved, and your TargetPortal favourites are taken over the first time. It works with AdjustablePortals 0.7.0 and 0.8.0 and leaves other versions alone.
