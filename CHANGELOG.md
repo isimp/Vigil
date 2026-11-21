@@ -2,7 +2,7 @@
 
 ## 0.47.1
 
-*AdjustablePortals: favourite portals*: a portal name too long for its row in the panel beside the map shows in full when you hold the pointer over it, in the game's own tooltip.
+*AdjustablePortals: favourite portals*: a portal name too long for its row in the panel beside the map shows in full while the pointer is over its row, in the row itself: the distance steps aside, and a very long name is drawn smaller.
 
 ## 0.47.0
 

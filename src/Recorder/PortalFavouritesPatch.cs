@@ -106,8 +106,6 @@ namespace Vigil.Recorder
         private static readonly List<RectTransform> s_favRows = new List<RectTransform>();
         private static readonly List<VehicleId> s_favRowIds = new List<VehicleId>();
         private static Sprite s_focusSprite;
-        private static GameObject s_tooltipPrefab;
-        private static bool s_tooltipLooked;
         /// <summary>The camera the panel's canvas draws with; none for a canvas drawn over the screen.</summary>
         private static Camera s_sideCamera;
         /// <summary>Jotunn's window drag, its GUIManager and the scroll view it makes, as AdjustablePortals' list uses them.</summary>
@@ -470,8 +468,6 @@ namespace Vigil.Recorder
             DestroySide();
             var map = Minimap.instance;
             if (map == null || map.m_largeRoot == null) return;
-            // Looked for again with each panel, in case the game's UI had none to lend the last time.
-            if (s_tooltipPrefab == null) s_tooltipLooked = false;
             float height =SideTop + SideFilter + 10f + SideListHeight + SideFoot;
             s_side = (GameObject)s_createPanel.Invoke(null, new object[] { map.m_largeRoot.transform, SideWidth, height, "Choose a destination" });
             var rt = (RectTransform)s_side.transform;
@@ -550,8 +546,16 @@ namespace Vigil.Recorder
             button.navigation = new Navigation { mode = Navigation.Mode.None };
             float buttonWidth = right - left - 4f, nameLeft = StarIndent + 10f, distanceWidth = 76f;
             var nameText = (Text)s_addText.Invoke(null, new object[] { button.transform, nameLeft, 0f, buttonWidth - nameLeft - distanceWidth - 6f, height, name, 16, TextAnchor.MiddleLeft, null });
-            if (Shorten(nameText, buttonWidth - nameLeft - distanceWidth - 6f)) FullNameTip(button.gameObject, name);
-            s_addText.Invoke(null, new object[] { button.transform, buttonWidth - distanceWidth - 6f, 0f, distanceWidth, height, s_destDistanceText.GetValue(destination) as string ?? "", 14, TextAnchor.MiddleRight, (Color?)Orange });
+            bool cut = Shorten(nameText, buttonWidth - nameLeft - distanceWidth - 6f);
+            var distanceText = (Text)s_addText.Invoke(null, new object[] { button.transform, buttonWidth - distanceWidth - 6f, 0f, distanceWidth, height, s_destDistanceText.GetValue(destination) as string ?? "", 14, TextAnchor.MiddleRight, (Color?)Orange });
+            if (cut)
+            {
+                var reveal = button.gameObject.AddComponent<NameReveal>();
+                reveal.Name = nameText;
+                reveal.Distance = distanceText;
+                reveal.Full = name;
+                reveal.FullWidth = buttonWidth - nameLeft - 8f;
+            }
             Star(row.transform, left + 6f, (height - StarSize) / 2f, favourite, () =>
             {
                 Toggle(destination);
@@ -582,26 +586,48 @@ namespace Vigil.Recorder
         }
 
         /// <summary>
-        /// The game's own hover tooltip (<c>UITooltip</c>, as on inventory items) with a cut name in
-        /// full: it shows by the pointer after the game's half second and takes no room in the panel.
-        /// Left out where the game has no tooltip to borrow.
+        /// A row whose name was cut shows it whole while the pointer is over it: the distance steps
+        /// aside, the name takes its room, and a name longer still is drawn smaller until it fits.
+        /// Nothing opens over the panel.
         /// </summary>
-        private static void FullNameTip(GameObject button, string name)
+        private sealed class NameReveal : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
         {
-            var prefab = TooltipPrefab();
-            if (prefab == null) return;
-            var tip = button.AddComponent<UITooltip>();
-            tip.m_tooltipPrefab = prefab;
-            tip.m_text = name;
-        }
+            public Text Name, Distance;
+            public string Full;
+            public float FullWidth;
+            private string _cut;
+            private float _cutWidth;
+            private bool _shown;
 
-        /// <summary>The tooltip the game's own UI shows, borrowed from one of its tooltips; none where none has one.</summary>
-        private static GameObject TooltipPrefab()
-        {
-            if (s_tooltipPrefab != null || s_tooltipLooked) return s_tooltipPrefab;
-            s_tooltipLooked = true;
-            s_tooltipPrefab = Resources.FindObjectsOfTypeAll<UITooltip>().Select(t => t.m_tooltipPrefab).FirstOrDefault(p => p != null);
-            return s_tooltipPrefab;
+            public void OnPointerEnter(PointerEventData eventData)
+            {
+                if (_shown || Name == null) return;
+                _shown = true;
+                _cut = Name.text;
+                _cutWidth = Name.rectTransform.sizeDelta.x;
+                if (Distance != null) Distance.enabled = false;
+                Name.rectTransform.sizeDelta = new Vector2(FullWidth, Name.rectTransform.sizeDelta.y);
+                Name.text = Full;
+                Name.horizontalOverflow = HorizontalWrapMode.Wrap;
+                Name.resizeTextMinSize = 10;
+                Name.resizeTextMaxSize = Name.fontSize;
+                Name.resizeTextForBestFit = true;
+            }
+
+            public void OnPointerExit(PointerEventData eventData) => Hide();
+
+            private void OnDisable() => Hide();
+
+            private void Hide()
+            {
+                if (!_shown || Name == null) return;
+                _shown = false;
+                Name.resizeTextForBestFit = false;
+                Name.horizontalOverflow = HorizontalWrapMode.Overflow;
+                Name.text = _cut;
+                Name.rectTransform.sizeDelta = new Vector2(_cutWidth, Name.rectTransform.sizeDelta.y);
+                if (Distance != null) Distance.enabled = true;
+            }
         }
 
         /// <summary>The button at a row's right end: the map centres on the portal, which stays to be picked.</summary>
