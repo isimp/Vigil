@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.0
+
+A new patch, off until the server switches it on: *Adventure Backpacks' buffs never stack* (`Patches.AdventureBackpacksBuffsOnce`). With Extra Slots giving backpacks their own slot, a cape can be worn beside a pack, and some packs carry a cape's buffs: the Cinderward Pack has the Ashen cape's cheaper blocking and attacks, the Frostbound Haversack the Deep North cape's cheaper running and attacks. Wearing both counted those buffs twice. On, a pack's buffs do not count while you wear any cape, and a Frostbound Haversack's adrenaline bar and its full-bar effect do not count while you wear a trinket. Without a cape or trinket a pack works as before, and its slower walk always counts. It works with Extra Slots Custom Slots 1.0.23 and leaves other versions alone.
+
 ## 0.47.1
 
 *AdjustablePortals: favourite portals*: a portal name too long for its row in the panel beside the map shows in full while the pointer is over its row, in the row itself: the distance steps aside, and a very long name is drawn smaller.

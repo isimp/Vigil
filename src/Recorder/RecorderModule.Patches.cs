@@ -24,7 +24,8 @@ namespace Vigil.Recorder
         private const string OdinSafeStreamNote = "OdinOnDemand's radios ask Unity for their play position from Unity's sound thread, while the game's main thread may be stopping or changing that same sound, and the game has crashed there, mostly while it was running slowly. On, the main thread notes each stream's play position once a frame and the sound thread works it out from that note, so it never asks Unity. The sound is the same; at most the first moment after the switch is turned on mid-stream may skip. An OdinOnDemand whose stream code differs from 1.3.0 is left alone.";
         private const string PortalFavouritesNote = "AdjustablePortals lets you choose where a portal sends you, from a list or on the map, and has no favourites. On, a star at the left of each row of its list marks or unmarks a portal as one of your favourites, and the list shows your favourites first, in your order, under their own heading. On its map, a right click on a portal marks or unmarks it, a favourite's pin carries a star, and a panel at the map's left lists the portals as its list does: a filter to type in (X empties it), your favourites first in the order you drag them into by their grip, then all other portals A to Z, each with a star, how far it is and a button that centres the map on it, in a list the wheel scrolls three rows a notch without zooming the map; a click on a row travels there as a click on its pin would, Enter in the filter takes the first, and the panel can be dragged anywhere. Favourites are kept with your character by each portal's world id, so a renamed or moved portal stays one; the first time, your TargetPortal favourites are taken over. An AdjustablePortals whose picker code differs from 0.7.0 and 0.8.0 is left alone.";
         private const string OnlyPortalsNote = "AdjustablePortals' map of portals opens on the large map with a pin on every portal you can travel to, and every other pin stays: HUDCompass's portal markers stand on the same portals, and your own pins and HUDCompass's carts and ships stand among them. On, while that map is open only its portals show; every other map pin, its name and HUDCompass's markers come back as the map closes. Scry's marks step aside there by themselves. An AdjustablePortals whose picker code differs from 0.7.0 and 0.8.0 is left alone.";
-        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade, _odinSafeStream, _summonRadial, _portalFavourites, _onlyPortals;
+        private const string PackOverlapNote = "With Extra Slots Custom Slots an Adventure Backpacks pack has a slot of its own, so a cape can be worn beside it, and some packs carry a cape's buffs: the Cinderward Pack the Ashen cape's -20 % block and -10 % attack stamina, the Frostbound Haversack the Deep North cape's -20 % run and attack stamina, and at level 4 an adrenaline bar with its own full-bar effect, as a trinket has. Both counted, so the same buff came twice. On, while any cape is worn none of the pack's buffs count (stamina savings, more speed, heat resistance), and while a trinket is worn the pack adds nothing to the adrenaline bar and only the trinket's effect fires when it fills. The pack's penalties (its slower walk) always count, its carry bonus and storage stay, and a pack worn without a cape or trinket works as built. Resistances never added up in the game, the better one counts. The pack's tooltip still shows its own numbers; the totals in brackets are the real ones. It takes effect on each player's game, so it needs Vigil there. An Extra Slots Custom Slots whose backpack slot code differs from 1.0.23 is left alone.";
+        private ConfigEntry<bool> _compassFollowPins, _targetPortalFollow, _odinSpeakers, _odinMusicFade, _odinSafeStream, _summonRadial, _portalFavourites, _onlyPortals, _packOverlap;
         private ConfigEntry<int> _awayMinutes, _wardSeconds;
         private ConfigEntry<string> _wardPassword;
         private string _awayMinutesText = "5", _wardSecondsText = "10";
@@ -140,6 +141,11 @@ namespace Vigil.Recorder
             _onlyPortals = Config.Bind("Patches", "AdjustablePortalsOnlyPortals", false, "This game's own switch: " + OnlyPortalsNote);
             PortalFavouritesPatch.OnlyPortals = _onlyPortals.Value;
             _onlyPortals.SettingChanged += (_, __) => PortalFavouritesPatch.OnlyPortals = _onlyPortals.Value;
+            _packOverlap = Config.Bind("Patches", "AdventureBackpacksBuffsOnce", false,
+                "Set on the dedicated server: " + PackOverlapNote + " ServerSync passes it to every player running Vigil; the server's admins can switch it in the panel's Patches tab.");
+            _host.Sync.AddConfigEntry(_packOverlap);
+            PackOverlapPatch.On = _packOverlap.Value;
+            _packOverlap.SettingChanged += (_, __) => PackOverlapPatch.On = _packOverlap.Value;
             _awaySleep =Config.Bind("Patches", "AwaySleep", false,
                 "Set on the dedicated server: a player whose game menu has stayed open for AwayMinutes is away, and the night is skipped once everyone else is in bed; somebody has to be in bed. " +
                 "An away player out of bed gets no morning (no Rested, no good morning), and the players in bed are told who was away and not counted. Moving the mouse in the menu does not count; closing it does. " +
@@ -257,6 +263,8 @@ namespace Vigil.Recorder
             if (SummonRadialPatch.Problem != null) _host.Log.LogWarning("Vigil: the Summon Commander radial patch stepped aside: " + SummonRadialPatch.Problem);
             if (!_server) PortalFavouritesPatch.Hook(line => _host.Log.LogWarning(line));
             if (PortalFavouritesPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch for AdjustablePortals' favourite portals stepped aside: " + PortalFavouritesPatch.Problem);
+            if (!_server) PackOverlapPatch.Hook(line => _host.Log.LogInfo(line));
+            if (PackOverlapPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch keeping Adventure Backpacks' buffs from stacking stepped aside: " + PackOverlapPatch.Problem);
             AwaySleepPatch.Hook();
             if (AwaySleepPatch.Problem != null) _host.Log.LogWarning("Vigil: the patch on away players and sleep stepped aside: " + AwaySleepPatch.Problem);
             WardRepairPatch.Hook(line => _host.Log.LogInfo(line));
@@ -286,7 +294,7 @@ namespace Vigil.Recorder
         }
 
         private PanelBadge PatchesBadge() => new PanelBadge(((_odinVolume.Value ? 1 : 0) + (_skipWinter.Value ? 1 : 0) + (_joinPackages.Value ? 1 : 0) + (_jotunnSync.Value ? 1 : 0) + (_chestScroll.Value ? 1 : 0) + (_containerFit.Value ? 1 : 0) + (_relocateFixes.Value ? 1 : 0) + (_relocateSpirit.Value ? 1 : 0)
-            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0) + (_odinSafeStream.Value ? 1 : 0) + (_summonRadial.Value ? 1 : 0) + (_portalFavourites.Value ? 1 : 0) + (_onlyPortals.Value ? 1 : 0)) + " of 25 on", Skin.Tone.Quiet);
+            + (_buildMenu.Value ? 1 : 0) + (_buildNavLater.Value ? 1 : 0) + (_comfortBadges.Value ? 1 : 0) + (_comfortPlates.Value ? 1 : 0) + (_compassPins.Value ? 1 : 0) + (_vehiclePins.Value ? 1 : 0) + (_compassFollow.Value ? 1 : 0) + (_compassMap.Value ? 1 : 0) + (_awaySleep.Value ? 1 : 0) + (_wardNetwork.Value ? 1 : 0) + (_wardAuto.Value ? 1 : 0) + (_odinSpeakers.Value ? 1 : 0) + (_odinMusicFade.Value ? 1 : 0) + (_odinSafeStream.Value ? 1 : 0) + (_summonRadial.Value ? 1 : 0) + (_portalFavourites.Value ? 1 : 0) + (_onlyPortals.Value ? 1 : 0) + (_packOverlap.Value ? 1 : 0)) + " of 26 on", Skin.Tone.Quiet);
 
         private void DrawPatches()
         {
@@ -493,6 +501,27 @@ namespace Vigil.Recorder
             Ui.Note(VehiclePinsNote);
             Ui.Row("Set by", "the server, for every player running Vigil (Patches.VehiclePinsFromServer)");
             Ui.Row(_server ? "On the server" : "On this game", Toned(VehiclePinsPatch.State, VehiclePinsPatch.Problem != null ? ResultTone.Caution : _vehiclePins.Value && VehiclePinsPatch.Found ? ResultTone.Good : ResultTone.Quiet));
+
+            Ui.Heading("Adventure Backpacks' buffs never stack");
+            Ui.BeginFormLine("Switch");
+            if (may)
+            {
+                int picked = Ui.Choice(_packOverlap.Value ? 0 : 1, OnOffWords);
+                if (picked >= 0 && (picked == 0) != _packOverlap.Value)
+                {
+                    bool on = picked == 0;
+                    Ui.Later(() =>
+                    {
+                        _packOverlap.Value = on;
+                        EventLog.Write("patch-set", PlayerName(), "AdventureBackpacksBuffsOnce " + (on ? "on" : "off"));
+                    });
+                }
+            }
+            else Ui.Text(_packOverlap.Value ? "On" : "Off");
+            Ui.EndLine();
+            Ui.Note(PackOverlapNote);
+            Ui.Row("Set by", "the server, for every player running Vigil (Patches.AdventureBackpacksBuffsOnce)");
+            if (!_server) Ui.Row("On this game", Toned(PackOverlapPatch.State, PackOverlapPatch.Problem != null ? ResultTone.Caution : _packOverlap.Value && PackOverlapPatch.Found ? ResultTone.Good : ResultTone.Quiet));
 
             Ui.Heading("Away players don't hold up sleep");
             Ui.BeginFormLine("Switch");
