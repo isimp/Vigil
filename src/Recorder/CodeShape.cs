@@ -55,7 +55,7 @@ namespace Vigil.Recorder
                         module = ModuleDefinition.ReadModule(path, new ReaderParameters { ReadingMode = ReadingMode.Deferred, InMemory = true });
                         modules[path] = module;
                     }
-                    var definition = module.LookupToken(method.MetadataToken) as MethodDefinition;
+                    var definition = Find(module, method);
                     if (definition == null) throw new InvalidOperationException(method.Name + " is not in " + path);
                     found.Add(definition);
                 }
@@ -65,6 +65,45 @@ namespace Vigil.Recorder
             {
                 foreach (var module in modules.Values) module.Dispose();
             }
+        }
+
+        /// <summary>
+        /// The file's definition of a loaded method: the one its number names when that is the same
+        /// method, else the one with its type, name and parameter types. A mod can run as a copy
+        /// whose methods are numbered otherwise than in its file (seen with Extra Slots Custom Slots
+        /// in the game), and its number then names another method there. Null when the file has none.
+        /// </summary>
+        internal static MethodDefinition Find(ModuleDefinition module, MethodBase method)
+        {
+            if (module.LookupToken(method.MetadataToken) is MethodDefinition byNumber && Same(byNumber, method)) return byNumber;
+            var type = method.DeclaringType;
+            if (type == null) return null;
+            if (type.IsGenericType) type = type.GetGenericTypeDefinition();
+            var definition = module.GetType(type.FullName.Replace('+', '/'));
+            if (definition == null) return null;
+            foreach (var candidate in definition.Methods)
+                if (Same(candidate, method)) return candidate;
+            return null;
+        }
+
+        private static bool Same(MethodDefinition definition, MethodBase method)
+        {
+            var type = method.DeclaringType;
+            if (definition.Name != method.Name || type == null) return false;
+            if (type.IsGenericType) type = type.GetGenericTypeDefinition();
+            if (definition.DeclaringType.FullName != type.FullName.Replace('+', '/')) return false;
+            var parameters = method.GetParameters();
+            if (definition.Parameters.Count != parameters.Length) return false;
+            for (int i = 0; i < parameters.Length; i++)
+                if (BareName(definition.Parameters[i].ParameterType.Name) != BareName(parameters[i].ParameterType.Name)) return false;
+            return true;
+        }
+
+        /// <summary>A type's name without generic arguments, which Mono.Cecil and reflection write differently.</summary>
+        private static string BareName(string name)
+        {
+            int angle = name.IndexOf('<');
+            return angle < 0 ? name : name.Substring(0, angle);
         }
 
         private static string Operand(object operand, Mono.Collections.Generic.Collection<Instruction> code)

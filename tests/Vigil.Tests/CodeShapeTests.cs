@@ -27,20 +27,29 @@ namespace Vigil.Tests
             public int Constant = 500;
             public string Text = "x";
             public bool BranchToEnd = true;
+            public bool PicksSwapped;
         }
 
         /// <summary>A mod with type T: optionally new parts placed first, two helpers and Subject, which calls one of them.</summary>
         private static byte[] Build(Shape s)
         {
             // New parts placed first renumber what Subject refers to, and their text moves Subject's text.
-            string extra = s.ExtraFirst
+            // Two overloads of one name, each with code of its own, in either order.
+            string pickNumber = "public static void Pick(int n) { Seen = n + 1; }", pickText = "public static void Pick(string t) { Last = t + \"!\"; }";
+            string picks = s.PicksSwapped ? pickText + " " + pickNumber : pickNumber + " " + pickText;
+            string extra = picks + " " + (s.ExtraFirst
                 ? "public static int Added; public static string AddedText() { return \"a much longer text placed first\"; } public static void AddedStep() { Added++; }"
-                : "";
+                : "");
             string branch = s.BranchToEnd ? "if (b) Seen = 0; else Seen = 1;" : "if (b) Seen = 0; Seen = 1;";
             string source = "namespace Ns { public static class U { public static void Helper() { } } public static class T { " + extra +
                 " public static int Seen; public static string Last;" +
                 " public static void Helper() { Seen++; } public static void Other() { Seen--; }" +
                 " public static void Subject(bool b) { " + s.Callee + "(); Last = \"" + s.Text + "\"; Seen += " + s.Constant + "; " + branch + " } } }";
+            return Compile(source);
+        }
+
+        private static byte[] Compile(string source)
+        {
             var refs = new[] { MetadataReference.CreateFromFile(typeof(object).Assembly.Location) }
                 .Concat(Directory.GetFiles(Path.GetDirectoryName(typeof(object).Assembly.Location), "System.Runtime.dll").Select(p => MetadataReference.CreateFromFile(p)));
             var compilation = CSharpCompilation.Create("Shape" + Guid.NewGuid().ToString("N"), new[] { CSharpSyntaxTree.ParseText(source) }, refs,
@@ -133,6 +142,70 @@ namespace Vigil.Tests
             {
                 try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
+        }
+
+        [Fact]
+        public void A_mod_whose_loaded_copy_numbers_its_methods_otherwise_than_its_file_is_read_by_name()
+        {
+            // In the game, Extra Slots Custom Slots ran with its methods numbered otherwise than in its
+            // file, so a lookup by number read two other methods and its patch stepped aside.
+            byte[] file = Build(new Shape()), running = Build(new Shape { ExtraFirst = true });
+            var loaded = Assembly.Load(running).GetType("Ns.T").GetMethod("Subject");
+            var module = ModuleDefinition.ReadModule(new MemoryStream(file));
+
+            Assert.NotEqual("Subject", (module.LookupToken(loaded.MetadataToken) as Mono.Cecil.MethodDefinition)?.Name);
+            var found = CodeShape.Find(module, loaded);
+            Assert.Equal("Subject", found.Name);
+            Assert.Equal("Ns.T", found.DeclaringType.FullName);
+            Assert.Equal(HashOf(file), CodeShape.Hash(new[] { found }));
+        }
+
+        [Fact]
+        public void Of_two_methods_with_one_name_the_one_with_the_same_parameters_is_read()
+        {
+            byte[] file = Build(new Shape()), running = Build(new Shape { PicksSwapped = true });
+            var loaded = Assembly.Load(running).GetType("Ns.T").GetMethod("Pick", new[] { typeof(string) });
+            var module = ModuleDefinition.ReadModule(new MemoryStream(file));
+
+            var found = CodeShape.Find(module, loaded);
+            Assert.Equal("String", found.Parameters.Single().ParameterType.Name);
+        }
+
+        [Fact]
+        public void A_method_of_the_same_name_and_parameters_in_another_class_is_not_taken_for_it()
+        {
+            // As a mod's many patch classes each have a Postfix: the running copy lists the classes in
+            // the other order, so T.Run's number names U.Run in the file.
+            const string u = "public static class U { public static int N; public static void Run(int a) { N = a; } }";
+            const string t = "public static class T { public static string S; public static void Run(int a) { S = a.ToString(); } }";
+            byte[] file = Compile("namespace Ns { " + u + " " + t + " }"), running = Compile("namespace Ns { " + t + " " + u + " }");
+            var loaded = Assembly.Load(running).GetType("Ns.T").GetMethod("Run");
+            var module = ModuleDefinition.ReadModule(new MemoryStream(file));
+
+            Assert.Equal("Ns.U", (module.LookupToken(loaded.MetadataToken) as Mono.Cecil.MethodDefinition)?.DeclaringType.FullName);
+            Assert.Equal("Ns.T", CodeShape.Find(module, loaded).DeclaringType.FullName);
+        }
+
+        [Fact]
+        public void Of_two_methods_with_one_name_the_one_with_more_parameters_is_not_taken_for_the_shorter()
+        {
+            const string one = "public static void Two(int a) { N = a; }", two = "public static void Two(int a, int b) { N = a * b; }";
+            byte[] file = Compile("namespace Ns { public static class T { public static int N; " + two + " " + one + " } }");
+            byte[] running = Compile("namespace Ns { public static class T { public static int N; " + one + " " + two + " } }");
+            var loaded = Assembly.Load(running).GetType("Ns.T").GetMethod("Two", new[] { typeof(int) });
+            var module = ModuleDefinition.ReadModule(new MemoryStream(file));
+
+            Assert.Single(CodeShape.Find(module, loaded).Parameters);
+        }
+
+        [Fact]
+        public void A_method_missing_from_the_file_is_not_found_rather_than_another_one()
+        {
+            byte[] file = Build(new Shape()), running = Build(new Shape { ExtraFirst = true });
+            var added = Assembly.Load(running).GetType("Ns.T").GetMethod("AddedStep");
+            var module = ModuleDefinition.ReadModule(new MemoryStream(file));
+
+            Assert.Null(CodeShape.Find(module, added));
         }
 
         [Fact]
