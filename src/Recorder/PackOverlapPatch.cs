@@ -66,9 +66,23 @@ namespace Vigil.Recorder
                 var adds = items?.GetNestedType("Player_UpdateModifiers_AdventureBackpack", BindingFlags.NonPublic | BindingFlags.Public);
                 var postfix = adds != null ? AccessTools.DeclaredMethod(adds, "Postfix") : null;
                 var active = slot != null ? AccessTools.PropertyGetter(slot, "IsActive") : null;
-                if (get == null || postfix == null || active == null || CodeShape.Hash(new MethodBase[] { postfix, get }) != KnownCode)
+                var missing = new System.Collections.Generic.List<string>();
+                if (ext == null) missing.Add("HumanoidExtension");
+                else if (get == null) missing.Add("GetAdventureBackpack");
+                if (items == null) missing.Add("CustomItemType");
+                else if (adds == null) missing.Add("its UpdateModifiers patch class");
+                else if (postfix == null) missing.Add("its UpdateModifiers Postfix");
+                if (slot == null) missing.Add("AdventureBackpacksSlot");
+                else if (active == null) missing.Add("IsActive");
+                if (missing.Count > 0)
                 {
-                    Problem = "its backpack slot code changed (an update)";
+                    Problem = "its backpack slot parts were not found (" + string.Join(", ", missing.ToArray()) + ")";
+                    return;
+                }
+                ulong code = CodeShape.Hash(new MethodBase[] { postfix, get });
+                if (code != KnownCode)
+                {
+                    Problem = "its backpack slot code changed (an update): 0x" + code.ToString("X16") + " instead of 0x" + KnownCode.ToString("X16");
                     return;
                 }
                 s_sources = AccessTools.Field(typeof(Player), "s_equipmentModifierSourceFields");
