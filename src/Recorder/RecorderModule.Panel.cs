@@ -521,6 +521,7 @@ namespace Vigil.Recorder
                         state.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass
                         : state.StartsWith("stepped aside", StringComparison.Ordinal) ? SelfTestReport.Result.Warn
                         : SelfTestReport.Result.Info, state));
+                PackOverlapPatch.SelfTest(area, checks);
                 string comfort = ComfortBadgesPatch.State;
                 checks.Add(new SelfTestReport.Check(area, "game patch: ComfortMe redraws its badges only on a change",
                     comfort.StartsWith("working", StringComparison.Ordinal) ? SelfTestReport.Result.Pass

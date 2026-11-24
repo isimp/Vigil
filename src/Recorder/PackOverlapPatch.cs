@@ -42,6 +42,7 @@ namespace Vigil.Recorder
         private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> s_shoulder = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_shoulderItem");
         private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> s_trinket = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_trinketItem");
         private static FieldInfo s_sources;
+        private static MethodInfo s_update, s_addAdrenaline;
         private static Func<Humanoid, ItemDrop.ItemData> s_pack;
         private static Func<bool> s_slotActive;
 
@@ -71,8 +72,8 @@ namespace Vigil.Recorder
                     return;
                 }
                 s_sources = AccessTools.Field(typeof(Player), "s_equipmentModifierSourceFields");
-                var update = AccessTools.DeclaredMethod(typeof(Player), "UpdateModifiers");
-                var addAdrenaline = AccessTools.DeclaredMethod(typeof(Player), nameof(Player.AddAdrenaline));
+                var update = s_update = AccessTools.DeclaredMethod(typeof(Player), "UpdateModifiers");
+                var addAdrenaline = s_addAdrenaline = AccessTools.DeclaredMethod(typeof(Player), nameof(Player.AddAdrenaline));
                 if (s_sources == null || update == null || addAdrenaline == null)
                 {
                     Problem = "the game's equipment modifiers were not found (a game update changed them)";
@@ -128,6 +129,107 @@ namespace Vigil.Recorder
             s_hiddenFrom = pack.m_shared;
             s_hidden = effect;
             pack.m_shared.m_fullAdrenalineSE = null;
+        }
+
+        /// <summary>
+        /// The self-test on this game, whatever the server's switch: the local player's totals are
+        /// worked out by the game three times (the pack's values set to nothing, the switch off, the
+        /// switch on) and judged by <see cref="PackOverlap.TotalsCheck"/>; the pack's full-bar effect is
+        /// hidden and put back once by the patch's own steps, and the adrenaline step is checked for
+        /// carrying them. Everything is put back as it was, and the totals are worked out once more.
+        /// </summary>
+        public static void SelfTest(string area, System.Collections.Generic.List<SelfTestReport.Check> checks)
+        {
+            const string totalsName = "game patch: Adventure Backpacks' buffs never stack, measured";
+            if (!Found || Problem != null || s_update == null)
+            {
+                checks.Add(new SelfTestReport.Check(area, totalsName, SelfTestReport.Result.Info, "not tested: " + State));
+                return;
+            }
+            var player = Player.m_localPlayer;
+            if (player == null)
+            {
+                checks.Add(new SelfTestReport.Check(area, totalsName, SelfTestReport.Result.Info, "not tested: no character in a world"));
+                return;
+            }
+            try
+            {
+                var pack = SlotPack(player);
+                bool cape = s_shoulder(player) != null;
+                bool trinket = s_trinket(player) != null;
+                checks.Add(PackOverlap.TotalsCheck(area, pack != null ? Measure(player, pack, cape, trinket) : null));
+
+                var effect = pack?.m_shared.m_fullAdrenalineSE;
+                bool hidden = false, back = false;
+                if (effect != null && trinket)
+                {
+                    bool was = On;
+                    On = true;
+                    try
+                    {
+                        BeforeAddAdrenaline(player);
+                        hidden = pack.m_shared.m_fullAdrenalineSE == null;
+                    }
+                    finally
+                    {
+                        AfterAddAdrenaline();
+                        On = was;
+                    }
+                    back = pack.m_shared.m_fullAdrenalineSE == effect;
+                }
+                checks.Add(PackOverlap.EffectCheck(area, effect != null, trinket, Carries(s_addAdrenaline, prefix: true, finalizer: true), hidden, back));
+            }
+            catch (Exception e)
+            {
+                checks.Add(new SelfTestReport.Check(area, totalsName, SelfTestReport.Result.Fail, "the measurement failed: " + e.GetType().Name + " " + e.Message));
+            }
+        }
+
+        private static PackTotals Measure(Player player, ItemDrop.ItemData pack, bool cape, bool trinket)
+        {
+            var fields = (FieldInfo[])s_sources.GetValue(null);
+            var saved = new object[fields.Length];
+            var packValues = new float[fields.Length];
+            for (int i = 0; i < fields.Length; i++)
+            {
+                saved[i] = fields[i].GetValue(pack.m_shared);
+                packValues[i] = saved[i] is float f ? f : 0f;
+            }
+            bool was = On;
+            float[] without, counted, fixedTotals;
+            try
+            {
+                On = false;
+                for (int i = 0; i < fields.Length; i++)
+                    if (saved[i] is float) fields[i].SetValue(pack.m_shared, 0f);
+                without = Totals(player);
+                for (int i = 0; i < fields.Length; i++) fields[i].SetValue(pack.m_shared, saved[i]);
+                counted = Totals(player);
+                On = true;
+                fixedTotals = Totals(player);
+            }
+            finally
+            {
+                for (int i = 0; i < fields.Length; i++) fields[i].SetValue(pack.m_shared, saved[i]);
+                On = was;
+                s_update.Invoke(player, null);
+            }
+            return new PackTotals(fields.Select(f => f.Name).ToArray(), without, counted, fixedTotals, packValues, cape, trinket);
+        }
+
+        /// <summary>The game works out the player's totals now; a copy of them.</summary>
+        private static float[] Totals(Player player)
+        {
+            s_update.Invoke(player, null);
+            return (float[])s_values(player).Clone();
+        }
+
+        /// <summary>Whether Harmony holds this patch's steps on the method.</summary>
+        private static bool Carries(MethodBase method, bool prefix, bool finalizer)
+        {
+            var info = method != null ? Harmony.GetPatchInfo(method) : null;
+            if (info == null) return false;
+            return (!prefix || info.Prefixes.Any(p => p.owner == HarmonyId)) && (!finalizer || info.Finalizers.Any(p => p.owner == HarmonyId));
         }
 
         /// <summary>A finalizer that returns nothing lets any exception go on as before; the effect is always put back.</summary>
