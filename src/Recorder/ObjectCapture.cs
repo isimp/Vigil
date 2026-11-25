@@ -42,7 +42,6 @@ namespace Vigil.Recorder
             var after = Patching.M(typeof(ObjectCapture), nameof(AfterSet));
             foreach (var t in new[] { typeof(float), typeof(string), typeof(Vector3), typeof(Quaternion), typeof(int), typeof(long), typeof(byte[]) })
                 Patching.Apply(harmony, AccessTools.Method(extra, "Set", new[] { typeof(ZDOID), typeof(int), t }), "object values changed (" + t.Name + ")", postfix: after);
-            Patching.Apply(harmony, AccessTools.Method(extra, "Update", new[] { typeof(ZDOID), typeof(int), typeof(Vector3) }), "object values changed (Vector3 update)", postfix: after);
             Patching.Apply(harmony, AccessTools.Method(typeof(ZDO), nameof(ZDO.SetPosition)), "objects moved",
                 prefix: Patching.M(typeof(ObjectCapture), nameof(BeforeChange)), postfix: Patching.M(typeof(ObjectCapture), nameof(AfterPosition)));
             Patching.Apply(harmony, AccessTools.Method(typeof(ZDO), nameof(ZDO.SetRotation)), "objects turned",
@@ -92,13 +91,14 @@ namespace Vigil.Recorder
                 owners.TryGetValue(owner, out int had);
                 owners[owner] = had + b;
             }
-            foreach (var kv in floats) Add(kv.Key, ValueSize.Float);
-            foreach (var kv in vec3s) Add(kv.Key, ValueSize.Vec3);
-            foreach (var kv in quats) Add(kv.Key, ValueSize.Quat);
-            foreach (var kv in ints) Add(kv.Key, ValueSize.Int);
-            foreach (var kv in longs) Add(kv.Key, ValueSize.Long);
-            foreach (var kv in strings) Add(kv.Key, ValueSize.String(kv.Value));
-            foreach (var kv in bytes) Add(kv.Key, ValueSize.Bytes(kv.Value));
+            // The game hands each kind of value as a list read by position.
+            for (int i = 0; i < floats.Count; i++) Add(floats[i].Key, ValueSize.Float);
+            for (int i = 0; i < vec3s.Count; i++) Add(vec3s[i].Key, ValueSize.Vec3);
+            for (int i = 0; i < quats.Count; i++) Add(quats[i].Key, ValueSize.Quat);
+            for (int i = 0; i < ints.Count; i++) Add(ints[i].Key, ValueSize.Int);
+            for (int i = 0; i < longs.Count; i++) Add(longs[i].Key, ValueSize.Long);
+            for (int i = 0; i < strings.Count; i++) { var kv = strings[i]; Add(kv.Key, ValueSize.String(kv.Value)); }
+            for (int i = 0; i < bytes.Count; i++) { var kv = bytes[i]; Add(kv.Key, ValueSize.Bytes(kv.Value)); }
             s_tally.Add(RecorderModule.NameOf(zdo.GetPrefab()), Id(zdo.m_uid), size, owners);
         }
 

@@ -323,9 +323,25 @@ namespace Vigil.Recorder
             a.Count++; a.Bytes += size;
             if (!s_byZdo.TryGetValue(__instance.m_uid, out var o)) s_byZdo[__instance.m_uid] = o = new One { Prefab = prefab };
             o.Count++; o.Bytes += size; o.Pos = __instance.GetPosition(); o.Mine = __instance.IsOwner();
-            LoadTest.CountSent(__instance, size);
-            ObjectCapture.Sent(__instance, size);
+            // This runs inside the game's own sending: nothing here may stop it. The counting
+            // reads the object's values through the game's code, kept in methods of their own so
+            // that a game update which changes that code fails here and not in the send.
+            try
+            {
+                LoadTest.CountSent(__instance, size);
+                ObjectCapture.Sent(__instance, size);
+            }
+            catch (Exception e)
+            {
+                if (!s_sentCountingFailed)
+                {
+                    s_sentCountingFailed = true;
+                    Patching.Problems.Add("world-object uploads by mod: " + e.GetType().Name + " " + e.Message);
+                }
+            }
         }
+
+        private static bool s_sentCountingFailed;
 
         public override void FixedUpdate()
         {

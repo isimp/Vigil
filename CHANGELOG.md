@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.48.1
+
+Works with Valheim 1.0.30. On that game version earlier Vigil versions could stop your game from sending world objects to the server while recording.
+
+*The build menu sets up its navigation a frame later* follows the build menu of Valheim 1.0.30: moving right past the end of a row goes on to the next row, moving down from above a short last row reaches its last button, and the search field keeps its links.
+
 ## 0.48.0
 
 A new patch, off until the server switches it on: *Adventure Backpacks' buffs never stack* (`Patches.AdventureBackpacksBuffsOnce`). With Extra Slots giving backpacks their own slot, a cape can be worn beside a pack, and some packs carry a cape's buffs: the Cinderward Pack has the Ashen cape's cheaper blocking and attacks, the Frostbound Haversack the Deep North cape's cheaper running and attacks. Wearing both counted those buffs twice. On, a pack's buffs do not count while you wear any cape, and a Frostbound Haversack's adrenaline bar and its full-bar effect do not count while you wear a trinket. Without a cape or trinket a pack works as before, and its slower walk always counts. It works with Extra Slots Custom Slots 1.0.23 and leaves other versions alone.

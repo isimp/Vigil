@@ -18,7 +18,8 @@ namespace Vigil.Recorder
     /// run; ComfortMe redraws its badges on every frame the menu is open anyway, and DragNBuild's mark
     /// on a button depends only on its piece. On <c>BuildUi.ConfigureButtonNavigation</c>, while the
     /// menu is hidden: the game's grid setup links only shown buttons, so it links none and only
-    /// forces every canvas to update; the repair button's links, set whether shown or not, are kept.
+    /// forces every canvas to update; the repair button's and the search field's links, set
+    /// whether shown or not, are kept.
     /// The open sets up the navigation again once the menu is shown. The switch is this game's own.
     /// </summary>
     internal static class BuildMenuPatch
@@ -79,7 +80,8 @@ namespace Vigil.Recorder
         private static AccessTools.FieldRef<BuildUi, RectTransform> s_corner;
         private static readonly List<BuildUiPieceButton> s_cornerButtons = new List<BuildUiPieceButton>();
         private static BuildUiPieceButton s_gameRemoves;
-        private static Func<BuildUi, Navigation> s_specialNavigation;
+        private static Func<BuildUi, Navigation> s_specialNavigation, s_searchNavigation;
+        private static FieldInfo s_searchField;
         private static readonly List<Piece> s_wanted = new List<Piece>();
         private static readonly List<Piece> s_shown = new List<Piece>();
 
@@ -91,8 +93,12 @@ namespace Vigil.Recorder
                 var update = AccessTools.DeclaredMethod(typeof(BuildUi), "UpdatePieceButtons");
                 var navigation = AccessTools.DeclaredMethod(typeof(BuildUi), "ConfigureButtonNavigation");
                 var specialNavigation = AccessTools.DeclaredMethod(typeof(BuildUi), "GetSpecialButtonNavigation");
+                var searchNavigation = AccessTools.DeclaredMethod(typeof(BuildUi), "GetSearchFieldNavigation");
+                var searchField = AccessTools.Field(typeof(BuildUi), "m_searchField");
                 string[] fields = { "m_currentBuildTool", "m_pieceLists", "m_currentPieceList", "m_currentTagId", "m_availablePieceCount", "m_pieceButtons", "m_specialPieceButton", "m_specialButtonsContainer" };
                 if (update == null || navigation == null || specialNavigation == null || specialNavigation.ReturnType != typeof(Navigation) ||
+                    searchNavigation == null || searchNavigation.ReturnType != typeof(Navigation) ||
+                    searchField == null || !typeof(Selectable).IsAssignableFrom(searchField.FieldType) ||
                     Array.Exists(fields, f => AccessTools.Field(typeof(BuildUi), f) == null))
                 {
                     Problem = "the build menu changed (an update)";
@@ -107,6 +113,8 @@ namespace Vigil.Recorder
                 s_special = AccessTools.FieldRefAccess<BuildUi, BuildUiPieceButton>("m_specialPieceButton");
                 s_corner = AccessTools.FieldRefAccess<BuildUi, RectTransform>("m_specialButtonsContainer");
                 s_specialNavigation = AccessTools.MethodDelegate<Func<BuildUi, Navigation>>(specialNavigation);
+                s_searchNavigation = AccessTools.MethodDelegate<Func<BuildUi, Navigation>>(searchNavigation);
+                s_searchField = searchField;
                 var harmony = new Harmony(HarmonyId);
                 harmony.Patch(update, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeUpdatePieceButtons)), postfix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(AfterUpdatePieceButtons)));
                 harmony.Patch(navigation, prefix: new HarmonyMethod(typeof(BuildMenuPatch), nameof(BeforeNavigation)));
@@ -269,9 +277,11 @@ namespace Vigil.Recorder
             if (!skipHidden && !later) return true;
             try
             {
-                // The repair button's links, which the game sets whether it is shown or not.
+                // The repair button's and the search field's links, which the game sets whether
+                // the menu is shown or not.
                 var special = s_special(__instance);
                 if (special != null) special.GetComponent<Button>().navigation = s_specialNavigation(__instance);
+                if (s_searchField.GetValue(__instance) is Selectable search && search != null) search.navigation = s_searchNavigation(__instance);
             }
             catch (Exception e)
             {
@@ -298,7 +308,7 @@ namespace Vigil.Recorder
             try
             {
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-                int n = Link(s_pieceGrid(__instance), s_pieceEdge(__instance)) + Link(s_tagGrid(__instance), s_tagEdge(__instance));
+                int n = Link(s_pieceGrid(__instance), s_pieceEdge(__instance), wrap: true) + Link(s_tagGrid(__instance), s_tagEdge(__instance), wrap: false);
                 LastLinkMs = (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
                 LastLinkButtons = n;
                 LastLinkFrame = Time.frameCount;
@@ -311,8 +321,9 @@ namespace Vigil.Recorder
         }
 
         // The shown, usable buttons of a grid in its order, linked to their neighbours, the grid's
-        // edge links at the sides. Returns how many were linked.
-        private static int Link(RectTransform grid, Navigation edge)
+        // edge links at the sides, past a row's end where the game lets the grid wrap (the piece
+        // buttons, not the tags). Returns how many were linked.
+        private static int Link(RectTransform grid, Navigation edge, bool wrap)
         {
             if (grid == null) return 0;
             s_selectables.Clear();
@@ -331,11 +342,11 @@ namespace Vigil.Recorder
             int columns = s_rows.Count == count ? GridLinks.Columns(s_rows) : 1;
             for (int i = 0; i < count; i++)
             {
-                var l = GridLinks.Neighbours(i, count, columns);
+                var l = GridLinks.Neighbours(i, count, columns, wrap);
                 var nav = s_selectables[i].navigation;
                 nav.mode = Navigation.Mode.Explicit;
-                nav.selectOnLeft = l.Left >= 0 ? s_selectables[l.Left] : edge.selectOnLeft;
-                nav.selectOnRight = l.Right >= 0 ? s_selectables[l.Right] : edge.selectOnRight;
+                nav.selectOnLeft = GridLinks.Side(l.Left, edge.selectOnLeft, edge.selectOnLeft != null, l.WrapLeft, At);
+                nav.selectOnRight = GridLinks.Side(l.Right, edge.selectOnRight, edge.selectOnRight != null, l.WrapRight, At);
                 nav.selectOnUp = l.Up >= 0 ? s_selectables[l.Up] : edge.selectOnUp;
                 nav.selectOnDown = l.Down >= 0 ? s_selectables[l.Down] : edge.selectOnDown;
                 s_selectables[i].navigation = nav;
@@ -343,5 +354,7 @@ namespace Vigil.Recorder
             s_selectables.Clear();
             return count;
         }
+
+        private static Selectable At(int i) => s_selectables[i];
     }
 }
