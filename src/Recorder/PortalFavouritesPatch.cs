@@ -24,19 +24,20 @@ namespace Vigil.Recorder
     /// list does, a filter over the favourites and all other portals, a click on a row travelling there
     /// through AdjustablePortals' own <c>PortalTargeting.TravelTo</c>.
     /// Everything is drawn with AdjustablePortals' own <c>PickerUI</c> and the build menu's
-    /// favourite star. AdjustablePortals' picker code is compared with 0.7.0's and 0.8.0's, which
-    /// are the same, and any change makes the patch step aside. The switch is this game's own.
+    /// favourite star. AdjustablePortals' picker code is compared with the versions known (0.7.0's
+    /// and 0.8.0's, which are the same, and 0.8.1's, whose map picker also lays a glow under each
+    /// pin it adds), and any other code makes the patch step aside. The switch is this game's own.
     /// </summary>
     internal static class PortalFavouritesPatch
     {
         private const string HarmonyId = "isimp.Vigil.patches.portalfavourites";
 
         /// <summary>
-        /// AdjustablePortals 0.7.0's and 0.8.0's PortalListPicker Build, Rebuild, AddRow;
-        /// PortalMapPicker Open, Close, PickAt; PickerUI CreatePanel, AddText, AddButton, NewLayoutRow,
-        /// AddTextField, NewRect.
+        /// The code of AdjustablePortals' PortalListPicker Build, Rebuild, AddRow; PortalMapPicker
+        /// Open, Close, PickAt; PickerUI CreatePanel, AddText, AddButton, NewLayoutRow, AddTextField,
+        /// NewRect: in 0.7.0 and 0.8.0, then in 0.8.1 (Open and Close make and remove a glow per pin).
         /// </summary>
-        private const ulong KnownCode = 0xBE6790BEB9108F48UL;
+        private static readonly ulong[] KnownCode = { 0xBE6790BEB9108F48UL, 0xC991017DC0CD1361UL };
 
         private const string StarName = "VigilFavouriteStar";
         private const float StarSize = 20f, StarIndent = 26f, HeadingHeight = 24f;
@@ -150,7 +151,7 @@ namespace Vigil.Recorder
                 s_newRect = Method(ui, "NewRect");
                 s_travelTo = Method(targeting, "TravelTo");
                 var code = new MethodBase[] { build, s_rebuild, addRow, open, close, pickAt, s_createPanel, s_addText, s_addButton, s_newLayoutRow, s_addTextField, s_newRect };
-                if (code.Any(m => m == null) || s_travelTo == null || destination == null || CodeShape.Hash(code) != KnownCode)
+                if (code.Any(m => m == null) || s_travelTo == null || destination == null || !KnownCode.Contains(CodeShape.Hash(code)))
                 {
                     Problem = "AdjustablePortals' picker code changed (an update)";
                     return;

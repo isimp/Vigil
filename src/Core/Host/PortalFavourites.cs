@@ -6,7 +6,7 @@ using System.Linq;
 namespace Vigil.Core
 {
     /// <summary>
-    /// The game patch "AdjustablePortals: favourite portals". AdjustablePortals (0.7.0 and 0.8.0) lets
+    /// The game patch "AdjustablePortals: favourite portals". AdjustablePortals (0.7.0 to 0.8.1) lets
     /// a player choose where a portal sends them, from a list or on the map, and has no favourites.
     /// The player's favourite portals are kept by each portal's world id in the character's data, so
     /// a renamed or moved portal stays a favourite; a portal torn down and built again is a new one.

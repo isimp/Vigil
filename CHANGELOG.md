@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.2
+
+*AdjustablePortals: favourite portals* and *AdjustablePortals' map shows only the portals* work with AdjustablePortals 0.8.1, whose glowing portal pins had made them step aside.
+
 ## 0.48.1
 
 Works with Valheim 1.0.30. On that game version earlier Vigil versions could stop your game from sending world objects to the server while recording.
